@@ -11,8 +11,9 @@ public sealed record GpuInfo(string InstanceId, string Name, bool IsExternal);
 
 /// <summary>An active display path target.</summary>
 /// <param name="Id">Stable identifier of the monitor (device path or instance ID).</param>
-/// <param name="IsInternal">True for the built-in panel (output technology INTERNAL).</param>
-public sealed record DisplayInfo(string Id, bool IsInternal);
+/// <param name="IsInternal">True for the built-in panel (output technology INTERNAL or embedded DisplayPort).</param>
+/// <param name="Name">Monitor name from EDID, for logs and UI.</param>
+public sealed record DisplayInfo(string Id, bool IsInternal, string Name = "");
 
 /// <summary>Everything mode detection looks at, captured at one point in time.</summary>
 public sealed record DeviceSnapshot(IReadOnlyList<GpuInfo> Gpus, IReadOnlyList<DisplayInfo> Displays, bool OnAcPower)
