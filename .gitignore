@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Claude Code project skills (the VS pattern [Rr]elease/ above would hide the release skill)
+!.claude/skills/release/

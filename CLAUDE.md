@@ -67,6 +67,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - **UI**: minimal ("简约风"): neutral grays, monochrome accent, hairline borders, small colored status dots only.
   A retro pixel theme (navy palette and a pixel font) was tried and **rejected as ugly**, so keep pixel style to the icons.
 - The About page credits the author **rozx** (github.com/rozx).
+- **Releasing**: use the project skill `/release` (`.claude/skills/release/SKILL.md`). It walks through changelog,
+  README (both languages), version bump, the release PR and verification. Claude cannot merge PRs; the user merges.
 - **Releases** come only from a **merged PR** whose branch is `release/v<major>.<minor>[.<patch>]` **and** that has
   the `release` label (`.github/workflows/release.yml`; the version comes from the branch name and the tag
   `v<version>` is created on the merge commit). `ci.yml` only builds and tests on pushes and PRs.
