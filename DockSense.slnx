@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DockSense.App/DockSense.App.csproj" />
+    <Project Path="src/DockSense.Core/DockSense.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DockSense.Core.Tests/DockSense.Core.Tests.csproj" />
+  </Folder>
+</Solution>
