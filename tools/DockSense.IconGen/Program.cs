@@ -48,8 +48,9 @@ foreach (var (name, sprite, palette) in tray)
         Render(sprite, palette, 4),
     ]);
 
-    // 1x for the UI (scaled with nearest neighbor), 8x for toast notifications.
+    // 1x for the UI (scaled with nearest neighbor), 3x for the README, 8x for toast notifications.
     SavePng(oneX, Path.Combine(iconDir, $"{name}.png"));
+    SavePng(Render(sprite, palette, 3), Path.Combine(iconDir, $"{name}@3x.png"));
     SavePng(Render(sprite, palette, 8), Path.Combine(iconDir, $"{name}@8x.png"));
 }
 

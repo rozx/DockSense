@@ -38,20 +38,38 @@ Details and raw data: `docs/game-mode-throttle.md`.
   boot-into-FSE. `GamingHomeApp` is the home app (the user's machine has AnyFSE set). There is no official API or URI for a live toggle;
   `Win+F11` toggles it, so a live switch has to know the current state first (still to be researched).
 
-## Architecture (planned)
-- `src/DockSense.Core` (net10.0): pure logic and tests-first. Holds `DeviceSnapshot` → `ModeResolver` → `DockMode`, the debouncer,
-  the profile/config model (JSON at `%APPDATA%\DockSense\config.json`), and the "remember previous plan, restore on leave" policy.
-- `src/DockSense.App` (net10.0-windows, WinForms tray): platform services and P/Invoke code.
-  - CfgMgr32/SetupAPI for GPU properties
-  - QueryDisplayConfig for displays
-  - powrprof for `PowerGetActiveScheme`, `PowerSetActiveScheme` and `PowerDuplicateScheme`
-  - `RegisterPowerSettingNotification` for `GUID_ACTIVE_POWERSCHEME` and `GUID_ACDC_POWER_SOURCE`
-  - `RegisterDeviceNotification` for `GUID_DEVINTERFACE_DISPLAY_ADAPTER`, plus WM_DISPLAYCHANGE and resume
-  - registry access for FSE
-  - The UI: tray menu, settings window, start with Windows (HKCU Run key, only when the user ticks the option).
+## Architecture
+- `src/DockSense.Core` (net10.0): pure logic, fully unit tested.
+  - `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld) and `ModeStabilizer` (debounce)
+  - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
+  - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`
+- `src/DockSense.App` (net10.0-windows10.0.19041.0, WPF + WPF-UI 4.3):
+  - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
+    and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
+    AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, AutoStart (HKCU Run), GameModeDiagnostics.
+  - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied` and `Warning` events.
+  - `Services/`: `Appearance` (minimal zinc palette with a monochrome accent; it overrides WPF-UI brush keys in
+    Application.Resources and follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications),
+    `TrayIconService` (H.NotifyIcon), `IconAssets`.
+  - `ViewModels/MainViewModel` (CommunityToolkit.Mvvm partial properties) is shared by all pages. The pages are
+    Status, Mode profiles, Detection, Settings and About.
+  - `Localization/`: `Strings.resx` and `Strings.zh-Hans.resx`, `Loc` with live switching, and XAML `{loc:T Key}`.
+  - Custom `Program.Main` (App.xaml is a Page): single instance via mutex, plus a named event that makes a second
+    launch show the window. `--probe <file>` writes a read-only report.
 - `tests/DockSense.Core.Tests` (xUnit).
-- No admin rights needed for any v1 feature.
-- Mode priority: eGPU > Docked > Handheld.
+- `tools/DockSense.IconGen`: the pixel-art icons are text grids in `Sprites.cs`. Running the tool regenerates
+  `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.
+- No admin rights are needed anywhere.
+
+## Design decisions (from the user)
+- **Icons**: pixel art. The app icon is a one-piece widescreen handheld. Tray: Handheld = handheld with a green
+  screen, Docked = monitor, eGPU = graphics card with a purple fan (variant "V4"), Paused = handheld with pause bars.
+- **UI**: minimal ("简约风"): neutral grays, monochrome accent, hairline borders, small colored status dots only.
+  A retro pixel theme (navy palette and a pixel font) was tried and **rejected as ugly**, so keep pixel style to the icons.
+- The About page credits the author **rozx** (github.com/rozx).
+- **Releases** come only from a **merged PR** whose branch is `release/v<major>.<minor>[.<patch>]` **and** that has
+  the `release` label (`.github/workflows/release.yml`; the version comes from the branch name and the tag
+  `v<version>` is created on the merge commit). `ci.yml` only builds and tests on pushes and PRs.
 
 ## Environment
 - Repo: `E:\Projects\DockSense` (the user keeps projects under `E:\Projects`). Windows 11, PowerShell 5.1 shell.
@@ -62,7 +80,12 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - Registering persistence (scheduled tasks, Run keys) from Claude's shell is blocked by the auto-mode classifier.
   The user runs such steps themselves with `!`.
 - The shell is Windows PowerShell 5.1. Multi-line commit messages that contain double quotes get mangled when passed
-  as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. New tools (dotnet, git, gh) may be
+  as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. Write that file with the Write
+  tool, not `Set-Content -Encoding utf8`, which adds a BOM to the commit message.
+- WPF projects do not import `System.IO` implicitly (the csproj adds it). XML comments in csproj files must not
+  contain `--`.
+- UI screenshots: launch with `--show`, then render the window with `PrintWindow` (PW_RENDERFULLCONTENT) so other
+  windows on top don't spoil the capture. Use UI Automation to click the navigation items. New tools (dotnet, git, gh) may be
   missing from PATH in older sessions; refresh with
   `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`.
 - Read-only hardware check: `src\DockSense.App\bin\Debug\net10.0-windows\DockSense.exe --probe <file>` writes a report

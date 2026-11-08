@@ -1,59 +1,270 @@
+<div align="center">
+
+<img src="assets/logo.png" width="192" alt="DockSense pixel-art handheld logo" />
+
 # DockSense
 
-**English** | [简体中文](README.zh-CN.md)
+**Automatic power profiles for Windows gaming handhelds: Handheld, Docked or eGPU.**
 
-**Automatic power profiles for PC gaming handhelds: Handheld, Docked or eGPU.**
+[![CI](https://github.com/rozx/DockSense/actions/workflows/ci.yml/badge.svg)](https://github.com/rozx/DockSense/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rozx/DockSense?include_prereleases&sort=semver&label=release)](https://github.com/rozx/DockSense/releases)
+[![Downloads](https://img.shields.io/github/downloads/rozx/DockSense/total?label=downloads)](https://github.com/rozx/DockSense/releases)
+[![License](https://img.shields.io/github/license/rozx/DockSense)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#requirements)
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Stars](https://img.shields.io/github/stars/rozx/DockSense?style=flat&logo=github)](https://github.com/rozx/DockSense/stargazers)
 
-DockSense is a small Windows tray app. It detects how your handheld is being used and applies the matching profile:
+**English** · [简体中文](README.zh-CN.md)
 
-| Mode | Detected when | Default profile |
+<img src="docs/images/status.png" width="800" alt="DockSense status page" />
+
+</div>
+
+---
+
+DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, works out how your handheld is being used, and applies the matching **power plan** and **Xbox full screen experience** setting. You don't have to switch anything by hand when you dock or undock.
+
+It started with one bug hunt: an ASUS ROG Xbox Ally X docked to an RTX 5090 was stuck at ~50 FPS with the CPU throttled to **2 GHz / 12 W**, and only while a game was in the foreground.
+
+## Contents
+
+- [Why DockSense](#why-docksense)
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Supported hardware](#supported-hardware)
+- [FAQ](#faq)
+- [Building from source](#building-from-source)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
+
+## Why DockSense
+
+Windows **Game Mode** has a hidden processor power profile called `GameMode`. It kicks in while a game has focus. On AMD handhelds, the vendor's provisioning package sets that profile to:
+
+| Setting | Normal | While a game is in the foreground |
 |---|---|---|
-| **Handheld** | no external display, no eGPU | leave the power plan to the vendor software, boot into Xbox Full Screen Experience |
-| **Docked** | an external display is connected | boot to the desktop |
-| **eGPU** | an external GPU (Thunderbolt / USB4 / OCuLink) is connected | eGPU-safe High Performance plan, boot to the desktop |
+| Energy performance preference (EPP) | 20 (favor performance) | **100 (maximum power saving)** |
+| Thread scheduling | prefer performance cores | **prefer efficient cores** |
 
-Every mode's power plan and Full Screen Experience behavior can be configured.
+That is a sensible choice when the CPU and iGPU share one small power budget. With an **eGPU**, though, the CPU becomes the bottleneck and the expensive graphics card waits half the time. Measured on a ROG Xbox Ally X with an RTX 5090, Game Mode on and the game in the foreground:
 
-> Status: **early development**. The first target device is the ASUS ROG Xbox Ally X (Ryzen AI Z2 Extreme). Other handhelds should work as long as they use standard Windows power plans.
+| Active power plan | CPU package | CPU clock | Result |
+|---|---|---|---|
+| Vendor "Turbo" plan (Balanced type) | 10–15 W | 2.2–2.6 GHz | throttled |
+| **DockSense Performance** (High Performance type) | **29–45 W** | **4.0–4.4 GHz** | full speed |
 
-## Why: the hidden Game Mode CPU throttle
+The overrides are only provisioned for *Balanced*-type plans, and `powercfg` cannot see them. DockSense switches to a High Performance-based plan while an eGPU is connected, then hands control back to your vendor software when you undock. You can keep Game Mode on.
 
-On the ROG Xbox Ally X docked to an RTX 5090 eGPU, games ran with the CPU at **~2 GHz / ~12 W** while a game was in the foreground. Alt-tabbing out brought it straight back to **~30 W / 3.7 GHz**.
-
-The cause is Windows **Game Mode**. While a game has focus, Windows switches to a hidden `GameMode` processor power profile. The AMD provisioning package on these handhelds sets that profile to **energy performance preference = 100 (max power saving)** and **"prefer efficient cores"**. That helps handheld play, where the CPU and iGPU share one power budget. With an eGPU, though, the CPU is the bottleneck, and the eGPU sits around half idle.
-
-These overrides only apply to **Balanced**-type power plans. A plan based on **High Performance** is not affected. DockSense creates such a plan and switches to it automatically while an eGPU is connected. Game Mode can stay on.
-
-The full analysis, data and manual workarounds are in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
+📖 The full investigation, raw data and registry paths are in **[docs/game-mode-throttle.md](docs/game-mode-throttle.md)**.
 
 ## Features
 
-- [x] Root-cause analysis and manual workaround (docs)
-- [x] Mode detection: eGPU (hot-pluggable display adapter), external displays, AC power, with debouncing
-- [x] Per-mode Windows power plan, restoring your previous plan when the mode ends
-- [x] Automatic "eGPU-safe" plan (High Performance personality, immune to the Game Mode throttle)
-- [x] Re-applies the plan when vendor software (e.g. Armoury Crate) switches it back
-- [x] Per-mode Xbox Full Screen Experience at sign-in: unchanged / desktop / boot into FSE
-- [ ] Live FSE switching when the mode changes (experimental)
-- [x] Tray icon with current mode, pause, start with Windows
-- [ ] Settings window (for now: tray → Edit settings opens `config.json`)
-- [x] Diagnostics: `DockSense.exe --probe report.txt` reports the hardware, the mode and whether the Game Mode throttle applies
-- [ ] Release builds (single-file .exe) and CI
+- 🔌 **Automatic mode detection.** Handheld, Docked (external display) or eGPU (Thunderbolt / USB4 / OCuLink), with debouncing so a dock being plugged in or out never causes flapping.
+- ⚡ **Per-mode power plans.** DockSense restores your previous plan when a mode ends, and creates an "eGPU-safe" plan that is immune to the Game Mode throttle.
+- 🛡️ **Keeps the plan you chose.** If vendor software (e.g. Armoury Crate) switches the plan back, DockSense re-applies it, and it backs off if something keeps fighting.
+- 🎮 **Xbox full screen experience per mode.** For example, boot into the full screen experience as a handheld and into the desktop when docked.
+- 🔔 **Native Windows notifications** when the mode changes, showing the detected GPU and the plan that was applied.
+- 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
+- 🌐 **English and 简体中文**, light and dark theme, and pixel-art tray icons for every state.
+- 🪶 **No admin rights, no driver, no service.** It uses only documented Windows power and device APIs.
 
-Tested on: ASUS ROG Xbox Ally X + ROG XG Mobile (RTX 5090), plugging and unplugging the dock live.
+## How it works
 
-No admin rights are required.
+```mermaid
+flowchart LR
+    E["Windows events<br/>GPU / monitor plugged · display change<br/>AC/DC · resume · power plan changed"] --> S["Snapshot<br/>GPUs · displays · AC"]
+    S --> M{"Mode"}
+    M -- "hot-pluggable PCIe GPU" --> G["eGPU"]
+    M -- "external display" --> D["Docked"]
+    M -- "otherwise" --> H["Handheld"]
+    G --> W["Settle<br/>(default 5 s)"]
+    D --> W
+    H --> W
+    W --> A["Apply profile<br/>power plan · full screen experience"]
+    A --> N["Notification"]
+```
 
-## Build
+| Mode | Detected when | Default profile |
+|:---:|---|---|
+| <img src="assets/icons/egpu@3x.png" width="48" alt="eGPU" /><br/>**eGPU** | A PCIe display adapter that Windows reports as hot-pluggable or outside the local machine (Thunderbolt / USB4 docks). OCuLink docks can be marked manually. | DockSense Performance plan · boot to desktop |
+| <img src="assets/icons/docked@3x.png" width="48" alt="Docked" /><br/>**Docked** | An active external display, and no eGPU | Plan unchanged · boot to desktop |
+| <img src="assets/icons/handheld@3x.png" width="48" alt="Handheld" /><br/>**Handheld** | Neither of the above | Plan unchanged (vendor decides) · boot into full screen experience |
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) on Windows 10/11.
+Some details:
+
+- **Vendor IDs are never used.** AMD iGPUs and AMD eGPUs share a vendor. USB display adapters (DisplayLink) and virtual displays (streaming apps) are ignored.
+- **Unplugging is messy.** AC power drops about 10 seconds *before* Windows removes the eGPU, and vendor software reacts to the AC change. DockSense keeps the eGPU profile until the GPU is actually gone, then restores the plan your vendor software picked.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/profiles.png" alt="Mode profiles" /><p align="center"><b>Mode profiles</b>: power plan and full screen experience per mode</p></td>
+    <td width="50%"><img src="docs/images/settings.png" alt="Settings" /><p align="center"><b>Settings</b>: language, theme, startup, notifications</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/toast.png" alt="Notification" /><p align="center"><b>Notification</b> when the mode changes</p></td>
+    <td align="center">
+      <img src="assets/icons/handheld@3x.png" width="48" alt="Handheld" />&nbsp;
+      <img src="assets/icons/docked@3x.png" width="48" alt="Docked" />&nbsp;
+      <img src="assets/icons/egpu@3x.png" width="48" alt="eGPU" />&nbsp;
+      <img src="assets/icons/paused@3x.png" width="48" alt="Paused" />
+      <p><b>Tray icons</b>: Handheld · Docked · eGPU · Paused</p>
+    </td>
+  </tr>
+</table>
+
+## Installation
+
+### Requirements
+
+- Windows 10 2004 or later, or Windows 11 (x64 or ARM64)
+- No .NET installation needed: release builds are self-contained
+
+### Download
+
+1. Download `DockSense-<version>-win-x64.zip` from the **[latest release](https://github.com/rozx/DockSense/releases/latest)**.
+2. Extract it anywhere, for example `%LOCALAPPDATA%\Programs\DockSense`, and run **DockSense.exe**.
+3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in.
+
+> [!NOTE]
+> The executable is not code-signed yet, so Windows SmartScreen may warn on first run (**More info → Run anyway**).
+
+## Usage
+
+- **Tray icon:** left-click opens the window. Right-click lets you pause automatic switching, re-check now, or exit.
+- **Status:** the current mode, the active plan, the Game Mode check, detected adapters and displays, and recent activity.
+- **Mode profiles:** pick the power plan and the full screen experience behavior for each mode. The choices are:
+  - *Don't change*: your vendor software decides
+  - *DockSense Performance*: the eGPU-safe plan
+  - any existing Windows plan
+- **Detection:** settle time, "Docked only when plugged in", and per-adapter overrides (*Always / Never an eGPU*).
+
+Closing the window keeps DockSense running in the tray. Launching DockSense.exe again brings the window back.
+
+## Configuration
+
+Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this file for you. Logs and runtime state live in `%LOCALAPPDATA%\DockSense`.
+
+| Key | Default | Description |
+|---|---|---|
+| `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`, `DockSensePerformance` or `Specific` (with `planId`) |
+| `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`, `Desktop` or `FullScreenExperience`, applied at the next sign-in |
+| `detection.settleSeconds` | `5` | How long a new mode must stay stable before it is applied |
+| `detection.dockedRequiresAcPower` | `false` | Count external displays only while plugged in |
+| `detection.forceEgpuInstanceIds` / `ignoreGpuInstanceIds` | `[]` | Per-adapter overrides (PnP instance IDs) |
+| `reassertPowerPlan` | `true` | Switch back when other software changes the plan in a managed mode |
+| `ui.language` | `system` | `system`, `en` or `zh-Hans` |
+| `ui.theme` | `System` | `System`, `Light` or `Dark` |
+| `ui.notifyOnModeChange` / `ui.notifyOnWarnings` | `true` | Windows notifications |
+
+## Supported hardware
+
+DockSense uses standard Windows APIs, so it should work on any Windows handheld or laptop. Tested so far:
+
+| Device | eGPU / dock | Status |
+|---|---|---|
+| ASUS ROG Xbox Ally X (Ryzen AI Z2 Extreme) | ASUS ROG XG Mobile (RTX 5090 Laptop GPU), USB4 | ✅ Tested: live plug/unplug, Armoury Crate coexistence |
+
+Tested it on another device? Please [open an issue](https://github.com/rozx/DockSense/issues/new) with the output of **About → Copy diagnostic report** so it can be added here.
+
+## FAQ
+
+<details>
+<summary><b>I can't find "DockSense Performance" in Control Panel.</b></summary>
+
+On Modern Standby devices, Windows hides High Performance-type plans from Control Panel and `powercfg /list`. The plan exists and works. Check `powercfg /getactivescheme`, or look at the Status page.
+</details>
+
+<details>
+<summary><b>Will DockSense fight with Armoury Crate / Legion Space / other vendor tools?</b></summary>
+
+Only in modes where you chose a specific plan, and only within limits. If something switches the plan more than 5 times in 2 minutes, DockSense stops re-applying it until the next mode change and tells you. Vendor TDP settings (e.g. Armoury Crate's 35 W Turbo) are separate from Windows plans and keep working.
+</details>
+
+<details>
+<summary><b>Do I need to turn off Game Mode?</b></summary>
+
+No. That was the old workaround. With an eGPU connected, DockSense uses a plan that the Game Mode profile doesn't touch, so Game Mode can stay on, and it keeps helping handheld play.
+</details>
+
+<details>
+<summary><b>How do I uninstall DockSense completely?</b></summary>
+
+1. Turn off **Start with Windows**, then exit from the tray.
+2. Delete the DockSense folder, plus `%APPDATA%\DockSense` and `%LOCALAPPDATA%\DockSense`.
+3. Optionally remove the plan with `powercfg /delete <guid>`. The GUID is `dockSensePerformancePlanId` in `config.json`.
+</details>
+
+<details>
+<summary><b>Something switched the wrong way. How do I debug it?</b></summary>
+
+Open **Settings → Open log**. Every decision is logged with the hardware snapshot behind it. Running `DockSense.exe --probe report.txt` writes a read-only diagnostic report.
+</details>
+
+## Building from source
+
+Requires Windows and the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```powershell
+git clone https://github.com/rozx/DockSense.git
+cd DockSense
 dotnet build
 dotnet test
 dotnet run --project src/DockSense.App
 ```
 
+| Project | Purpose |
+|---|---|
+| `src/DockSense.Core` | Platform-independent logic: mode resolution, debouncing, power plan policy, config (fully unit tested) |
+| `src/DockSense.App` | WPF tray app: Windows APIs (SetupAPI, display config, powrprof), UI, notifications |
+| `tests/DockSense.Core.Tests` | xUnit tests, including the measured Ally X / XG Mobile unplug sequence |
+| `tools/DockSense.IconGen` | Generates every icon from the pixel-art grids in `Sprites.cs` |
+
+The icons are text. To change one, edit `tools/DockSense.IconGen/Sprites.cs` and run `dotnet run --project tools/DockSense.IconGen -- assets`.
+
+### Release process
+
+Releases are automated, but they only happen when **all three** of these are true:
+
+1. A pull request into `main` is **merged**.
+2. Its branch is named **`release/v<major>.<minor>`** or `release/v<major>.<minor>.<patch>`, for example `release/v0.2` or `release/v1.2.3`.
+3. The pull request has the **`release`** label.
+
+GitHub Actions then reads the version from the branch name, runs the tests, builds self-contained single-file executables for x64 and ARM64, tags the merge commit `v<version>`, and publishes the release with generated notes. Every other push or pull request only runs CI (build + tests).
+
+## Roadmap
+
+- [ ] Switch the full screen experience live when the mode changes, not only at sign-in
+- [ ] Per-mode TDP via vendor interfaces (ASUS, Lenovo, ...)
+- [ ] Per-game profiles
+- [ ] winget / Microsoft Store distribution
+- [ ] Code signing
+
+Ideas and votes are welcome in [Issues](https://github.com/rozx/DockSense/issues).
+
+## Contributing
+
+Bug reports, device reports and pull requests are welcome.
+
+- Please include the diagnostic report (**About → Copy diagnostic report**) with hardware-related issues.
+- Keep `DockSense.Core` free of Windows APIs, and add tests for new decision logic.
+- UI text lives in `src/DockSense.App/Localization/Strings*.resx`. Please update both English and Chinese.
+
+## Acknowledgements
+
+- [WPF-UI](https://github.com/lepoco/wpfui): Fluent controls for WPF
+- [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon): tray icon
+- [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) and the [Windows Community Toolkit](https://github.com/CommunityToolkit/WindowsCommunityToolkit) notifications
+- [Sweetie 16](https://lospec.com/palette-list/sweetie-16) palette by GrafxKid, used for the pixel-art icons
+
 ## License
 
-DockSense is free software, licensed under the [GNU General Public License v3.0](LICENSE).
+DockSense is free software, released under the [GNU General Public License v3.0](LICENSE).
+Copyright © 2026 [rozx](https://github.com/rozx).
