@@ -80,8 +80,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - Registering persistence (scheduled tasks, Run keys) from Claude's shell is blocked by the auto-mode classifier.
   The user runs such steps themselves with `!`.
 - The shell is Windows PowerShell 5.1. Multi-line commit messages that contain double quotes get mangled when passed
-  as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. Write that file with the Write
-  tool, not `Set-Content -Encoding utf8`, which adds a BOM to the commit message.
+  as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. Create a fresh file with the Write
+  tool each time. `Set-Content -Encoding utf8` adds a BOM, and Write keeps the BOM of an existing file, so the BOM
+  ends up at the start of the commit message (commits b633cd4 and 23d2146 have one).
 - WPF projects do not import `System.IO` implicitly (the csproj adds it). XML comments in csproj files must not
   contain `--`.
 - UI screenshots: launch with `--show`, then render the window with `PrintWindow` (PW_RENDERFULLCONTENT) so other
