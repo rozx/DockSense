@@ -1,0 +1,82 @@
+<Page
+    x:Class="DockSense.App.Views.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:loc="clr-namespace:DockSense.App.Localization"
+    Title="Settings">
+    <StackPanel Margin="32,16,32,32">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{loc:T Set_Title}" />
+
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:T Set_Appearance}" />
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon LocalLanguage24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_Language}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_LanguageDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="220" DisplayMemberPath="Label" ItemsSource="{Binding LanguageOptions}" SelectedValue="{Binding SelectedLanguage}" SelectedValuePath="Value" />
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon DarkTheme24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_Theme}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_ThemeDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="220" DisplayMemberPath="Label" ItemsSource="{Binding ThemeOptions}" SelectedValue="{Binding SelectedTheme}" SelectedValuePath="Value" />
+        </ui:CardControl>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:T Set_Behavior}" />
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Power24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_Startup}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_StartupDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" />
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon ShieldCheckmark24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_Reassert}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_ReassertDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding ReassertPowerPlan}" />
+        </ui:CardControl>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:T Set_Notifications}" />
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Alert24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_NotifyMode}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_NotifyModeDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding NotifyOnModeChange}" />
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Warning24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_NotifyWarn}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_NotifyWarnDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding NotifyOnWarnings}" />
+        </ui:CardControl>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:T Set_Files}" />
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon FolderOpen24}">
+            <ui:CardControl.Header>
+                <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_FilesDesc}" Margin="0,0,24,0" />
+            </ui:CardControl.Header>
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Command="{Binding OpenConfigCommand}" Content="{loc:T Set_OpenConfig}" Icon="{ui:SymbolIcon Document24}" Margin="0,0,8,0" />
+                <ui:Button Command="{Binding OpenLogCommand}" Content="{loc:T Set_OpenLog}" Icon="{ui:SymbolIcon DocumentText24}" />
+            </StackPanel>
+        </ui:CardControl>
+    </StackPanel>
+</Page>

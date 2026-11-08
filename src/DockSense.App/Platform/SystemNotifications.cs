@@ -1,47 +1,50 @@
 using System.Runtime.InteropServices;
-using Microsoft.Win32;
+using System.Windows.Interop;
 using static DockSense.App.Platform.NativeMethods;
 
 namespace DockSense.App.Platform;
 
 /// <summary>
 /// A hidden top-level window that receives the Windows notifications DockSense reacts to:
-/// display adapters arriving or leaving, AC/DC changes, resume from sleep, display topology changes,
-/// and the active power plan changing (from any process).
-/// Events are raised on the UI thread that created this object.
+/// display adapters and monitors arriving or leaving, display changes, AC/DC changes, resume from sleep,
+/// and the active power plan changing (from any process). Events are raised on the UI thread.
 /// </summary>
-internal sealed class SystemNotifications : NativeWindow, IDisposable
+internal sealed class SystemNotifications : IDisposable
 {
+    private readonly HwndSource _window;
     private readonly List<IntPtr> _powerRegistrations = [];
-    private readonly IntPtr _deviceRegistration;
-    private readonly SynchronizationContext _uiContext;
+    private readonly List<IntPtr> _deviceRegistrations = [];
 
     public SystemNotifications()
     {
-        _uiContext = SynchronizationContext.Current
-            ?? throw new InvalidOperationException("Create SystemNotifications on the UI thread.");
-
-        CreateHandle(new CreateParams { Caption = "DockSense notifications" });
+        // A top-level (not message-only) window: WM_DISPLAYCHANGE is only broadcast to top-level windows.
+        _window = new HwndSource(new HwndSourceParameters("DockSense notifications") { WindowStyle = 0, Width = 0, Height = 0 });
+        _window.AddHook(WndProc);
 
         foreach (var setting in new[] { GUID_ACTIVE_POWERSCHEME, GUID_ACDC_POWER_SOURCE })
         {
             var guid = setting;
-            var registration = RegisterPowerSettingNotification(Handle, ref guid, DEVICE_NOTIFY_WINDOW_HANDLE);
+            var registration = RegisterPowerSettingNotification(_window.Handle, ref guid, DEVICE_NOTIFY_WINDOW_HANDLE);
             if (registration != IntPtr.Zero)
             {
                 _powerRegistrations.Add(registration);
             }
         }
 
-        var filter = new DEV_BROADCAST_DEVICEINTERFACE
+        foreach (var deviceInterface in new[] { GUID_DEVINTERFACE_DISPLAY_ADAPTER, GUID_DEVINTERFACE_MONITOR })
         {
-            dbcc_size = Marshal.SizeOf<DEV_BROADCAST_DEVICEINTERFACE>(),
-            dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE,
-            dbcc_classguid = GUID_DEVINTERFACE_DISPLAY_ADAPTER,
-        };
-        _deviceRegistration = RegisterDeviceNotificationW(Handle, ref filter, DEVICE_NOTIFY_WINDOW_HANDLE);
-
-        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+            var filter = new DEV_BROADCAST_DEVICEINTERFACE
+            {
+                dbcc_size = Marshal.SizeOf<DEV_BROADCAST_DEVICEINTERFACE>(),
+                dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE,
+                dbcc_classguid = deviceInterface,
+            };
+            var registration = RegisterDeviceNotificationW(_window.Handle, ref filter, DEVICE_NOTIFY_WINDOW_HANDLE);
+            if (registration != IntPtr.Zero)
+            {
+                _deviceRegistrations.Add(registration);
+            }
+        }
     }
 
     /// <summary>Something that can change the mode happened. The argument is a short reason for the log.</summary>
@@ -52,39 +55,43 @@ internal sealed class SystemNotifications : NativeWindow, IDisposable
 
     public void Dispose()
     {
-        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         foreach (var registration in _powerRegistrations)
         {
             UnregisterPowerSettingNotification(registration);
         }
 
-        if (_deviceRegistration != IntPtr.Zero)
+        foreach (var registration in _deviceRegistrations)
         {
-            UnregisterDeviceNotification(_deviceRegistration);
+            UnregisterDeviceNotification(registration);
         }
 
-        DestroyHandle();
+        _window.RemoveHook(WndProc);
+        _window.Dispose();
     }
 
-    protected override void WndProc(ref Message m)
+    private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        switch (m.Msg)
+        switch (message)
         {
             case WM_POWERBROADCAST:
-                HandlePowerBroadcast((int)m.WParam, m.LParam);
-                m.Result = new IntPtr(1);
-                return;
+                HandlePowerBroadcast((int)wParam, lParam);
+                handled = true;
+                return new IntPtr(1);
 
-            case WM_DEVICECHANGE when (int)m.WParam == DBT_DEVICEARRIVAL:
-                HardwareChanged?.Invoke("display adapter arrived");
+            case WM_DEVICECHANGE when (int)wParam == DBT_DEVICEARRIVAL:
+                HardwareChanged?.Invoke("device arrived (display adapter or monitor)");
                 break;
 
-            case WM_DEVICECHANGE when (int)m.WParam == DBT_DEVICEREMOVECOMPLETE:
-                HardwareChanged?.Invoke("display adapter removed");
+            case WM_DEVICECHANGE when (int)wParam == DBT_DEVICEREMOVECOMPLETE:
+                HardwareChanged?.Invoke("device removed (display adapter or monitor)");
+                break;
+
+            case WM_DISPLAYCHANGE:
+                HardwareChanged?.Invoke("display configuration changed");
                 break;
         }
 
-        base.WndProc(ref m);
+        return IntPtr.Zero;
     }
 
     private void HandlePowerBroadcast(int eventType, IntPtr data)
@@ -110,8 +117,4 @@ internal sealed class SystemNotifications : NativeWindow, IDisposable
                 break;
         }
     }
-
-    // SystemEvents may raise this on its own thread; hop to the UI thread.
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e) =>
-        _uiContext.Post(_ => HardwareChanged?.Invoke("display configuration changed"), null);
 }

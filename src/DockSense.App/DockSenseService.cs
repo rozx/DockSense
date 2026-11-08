@@ -1,38 +1,52 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows;
+using System.Windows.Threading;
+using DockSense.App.Localization;
 using DockSense.App.Platform;
 using DockSense.Core;
 
 namespace DockSense.App;
 
+/// <summary>One line in the dashboard's "Recent activity" list.</summary>
+public sealed record ActivityEntry(DateTime Time, string Message);
+
+/// <summary>Raised after a mode's profile has been applied.</summary>
+public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string? PlanName, bool IsStartup);
+
 /// <summary>
 /// Ties detection, debouncing and profile application together. Everything runs on the UI thread: Windows
-/// notifications only schedule a re-check, and timers do the work.
+/// notifications only schedule a re-check, and dispatcher timers do the work.
 /// </summary>
-internal sealed class DockSenseService : IDisposable
+public sealed class DockSenseService : IDisposable
 {
+    private const int MaxActivity = 50;
     private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(1500);
 
     private readonly ConfigStore _configStore;
-    private readonly System.Windows.Forms.Timer _rescanTimer = new();
-    private readonly System.Windows.Forms.Timer _settleTimer = new();
+    private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
+    private readonly DispatcherTimer _settleTimer = new();
     private SystemNotifications? _notifications;
-    private DockSenseConfig _config = new();
     private ModeStabilizer _stabilizer = new(DockMode.Handheld, TimeSpan.Zero);
     private PowerPlanController _planController = new();
 
     public DockSenseService(ConfigStore configStore)
     {
         _configStore = configStore;
-        _rescanTimer.Interval = (int)CoalesceDelay.TotalMilliseconds;
         _rescanTimer.Tick += (_, _) => { _rescanTimer.Stop(); Evaluate(); };
         _settleTimer.Tick += (_, _) => { _settleTimer.Stop(); Evaluate(); };
     }
 
-    /// <summary>Raised whenever the mode, plan, pause state or snapshot changes (for the tray UI).</summary>
+    /// <summary>Raised whenever anything shown in the UI may have changed.</summary>
     public event EventHandler? StatusChanged;
 
-    /// <summary>Raised for things the user should notice (e.g. DockSense gave up re-applying its plan).</summary>
-    public event Action<string>? Notice;
+    /// <summary>Raised after a mode profile was applied (startup and every mode change).</summary>
+    public event Action<ModeApplied>? ModeApplied;
+
+    /// <summary>Raised for problems the user should know about.</summary>
+    public event Action<string>? Warning;
+
+    public ObservableCollection<ActivityEntry> Activity { get; } = [];
 
     public DockMode Mode => _stabilizer.Current;
 
@@ -40,18 +54,32 @@ internal sealed class DockSenseService : IDisposable
 
     public bool Paused { get; private set; }
 
-    public DockSenseConfig Config => _config;
+    public DockSenseConfig Config { get; private set; } = new();
+
+    public GameModeReport? GameMode { get; private set; }
+
+    /// <summary>True when config.json did not exist at startup (first run).</summary>
+    public bool IsFirstRun { get; private set; }
+
+    public string ConfigPath => _configStore.FilePath;
 
     public void Start()
     {
-        _config = _configStore.Load(Log.Warn);
+        IsFirstRun = !File.Exists(_configStore.FilePath);
+        Config = _configStore.Load(Log.Warn);
+        if (IsFirstRun)
+        {
+            _configStore.Save(Config);
+        }
+
         Snapshot = TakeSnapshot() ?? new DeviceSnapshot([], [], OnAcPower: true);
-        var mode = ModeResolver.Resolve(Snapshot, _config.Detection);
-        _stabilizer = new ModeStabilizer(mode, TimeSpan.FromSeconds(Math.Max(0, _config.Detection.SettleSeconds)));
+        var mode = ModeResolver.Resolve(Snapshot, Config.Detection);
+        _stabilizer = new ModeStabilizer(mode, SettleTime);
         _planController = CreatePlanController(StateStore.Load());
 
         Log.Info($"Started. {Describe(Snapshot)} -> {mode}");
-        ApplyProfile(mode, "startup");
+        AddActivity(Loc.F("Act_Started", ModeName(mode)));
+        ApplyProfile(mode, "startup", isStartup: true);
 
         // Register only after the initial apply: Windows immediately reports the current plan, which is then ours.
         _notifications = new SystemNotifications();
@@ -75,53 +103,69 @@ internal sealed class DockSenseService : IDisposable
 
         Paused = paused;
         Log.Info(paused ? "Automatic switching paused." : "Automatic switching resumed.");
+        AddActivity(Loc.T(paused ? "Act_Paused" : "Act_Resumed"));
         if (!paused)
         {
             Snapshot = TakeSnapshot() ?? Snapshot;
-            ApplyProfile(_stabilizer.Current, "resumed");
+            ApplyProfile(_stabilizer.Current, "resumed", isStartup: false);
         }
 
-        StatusChanged?.Invoke(this, EventArgs.Empty);
+        RaiseStatusChanged();
     }
 
-    /// <summary>Re-reads config.json (after the user edited it) and re-applies the current mode.</summary>
-    public void ReloadConfig()
+    /// <summary>Changes and saves the config. When <paramref name="reapply"/> is set, the current mode is re-applied.</summary>
+    public void UpdateConfig(Func<DockSenseConfig, DockSenseConfig> change, bool reapply)
     {
-        _config = _configStore.Load(Log.Warn);
-        _stabilizer = new ModeStabilizer(_stabilizer.Current, TimeSpan.FromSeconds(Math.Max(0, _config.Detection.SettleSeconds)));
-        _planController = CreatePlanController(_planController.State);
-        Log.Info("Config reloaded.");
-        Evaluate(force: true);
-    }
-
-    /// <summary>Makes sure config.json exists on disk (with defaults) so the user can open and edit it.</summary>
-    public string EnsureConfigFile()
-    {
-        if (!File.Exists(_configStore.FilePath))
+        var before = Config;
+        Config = change(Config);
+        if (Config == before)
         {
-            _configStore.Save(_config);
+            return;
         }
 
-        return _configStore.FilePath;
+        _configStore.Save(Config);
+        if (Config.Detection.SettleSeconds != before.Detection.SettleSeconds)
+        {
+            _stabilizer = new ModeStabilizer(_stabilizer.Current, SettleTime);
+        }
+
+        if (Config.ReassertPowerPlan != before.ReassertPowerPlan)
+        {
+            _planController = CreatePlanController(_planController.State);
+        }
+
+        Log.Info("Settings saved.");
+        if (reapply)
+        {
+            Evaluate(force: true);
+        }
+        else
+        {
+            RaiseStatusChanged();
+        }
     }
 
     public void Dispose()
     {
         _notifications?.Dispose();
-        _rescanTimer.Dispose();
-        _settleTimer.Dispose();
+        _rescanTimer.Stop();
+        _settleTimer.Stop();
     }
+
+    public static string ModeName(DockMode mode) => Loc.T($"Mode_{mode}");
+
+    private TimeSpan SettleTime => TimeSpan.FromSeconds(Math.Clamp(Config.Detection.SettleSeconds, 0, 120));
 
     private PowerPlanController CreatePlanController(PowerPlanState? savedState)
     {
         // No saved state but our own plan is active (e.g. state file deleted): treat it as owned so that leaving
         // the eGPU mode still switches away from it.
-        if (savedState is null && _config.DockSensePerformancePlanId is { } ownPlan && SafeGetActivePlan() == ownPlan)
+        if (savedState is null && Config.DockSensePerformancePlanId is { } ownPlan && SafeGetActivePlan() == ownPlan)
         {
             savedState = new PowerPlanState(ownPlan, null);
         }
 
-        return new PowerPlanController(savedState) { ReassertEnabled = _config.ReassertPowerPlan };
+        return new PowerPlanController(savedState) { ReassertEnabled = Config.ReassertPowerPlan };
     }
 
     private void Evaluate(bool force = false)
@@ -132,29 +176,30 @@ internal sealed class DockSenseService : IDisposable
             return;
         }
 
-        var observed = ModeResolver.Resolve(Snapshot, _config.Detection);
+        var observed = ModeResolver.Resolve(Snapshot, Config.Detection);
         var now = DateTimeOffset.Now;
         if (_stabilizer.Observe(observed, now))
         {
             Log.Info($"Mode changed to {observed}. {Describe(Snapshot)}");
-            ApplyProfile(observed, "mode change");
+            AddActivity(Loc.F("Act_ModeChanged", ModeName(observed)));
+            ApplyProfile(observed, "mode change", isStartup: false);
         }
         else if (force)
         {
-            ApplyProfile(_stabilizer.Current, "config reload");
+            ApplyProfile(_stabilizer.Current, "settings changed", isStartup: false, announce: false);
         }
         else if (_stabilizer.PendingDueAt is { } due)
         {
             Log.Info($"Waiting for {observed} to settle (until {due:HH:mm:ss}).");
             _settleTimer.Stop();
-            _settleTimer.Interval = Math.Max(100, (int)Math.Ceiling((due - now).TotalMilliseconds) + 100);
+            _settleTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(100, (due - now).TotalMilliseconds + 100));
             _settleTimer.Start();
         }
 
-        StatusChanged?.Invoke(this, EventArgs.Empty);
+        RaiseStatusChanged();
     }
 
-    private void ApplyProfile(DockMode mode, string reason)
+    private void ApplyProfile(DockMode mode, string reason, bool isStartup, bool announce = true)
     {
         if (Paused)
         {
@@ -162,10 +207,16 @@ internal sealed class DockSenseService : IDisposable
             return;
         }
 
-        var profile = _config.ProfileFor(mode);
+        var profile = Config.ProfileFor(mode);
         ApplyPowerPlan(mode, profile, reason);
         ApplyFse(mode, profile);
-        StatusChanged?.Invoke(this, EventArgs.Empty);
+
+        if (announce && Snapshot is not null)
+        {
+            ModeApplied?.Invoke(new ModeApplied(mode, Snapshot, SafeGetActivePlanName(), isStartup));
+        }
+
+        RaiseStatusChanged();
     }
 
     private void ApplyPowerPlan(DockMode mode, ModeProfile profile, string reason)
@@ -179,6 +230,7 @@ internal sealed class DockSenseService : IDisposable
             {
                 PowerPlans.SetActive(plan);
                 Log.Info($"{mode} ({reason}): power plan {PowerPlans.Describe(active)} -> {PowerPlans.Describe(plan)}");
+                AddActivity(Loc.F("Act_PlanApplied", PowerPlans.GetName(plan)));
             }
 
             StateStore.Save(_planController.State);
@@ -203,23 +255,30 @@ internal sealed class DockSenseService : IDisposable
                 return null;
 
             case PowerPlanKind.DockSensePerformance:
-                if (_config.DockSensePerformancePlanId is { } existing && PowerPlans.Exists(existing))
-                {
-                    return existing;
-                }
-
-                var created = PowerPlans.CreateDockSensePerformancePlan();
-                Log.Info($"Created power plan {PowerPlans.Describe(created)}.");
-                _config = _config with { DockSensePerformancePlanId = created };
-                _configStore.Save(_config);
-                return created;
+                return EnsureDockSensePlan();
 
             default:
                 return null;
         }
     }
 
-    private static void ApplyFse(DockMode mode, ModeProfile profile)
+    /// <summary>Returns DockSense's own High Performance-based plan, creating it if needed.</summary>
+    public Guid EnsureDockSensePlan()
+    {
+        if (Config.DockSensePerformancePlanId is { } existing && PowerPlans.Exists(existing))
+        {
+            return existing;
+        }
+
+        var created = PowerPlans.CreateDockSensePerformancePlan();
+        Log.Info($"Created power plan {PowerPlans.Describe(created)}.");
+        AddActivity(Loc.F("Act_PlanCreated", PowerPlans.DockSensePlanName));
+        Config = Config with { DockSensePerformancePlanId = created };
+        _configStore.Save(Config);
+        return created;
+    }
+
+    private void ApplyFse(DockMode mode, ModeProfile profile)
     {
         if (profile.Fse == FseStartup.Unchanged || !FseSettings.IsAvailable)
         {
@@ -230,6 +289,7 @@ internal sealed class DockSenseService : IDisposable
         if (FseSettings.SetStartupToFse(wantFse))
         {
             Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
+            AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
         }
 
         if (profile.FseApplyImmediately)
@@ -242,6 +302,7 @@ internal sealed class DockSenseService : IDisposable
     {
         if (Paused)
         {
+            RaiseStatusChanged();
             return;
         }
 
@@ -249,18 +310,34 @@ internal sealed class DockSenseService : IDisposable
         if (reapply is { } plan)
         {
             Log.Info($"Power plan was switched to {PowerPlans.Describe(newActive)} by another program; re-applying {PowerPlans.Describe(plan)}.");
+            AddActivity(Loc.F("Act_PlanReasserted", PowerPlans.GetName(newActive), PowerPlans.GetName(plan)));
             TrySetActive(plan);
         }
         else if (_planController.GaveUp)
         {
-            var message = $"Another program keeps switching the power plan (now {PowerPlans.GetName(newActive)}). " +
-                "DockSense stopped re-applying its plan until the next mode change.";
-            Log.Warn(message);
-            Notice?.Invoke(message);
+            Log.Warn($"Another program keeps switching the power plan (now {PowerPlans.Describe(newActive)}); giving up until the next mode change.");
+            var message = Loc.T("Act_GaveUp");
+            AddActivity(message);
+            Warning?.Invoke(message);
         }
 
         StateStore.Save(_planController.State);
+        RaiseStatusChanged();
+    }
+
+    private void RaiseStatusChanged()
+    {
+        GameMode = SafeReadGameMode();
         StatusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void AddActivity(string message)
+    {
+        Activity.Insert(0, new ActivityEntry(DateTime.Now, message));
+        while (Activity.Count > MaxActivity)
+        {
+            Activity.RemoveAt(Activity.Count - 1);
+        }
     }
 
     private static void TrySetActive(Guid plan)
@@ -287,6 +364,20 @@ internal sealed class DockSenseService : IDisposable
         }
     }
 
+    public static string? SafeGetActivePlanName() => SafeGetActivePlan() is { } plan ? PowerPlans.GetName(plan) : null;
+
+    private static GameModeReport? SafeReadGameMode()
+    {
+        try
+        {
+            return GameModeDiagnostics.Read();
+        }
+        catch (Exception ex) when (ex is Win32Exception or System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     private static DeviceSnapshot? TakeSnapshot()
     {
         try
@@ -294,7 +385,7 @@ internal sealed class DockSenseService : IDisposable
             return new DeviceSnapshot(
                 GpuProbe.GetWorkingAdapters(),
                 DisplayProbe.GetActiveDisplays(),
-                SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online);
+                SystemParameters.PowerLineStatus == PowerLineStatus.Online);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {

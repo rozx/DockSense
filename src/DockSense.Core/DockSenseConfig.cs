@@ -28,6 +28,8 @@ public sealed record DockSenseConfig
     /// <summary>GUID of the plan DockSense created for <see cref="PowerPlanKind.DockSensePerformance"/>, once it exists.</summary>
     public Guid? DockSensePerformancePlanId { get; init; }
 
+    public UiSettings Ui { get; init; } = new();
+
     public ModeProfile ProfileFor(DockMode mode) => mode switch
     {
         DockMode.Handheld => Handheld,

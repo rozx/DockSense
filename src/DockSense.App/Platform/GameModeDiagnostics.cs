@@ -4,9 +4,9 @@ using static DockSense.App.Platform.NativeMethods;
 namespace DockSense.App.Platform;
 
 /// <summary>One provisioned GameMode override value.</summary>
-internal sealed record GameModeOverride(string Setting, string Scheme, uint? AcValue);
+public sealed record GameModeOverride(string Setting, string Scheme, uint? AcValue);
 
-internal sealed record GameModeReport(
+public sealed record GameModeReport(
     bool GameModeEnabled,
     int? ActivePlanPersonality,
     IReadOnlyList<GameModeOverride> Overrides)

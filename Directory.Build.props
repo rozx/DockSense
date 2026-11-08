@@ -6,7 +6,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Version>0.1.0</Version>
     <Product>DockSense</Product>
-    <Authors>DockSense contributors</Authors>
-    <Copyright>Copyright (c) 2026 DockSense contributors</Copyright>
+    <Authors>rozx</Authors>
+    <Company>rozx</Company>
+    <Copyright>Copyright (c) 2026 rozx</Copyright>
   </PropertyGroup>
 </Project>

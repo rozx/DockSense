@@ -37,7 +37,7 @@ internal static class ProbeReport
         var snapshot = new DeviceSnapshot(
             GpuProbe.GetWorkingAdapters(),
             DisplayProbe.GetActiveDisplays(),
-            SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online);
+            System.Windows.SystemParameters.PowerLineStatus == System.Windows.PowerLineStatus.Online);
 
         text.AppendLine();
         text.AppendLine($"AC power:            {snapshot.OnAcPower}");

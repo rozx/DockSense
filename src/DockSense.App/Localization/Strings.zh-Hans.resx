@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+
+  <data name="Nav_Status" xml:space="preserve"><value>状态</value></data>
+  <data name="Nav_Profiles" xml:space="preserve"><value>模式配置</value></data>
+  <data name="Nav_Detection" xml:space="preserve"><value>检测</value></data>
+  <data name="Nav_Settings" xml:space="preserve"><value>设置</value></data>
+  <data name="Nav_About" xml:space="preserve"><value>关于</value></data>
+
+  <data name="Mode_Handheld" xml:space="preserve"><value>掌机</value></data>
+  <data name="Mode_Docked" xml:space="preserve"><value>底座</value></data>
+  <data name="Mode_Egpu" xml:space="preserve"><value>外接显卡</value></data>
+  <data name="ModeTitle_Handheld" xml:space="preserve"><value>掌机模式</value></data>
+  <data name="ModeTitle_Docked" xml:space="preserve"><value>底座模式</value></data>
+  <data name="ModeTitle_Egpu" xml:space="preserve"><value>外接显卡模式</value></data>
+  <data name="ModeDesc_Handheld" xml:space="preserve"><value>没有连接外接显示器或外接显卡。</value></data>
+  <data name="ModeDesc_Docked" xml:space="preserve"><value>已连接外接显示器，没有外接显卡。</value></data>
+  <data name="ModeDesc_Egpu" xml:space="preserve"><value>已连接外接显卡（雷电 / USB4 / OCuLink）。</value></data>
+  <data name="ModeDetail_Handheld" xml:space="preserve"><value>正在使用内置屏幕</value></data>
+  <data name="ModeDetail_Docked" xml:space="preserve"><value>已连接 {0} 台外接显示器</value></data>
+  <data name="ModeDetail_Egpu" xml:space="preserve"><value>已连接 {0}</value></data>
+  <data name="Status_Paused" xml:space="preserve"><value>已暂停</value></data>
+  <data name="Status_PausedDetail" xml:space="preserve"><value>自动切换已暂停，仍在监测硬件变化。</value></data>
+
+  <data name="Common_On" xml:space="preserve"><value>开</value></data>
+  <data name="Common_Off" xml:space="preserve"><value>关</value></data>
+  <data name="Common_NotAvailable" xml:space="preserve"><value>不可用</value></data>
+  <data name="Common_Unknown" xml:space="preserve"><value>未知</value></data>
+
+  <data name="Dash_PowerPlan" xml:space="preserve"><value>电源计划</value></data>
+  <data name="Dash_Fse" xml:space="preserve"><value>登录时进入全屏体验</value></data>
+  <data name="Dash_Power" xml:space="preserve"><value>电源</value></data>
+  <data name="Power_Ac" xml:space="preserve"><value>已接通电源</value></data>
+  <data name="Power_Battery" xml:space="preserve"><value>使用电池</value></data>
+  <data name="Dash_Pause" xml:space="preserve"><value>暂停</value></data>
+  <data name="Dash_Resume" xml:space="preserve"><value>继续</value></data>
+  <data name="Dash_Recheck" xml:space="preserve"><value>重新检测</value></data>
+  <data name="Dash_ThrottleOkTitle" xml:space="preserve"><value>不受游戏模式 CPU 降频影响</value></data>
+  <data name="Dash_ThrottleOkMessage" xml:space="preserve"><value>当前电源计划不会被隐藏的 GameMode 电源配置覆盖，游戏可以获得完整的 CPU 性能。</value></data>
+  <data name="Dash_ThrottleWarnTitle" xml:space="preserve"><value>游戏模式会在游戏时限制 CPU</value></data>
+  <data name="Dash_ThrottleWarnMessage" xml:space="preserve"><value>当前是"平衡"类型的电源计划。游戏在前台时，Windows 会把 CPU 切换到最省电模式（EPP 100）。纯掌机游玩时没问题，但接外接显卡时会损失帧数。</value></data>
+  <data name="Dash_ThrottleNoneTitle" xml:space="preserve"><value>此设备没有游戏模式 CPU 降频</value></data>
+  <data name="Dash_ThrottleNoneMessage" xml:space="preserve"><value>没有发现 GameMode 电源配置覆盖，或者游戏模式已关闭。</value></data>
+  <data name="Dash_LearnMore" xml:space="preserve"><value>了解更多</value></data>
+  <data name="Dash_Adapters" xml:space="preserve"><value>显卡</value></data>
+  <data name="Dash_Displays" xml:space="preserve"><value>显示器</value></data>
+  <data name="Dash_Activity" xml:space="preserve"><value>最近活动</value></data>
+  <data name="Dash_NoActivity" xml:space="preserve"><value>暂无记录。</value></data>
+  <data name="Badge_External" xml:space="preserve"><value>外接</value></data>
+  <data name="Badge_BuiltIn" xml:space="preserve"><value>内置</value></data>
+
+  <data name="Act_Started" xml:space="preserve"><value>DockSense 已启动，当前为{0}模式</value></data>
+  <data name="Act_ModeChanged" xml:space="preserve"><value>已切换到{0}模式</value></data>
+  <data name="Act_PlanApplied" xml:space="preserve"><value>电源计划已切换为 {0}</value></data>
+  <data name="Act_PlanCreated" xml:space="preserve"><value>已创建电源计划 {0}</value></data>
+  <data name="Act_PlanReasserted" xml:space="preserve"><value>其他程序切换到了 {0}，已切回 {1}</value></data>
+  <data name="Act_GaveUp" xml:space="preserve"><value>有程序在反复修改电源计划。下次模式切换前，DockSense 不再自动切回。</value></data>
+  <data name="Act_Fse" xml:space="preserve"><value>登录时进入全屏体验：{0}</value></data>
+  <data name="Act_Paused" xml:space="preserve"><value>自动切换已暂停</value></data>
+  <data name="Act_Resumed" xml:space="preserve"><value>自动切换已恢复</value></data>
+  <data name="Act_SettingsSaved" xml:space="preserve"><value>设置已保存</value></data>
+
+  <data name="Prof_Title" xml:space="preserve"><value>模式配置</value></data>
+  <data name="Prof_Subtitle" xml:space="preserve"><value>选择每个模式生效时 DockSense 要应用的设置。</value></data>
+  <data name="Prof_PowerPlan" xml:space="preserve"><value>电源计划</value></data>
+  <data name="Prof_PowerPlanDesc" xml:space="preserve"><value>进入该模式时启用，离开时恢复之前的计划。</value></data>
+  <data name="Plan_Unmanaged" xml:space="preserve"><value>不更改（由厂商软件决定）</value></data>
+  <data name="Plan_DockSense" xml:space="preserve"><value>DockSense Performance（避开游戏模式降频）</value></data>
+  <data name="Prof_Fse" xml:space="preserve"><value>登录时进入全屏体验</value></data>
+  <data name="Prof_FseDesc" xml:space="preserve"><value>登录 Windows 时是否直接进入 Xbox 全屏体验。</value></data>
+  <data name="Fse_Unchanged" xml:space="preserve"><value>不更改</value></data>
+  <data name="Fse_Desktop" xml:space="preserve"><value>桌面</value></data>
+  <data name="Fse_Fse" xml:space="preserve"><value>全屏体验</value></data>
+  <data name="Prof_FseLive" xml:space="preserve"><value>立即切换</value></data>
+  <data name="Prof_FseLiveDesc" xml:space="preserve"><value>模式切换时立即进入或退出全屏体验。即将推出。</value></data>
+  <data name="Prof_Current" xml:space="preserve"><value>当前模式</value></data>
+
+  <data name="Det_Title" xml:space="preserve"><value>检测</value></data>
+  <data name="Det_Subtitle" xml:space="preserve"><value>DockSense 如何判断当前处于哪个模式。</value></data>
+  <data name="Det_Settle" xml:space="preserve"><value>稳定等待时间</value></data>
+  <data name="Det_SettleDesc" xml:space="preserve"><value>新模式需要保持不变这么久才会生效。拔掉显卡坞时，断电会比显卡消失更早发生。</value></data>
+  <data name="Det_Seconds" xml:space="preserve"><value>{0} 秒</value></data>
+  <data name="Det_RequireAc" xml:space="preserve"><value>仅在接通电源时识别为底座模式</value></data>
+  <data name="Det_RequireAcDesc" xml:space="preserve"><value>使用电池时忽略外接显示器。</value></data>
+  <data name="Det_Adapters" xml:space="preserve"><value>显卡</value></data>
+  <data name="Det_AdaptersDesc" xml:space="preserve"><value>可热插拔的 PCIe 显卡会被自动识别为外接显卡。OCuLink 显卡坞或识别错误时，可以在这里手动指定。</value></data>
+  <data name="Det_DetectedExternal" xml:space="preserve"><value>识别为外接显卡</value></data>
+  <data name="Det_DetectedBuiltIn" xml:space="preserve"><value>识别为内置显卡</value></data>
+  <data name="Override_Auto" xml:space="preserve"><value>自动</value></data>
+  <data name="Override_Egpu" xml:space="preserve"><value>始终视为外接显卡</value></data>
+  <data name="Override_Ignore" xml:space="preserve"><value>始终不视为外接显卡</value></data>
+
+  <data name="Set_Title" xml:space="preserve"><value>设置</value></data>
+  <data name="Set_Appearance" xml:space="preserve"><value>外观</value></data>
+  <data name="Set_Language" xml:space="preserve"><value>语言</value></data>
+  <data name="Set_LanguageDesc" xml:space="preserve"><value>立即生效。</value></data>
+  <data name="Lang_System" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Set_Theme" xml:space="preserve"><value>主题</value></data>
+  <data name="Set_ThemeDesc" xml:space="preserve"><value>浅色、深色，或跟随 Windows。</value></data>
+  <data name="Theme_System" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Theme_Light" xml:space="preserve"><value>浅色</value></data>
+  <data name="Theme_Dark" xml:space="preserve"><value>深色</value></data>
+  <data name="Set_Behavior" xml:space="preserve"><value>行为</value></data>
+  <data name="Set_Startup" xml:space="preserve"><value>开机自启</value></data>
+  <data name="Set_StartupDesc" xml:space="preserve"><value>登录 Windows 时在系统托盘中运行 DockSense。</value></data>
+  <data name="Set_Reassert" xml:space="preserve"><value>保持所选电源计划</value></data>
+  <data name="Set_ReassertDesc" xml:space="preserve"><value>在受管理的模式下，其他软件（如 Armoury Crate）更改计划时自动切回。</value></data>
+  <data name="Set_Notifications" xml:space="preserve"><value>通知</value></data>
+  <data name="Set_NotifyMode" xml:space="preserve"><value>模式切换</value></data>
+  <data name="Set_NotifyModeDesc" xml:space="preserve"><value>DockSense 切换模式时显示 Windows 通知。</value></data>
+  <data name="Set_NotifyWarn" xml:space="preserve"><value>问题提醒</value></data>
+  <data name="Set_NotifyWarnDesc" xml:space="preserve"><value>例如有程序在反复修改电源计划时。</value></data>
+  <data name="Set_Files" xml:space="preserve"><value>文件</value></data>
+  <data name="Set_FilesDesc" xml:space="preserve"><value>设置保存在 config.json 中。切换不符合预期时，可以查看日志排查。</value></data>
+  <data name="Set_OpenConfig" xml:space="preserve"><value>打开配置文件</value></data>
+  <data name="Set_OpenLog" xml:space="preserve"><value>打开日志</value></data>
+
+  <data name="About_Tagline" xml:space="preserve"><value>为 Windows 掌机自动切换电源配置。</value></data>
+  <data name="About_Version" xml:space="preserve"><value>版本 {0}</value></data>
+  <data name="About_Author" xml:space="preserve"><value>作者</value></data>
+  <data name="About_GitHub" xml:space="preserve"><value>GitHub</value></data>
+  <data name="About_Issue" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="About_Analysis" xml:space="preserve"><value>阅读游戏模式降频分析</value></data>
+  <data name="About_Diagnostics" xml:space="preserve"><value>诊断</value></data>
+  <data name="About_DiagnosticsDesc" xml:space="preserve"><value>只读报告，包含显卡、显示器、电源计划和游戏模式覆盖参数。反馈问题时请附上。</value></data>
+  <data name="About_CopyReport" xml:space="preserve"><value>复制诊断报告</value></data>
+  <data name="About_Copied" xml:space="preserve"><value>已复制到剪贴板</value></data>
+  <data name="About_License" xml:space="preserve"><value>DockSense 是自由软件，以 GNU 通用公共许可证 v3.0 协议发布。</value></data>
+
+  <data name="Tray_Mode" xml:space="preserve"><value>模式：{0}</value></data>
+  <data name="Tray_Open" xml:space="preserve"><value>打开 DockSense</value></data>
+  <data name="Tray_Pause" xml:space="preserve"><value>暂停自动切换</value></data>
+  <data name="Tray_Recheck" xml:space="preserve"><value>立即重新检测</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>退出</value></data>
+
+  <data name="Toast_Plan" xml:space="preserve"><value>电源计划：{0}</value></data>
+  <data name="Toast_WarningTitle" xml:space="preserve"><value>DockSense 提示</value></data>
+</root>

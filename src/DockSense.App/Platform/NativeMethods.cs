@@ -225,6 +225,7 @@ internal static class NativeMethods
 
     // ---------------------------------------------------------------- Notifications
 
+    public const int WM_DISPLAYCHANGE = 0x007E;
     public const int WM_POWERBROADCAST = 0x0218;
     public const int WM_DEVICECHANGE = 0x0219;
     public const int PBT_APMPOWERSTATUSCHANGE = 0x000A;
@@ -238,6 +239,17 @@ internal static class NativeMethods
     public static readonly Guid GUID_ACTIVE_POWERSCHEME = new("31f9f286-5084-42fe-b720-2b0264993763");
     public static readonly Guid GUID_ACDC_POWER_SOURCE = new("5d3e9a59-e9d5-4b00-a6bd-ff34ff516548");
     public static readonly Guid GUID_DEVINTERFACE_DISPLAY_ADAPTER = new("5b45201d-f2f2-4f3b-85bb-30ff1f953599");
+    public static readonly Guid GUID_DEVINTERFACE_MONITOR = new("e6f07b5f-ee97-4a90-b076-33f57bf4eaa7");
+
+    // ---------------------------------------------------------------- Metrics (tray icon size)
+
+    public const int SM_CXSMICON = 49;
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForSystem();
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetricsForDpi(int index, uint dpi);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POWERBROADCAST_SETTING_HEADER

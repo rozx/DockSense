@@ -37,6 +37,7 @@ public sealed class ConfigStoreTests : IDisposable
             Detection = new DetectionOptions { DockedRequiresAcPower = true, SettleSeconds = 8, ForceEgpuInstanceIds = [@"PCI\VEN_10DE&DEV_2684\X"] },
             ReassertPowerPlan = false,
             DockSensePerformancePlanId = planId,
+            Ui = new UiSettings { Language = "zh-Hans", Theme = AppTheme.Dark, NotifyOnModeChange = false },
         };
         var store = new ConfigStore(ConfigPath);
 
@@ -51,6 +52,20 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Equal(original.Detection.ForceEgpuInstanceIds, loaded.Detection.ForceEgpuInstanceIds);
         Assert.False(loaded.ReassertPowerPlan);
         Assert.Equal(planId, loaded.DockSensePerformancePlanId);
+        Assert.Equal(original.Ui, loaded.Ui);
+    }
+
+    [Fact]
+    public void Config_written_before_ui_settings_existed_gets_defaults()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(ConfigPath, """{ "schemaVersion": 1, "reassertPowerPlan": false }""");
+
+        var config = new ConfigStore(ConfigPath).Load();
+
+        Assert.False(config.ReassertPowerPlan);
+        Assert.Equal("system", config.Ui.Language);
+        Assert.True(config.Ui.NotifyOnModeChange);
     }
 
     [Fact]

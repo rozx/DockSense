@@ -18,19 +18,16 @@ internal static class Program
         }
 
         using var singleInstance = new Mutex(initiallyOwned: true, @"Local\DockSense", out var isFirstInstance);
+        using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockSense.Show");
         if (!isFirstInstance)
         {
+            // Already running: ask that instance to show its window.
+            showSignal.Set();
             return 0;
         }
 
-        ApplicationConfiguration.Initialize();
-        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
-        Application.ThreadException += (_, e) => Log.Error("Unhandled UI exception", e.Exception);
-
-        using var service = new DockSenseService(new ConfigStore(ConfigStore.DefaultPath));
-        var tray = new TrayApplicationContext(service);
-        service.Start();
-        Application.Run(tray);
-        return 0;
+        var app = new App(showSignal);
+        app.InitializeComponent();
+        return app.Run();
     }
 }
