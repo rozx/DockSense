@@ -29,13 +29,18 @@ The full analysis, data and manual workarounds are in [docs/game-mode-throttle.m
 ## Features
 
 - [x] Root-cause analysis and manual workaround (docs)
-- [ ] Mode detection: eGPU (hot-pluggable display adapter), external displays, AC power, with debouncing
-- [ ] Per-mode Windows power plan, restoring your previous plan when the mode ends
-- [ ] One-click "eGPU-safe" plan (High Performance personality, immune to the Game Mode throttle)
-- [ ] Re-applies the plan when vendor software (e.g. Armoury Crate) switches it back
-- [ ] Per-mode Xbox Full Screen Experience: unchanged / desktop / boot into FSE, plus an experimental live switch
-- [ ] Tray icon with current mode, settings window, start with Windows
-- [ ] Diagnostics: detects the Game Mode throttle on your device
+- [x] Mode detection: eGPU (hot-pluggable display adapter), external displays, AC power, with debouncing
+- [x] Per-mode Windows power plan, restoring your previous plan when the mode ends
+- [x] Automatic "eGPU-safe" plan (High Performance personality, immune to the Game Mode throttle)
+- [x] Re-applies the plan when vendor software (e.g. Armoury Crate) switches it back
+- [x] Per-mode Xbox Full Screen Experience at sign-in: unchanged / desktop / boot into FSE
+- [ ] Live FSE switching when the mode changes (experimental)
+- [x] Tray icon with current mode, pause, start with Windows
+- [ ] Settings window (for now: tray → Edit settings opens `config.json`)
+- [x] Diagnostics: `DockSense.exe --probe report.txt` reports the hardware, the mode and whether the Game Mode throttle applies
+- [ ] Release builds (single-file .exe) and CI
+
+Tested on: ASUS ROG Xbox Ally X + ROG XG Mobile (RTX 5090), plugging and unplugging the dock live.
 
 No admin rights are required.
 

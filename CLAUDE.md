@@ -61,3 +61,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
   Remove the task with `%LOCALAPPDATA%\EgpuPowerPlan\Uninstall.ps1` once DockSense covers it, or the two will fight.
 - Registering persistence (scheduled tasks, Run keys) from Claude's shell is blocked by the auto-mode classifier.
   The user runs such steps themselves with `!`.
+- The shell is Windows PowerShell 5.1. Multi-line commit messages that contain double quotes get mangled when passed
+  as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. New tools (dotnet, git, gh) may be
+  missing from PATH in older sessions; refresh with
+  `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`.
+- Read-only hardware check: `src\DockSense.App\bin\Debug\net10.0-windows\DockSense.exe --probe <file>` writes a report
+  (adapters, displays, resolved mode, plans, FSE, GameMode overrides) and changes nothing.
