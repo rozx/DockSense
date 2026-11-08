@@ -4,7 +4,8 @@ DockSense is an open-source Windows tray app for PC gaming handhelds (first targ
 It works out the device's **mode**: **Handheld**, **Docked** (external display) or **eGPU**. It then applies a per-mode profile:
 the Windows power plan and Xbox Full Screen Experience (FSE, now called "Xbox mode") behavior. More actions come later.
 
-The user communicates in Chinese. Code, comments, commit messages and docs are in English. README has a Chinese section.
+The user communicates in Chinese. Code, comments, commit messages and docs are in English.
+There are two READMEs: `README.md` in English and `README.zh-CN.md` in Chinese, each linking to the other. Keep them in sync when either changes.
 License: GPL-3.0. GitHub: https://github.com/rozx/DockSense (public). Commits use the GitHub noreply email, never the user's Gmail.
 
 ## Why this exists (root-cause finding, 2026-11-08)
