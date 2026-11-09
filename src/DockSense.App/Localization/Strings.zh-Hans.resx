@@ -255,4 +255,11 @@
   <data name="Unit_Minutes" xml:space="preserve"><value>分钟</value></data>
   <data name="Toast_IgpuTitle" xml:space="preserve"><value>重启后应用核显显存</value></data>
   <data name="Toast_IgpuMessage" xml:space="preserve"><value>下次重启后核显显存变为 {0}。</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Set_NotifyProgram" xml:space="preserve"><value>程序启动</value></data>
+  <data name="Set_NotifyProgramDesc" xml:space="preserve"><value>DockSense 为某个模式启动程序时显示 Windows 通知。</value></data>
+  <data name="Toast_ProgramTitle" xml:space="preserve"><value>已启动 {0}</value></data>
+  <data name="Toast_ProgramEnter" xml:space="preserve"><value>进入{0}模式</value></data>
+  <data name="Toast_ProgramLeave" xml:space="preserve"><value>离开{0}模式</value></data>
+  <data name="Toast_ProgramStartup" xml:space="preserve"><value>DockSense 在{0}模式下启动</value></data>
 </root>

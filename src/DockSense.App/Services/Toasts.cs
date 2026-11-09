@@ -34,6 +34,21 @@ public static class Toasts
         Show(builder, IconAssets.NameFor(applied.Mode), tag: "mode");
     }
 
+    public static void ShowProgramStarted(ProgramStarted started)
+    {
+        var mode = DockSenseService.ModeName(started.Mode);
+        var reason = started.AtStartup ? Loc.F("Toast_ProgramStartup", mode)
+            : started.Trigger == ProgramTrigger.Leave ? Loc.F("Toast_ProgramLeave", mode)
+            : Loc.F("Toast_ProgramEnter", mode);
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.F("Toast_ProgramTitle", started.Name))
+            .AddText(reason);
+
+        // One toast per program, so several programs started together all stay visible.
+        var tag = "program-" + started.Name;
+        Show(builder, IconAssets.NameFor(started.Mode), tag: tag.Length > 64 ? tag[..64] : tag);
+    }
+
     public static void ShowRestartNeeded(int megabytes)
     {
         var builder = new ToastContentBuilder()

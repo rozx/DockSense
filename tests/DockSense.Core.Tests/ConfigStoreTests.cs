@@ -73,6 +73,7 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.False(config.ReassertPowerPlan);
         Assert.Equal("system", config.Ui.Language);
         Assert.True(config.Ui.NotifyOnModeChange);
+        Assert.True(config.Ui.NotifyOnProgramStart);
     }
 
     [Fact]

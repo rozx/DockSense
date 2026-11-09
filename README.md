@@ -72,7 +72,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - 🎮 **Xbox full screen experience per mode.** For example, use the full screen experience as a handheld and the desktop when docked. DockSense can switch it **right away** when the mode changes, not only at the next sign-in.
 - 🚀 **Run programs on mode changes.** Start a program, script or URL when a mode begins or ends (or when DockSense starts in it), with arguments, a hidden window or administrator rights.
 - 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed.
-- 🔔 **Native Windows notifications** when the mode changes, showing the detected GPU and the plan that was applied.
+- 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied) and when a profile starts a program.
 - 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
 - 🌐 **English and 简体中文**, light and dark theme, and pixel-art tray icons for every state.
 - 🪶 **No admin rights, no driver, no service.** It uses documented Windows APIs, plus the ASUS ACPI interface (the one Armoury Crate uses) for the optional iGPU memory setting.
@@ -174,7 +174,7 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `reassertPowerPlan` | `true` | Switch back when other software changes the plan in a managed mode |
 | `ui.language` | `system` | `system`, `en` or `zh-Hans` |
 | `ui.theme` | `System` | `System`, `Light` or `Dark` |
-| `ui.notifyOnModeChange` / `ui.notifyOnWarnings` | `true` | Windows notifications |
+| `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows notifications for mode changes, programs started by a profile, and problems |
 
 ## Supported hardware
 

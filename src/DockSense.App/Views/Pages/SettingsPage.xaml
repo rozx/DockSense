@@ -58,6 +58,15 @@
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding NotifyOnModeChange}" />
         </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Play24}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_NotifyProgram}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_NotifyProgramDesc}" FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch AutomationProperties.Name="{loc:T Set_NotifyProgram}" IsChecked="{Binding NotifyOnProgramStart}" />
+        </ui:CardControl>
         <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Warning24}">
             <ui:CardControl.Header>
                 <StackPanel Margin="0,0,24,0">

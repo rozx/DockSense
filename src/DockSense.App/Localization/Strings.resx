@@ -255,4 +255,11 @@
   <data name="Unit_Minutes" xml:space="preserve"><value>min</value></data>
   <data name="Toast_IgpuTitle" xml:space="preserve"><value>Restart to apply the iGPU memory</value></data>
   <data name="Toast_IgpuMessage" xml:space="preserve"><value>The iGPU gets {0} after the next restart.</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Set_NotifyProgram" xml:space="preserve"><value>Programs started</value></data>
+  <data name="Set_NotifyProgramDesc" xml:space="preserve"><value>Show a Windows notification when DockSense starts a program for a mode.</value></data>
+  <data name="Toast_ProgramTitle" xml:space="preserve"><value>Started {0}</value></data>
+  <data name="Toast_ProgramEnter" xml:space="preserve"><value>Entering {0} mode</value></data>
+  <data name="Toast_ProgramLeave" xml:space="preserve"><value>Leaving {0} mode</value></data>
+  <data name="Toast_ProgramStartup" xml:space="preserve"><value>DockSense started in {0} mode</value></data>
 </root>

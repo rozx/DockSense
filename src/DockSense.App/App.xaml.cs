@@ -88,6 +88,13 @@ public partial class App : Application
                 Toasts.ShowModeApplied(applied);
             }
         };
+        Service.ProgramStarted += started =>
+        {
+            if (Service.Config.Ui.NotifyOnProgramStart)
+            {
+                Toasts.ShowProgramStarted(started);
+            }
+        };
         Service.IgpuMemoryChanged += megabytes =>
         {
             if (Service.Config.Ui.NotifyOnModeChange)

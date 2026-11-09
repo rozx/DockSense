@@ -14,6 +14,16 @@ public sealed record ActivityEntry(DateTime Time, string Message);
 /// <summary>Raised after a mode's profile has been applied.</summary>
 public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string? PlanName, bool IsStartup);
 
+/// <summary>Raised after DockSense started a program configured for a mode.</summary>
+/// <param name="Name">Short display name, e.g. "steam.exe".</param>
+/// <param name="Mode">The mode being entered, or for <see cref="ProgramTrigger.Leave"/> programs the mode being left.</param>
+/// <param name="Trigger">Why it ran.</param>
+/// <param name="AtStartup">True when it ran because DockSense started in <paramref name="Mode"/>.</param>
+public sealed record ProgramStarted(string Name, DockMode Mode, ProgramTrigger Trigger, bool AtStartup);
+
+/// <summary>Programs to start for one profile application, with the transition that caused it.</summary>
+internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs);
+
 /// <summary>Why a mode's profile is being applied.</summary>
 internal enum ApplyReason
 {
@@ -45,7 +55,7 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _lastApplied;
     private int _fseRequest;
     private bool _fseSwitching;
-    private readonly Queue<IReadOnlyList<ProgramLaunch>> _programBatches = new();
+    private readonly Queue<ProgramBatch> _programBatches = new();
     private bool _programsRunning;
     private IgpuMemoryBootState? _igpuBoot;
 
@@ -64,6 +74,9 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>Raised for problems the user should know about.</summary>
     public event Action<string>? Warning;
+
+    /// <summary>Raised after a program configured for a mode was started (not for the Test button).</summary>
+    public event Action<ProgramStarted>? ProgramStarted;
 
     /// <summary>Raised after a new iGPU memory size (in MB, 0 = Auto) was stored; it applies after a restart.</summary>
     public event Action<int>? IgpuMemoryChanged;
@@ -624,10 +637,11 @@ public sealed class DockSenseService : IDisposable
             return;
         }
 
-        var programs = ProgramPlanner.Select(Config, _lastApplied, mode, reason == ApplyReason.Startup);
+        var atStartup = reason == ApplyReason.Startup;
+        var programs = ProgramPlanner.Select(Config, _lastApplied, mode, atStartup);
         if (programs.Count > 0)
         {
-            _programBatches.Enqueue(programs);
+            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs));
             if (!_programsRunning)
             {
                 _ = RunProgramBatchesAsync();
@@ -647,7 +661,7 @@ public sealed class DockSenseService : IDisposable
         {
             while (_programBatches.TryDequeue(out var batch))
             {
-                foreach (var program in batch)
+                foreach (var program in batch.Programs)
                 {
                     var name = ProgramLauncher.DisplayName(program);
                     var error = await Task.Run(() => ProgramLauncher.Start(program));
@@ -655,6 +669,8 @@ public sealed class DockSenseService : IDisposable
                     {
                         Log.Info($"Started {program.Path} {program.Arguments}".TrimEnd());
                         AddActivity(Loc.F("Act_ProgramStarted", name));
+                        var mode = program.When == ProgramTrigger.Leave && batch.Previous is { } left ? left : batch.Current;
+                        ProgramStarted?.Invoke(new ProgramStarted(name, mode, program.When, batch.AtStartup));
                     }
                     else
                     {

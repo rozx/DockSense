@@ -85,6 +85,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial AppTheme SelectedTheme { get; set; }
     [ObservableProperty] public partial bool StartWithWindows { get; set; }
     [ObservableProperty] public partial bool NotifyOnModeChange { get; set; }
+    [ObservableProperty] public partial bool NotifyOnProgramStart { get; set; }
     [ObservableProperty] public partial bool NotifyOnWarnings { get; set; }
     [ObservableProperty] public partial bool ReassertPowerPlan { get; set; }
 
@@ -419,6 +420,7 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedTheme = ui.Theme;
         StartWithWindows = AutoStart.IsEnabled;
         NotifyOnModeChange = ui.NotifyOnModeChange;
+        NotifyOnProgramStart = ui.NotifyOnProgramStart;
         NotifyOnWarnings = ui.NotifyOnWarnings;
         ReassertPowerPlan = _service.Config.ReassertPowerPlan;
     }
@@ -523,6 +525,14 @@ public sealed partial class MainViewModel : ObservableObject
         if (!_syncing)
         {
             _service.UpdateConfig(c => c with { Ui = c.Ui with { NotifyOnModeChange = value } }, reapply: false);
+        }
+    }
+
+    partial void OnNotifyOnProgramStartChanged(bool value)
+    {
+        if (!_syncing)
+        {
+            _service.UpdateConfig(c => c with { Ui = c.Ui with { NotifyOnProgramStart = value } }, reapply: false);
         }
     }
 
