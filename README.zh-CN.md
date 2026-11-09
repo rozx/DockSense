@@ -262,7 +262,7 @@ dotnet run --project src/DockSense.App
 2. 这个 PR 的分支名是 **`release/v<主版本>.<次版本>`** 或 `release/v<主版本>.<次版本>.<修订号>`，例如 `release/v0.2`、`release/v1.2.3`。
 3. 这个 PR 带有 **`release`** 标签。
 
-满足条件后，GitHub Actions 会从分支名读取版本号，运行测试，编译 x64 和 ARM64 的单文件程序（自带运行时），给合并提交打上 `v<版本号>` 标签，并发布附带自动生成更新说明的 Release。其他推送和 PR 只会运行 CI（编译 + 测试）。
+满足条件后，GitHub Actions 会从分支名读取版本号，运行测试，编译 x64 和 ARM64 的单文件程序（自带运行时），给合并提交打上 `v<版本号>` 标签，并发布 Release。Release 说明取自 [CHANGELOG.md](CHANGELOG.md) 中该版本的章节，后面附上 GitHub 自动生成的已合并 PR 列表。如果发布 PR 的版本在 CHANGELOG 中没有对应章节，CI 会失败。其他推送和 PR 只会运行 CI（编译 + 测试）。
 
 ## 路线图
 

@@ -27,3 +27,17 @@ jobs:
 
       - name: Test
         run: dotnet test tests/DockSense.Core.Tests -c Release --no-build --logger "console;verbosity=normal"
+
+      # Release PRs must have a CHANGELOG.md section for their version: it becomes the release description,
+      # and a missing one can no longer be fixed once the PR is merged.
+      - name: Check release notes (release PRs only)
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/v')
+        shell: pwsh
+        env:
+          BRANCH: ${{ github.head_ref }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if ($env:BRANCH -notmatch '^release/v(\d+\.\d+(\.\d+)?)$') {
+            throw "Branch '$env:BRANCH' must be named release/v<major>.<minor> or release/v<major>.<minor>.<patch>"
+          }
+          ./.github/scripts/Get-ReleaseNotes.ps1 -Version $Matches[1] -RepositoryUrl $env:REPOSITORY_URL | Out-Host

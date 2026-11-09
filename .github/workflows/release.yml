@@ -38,6 +38,15 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Releasing DockSense $version"
 
+      # The release description is the CHANGELOG.md section for this version (CI checks it exists on release PRs);
+      # GitHub's generated list of merged pull requests is appended below it.
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: ./.github/scripts/Get-ReleaseNotes.ps1 -Version $env:VERSION -RepositoryUrl $env:REPOSITORY_URL -OutFile release-notes.md
+
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
@@ -65,4 +74,5 @@ jobs:
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
           name: DockSense v${{ steps.version.outputs.version }}
           files: DockSense-*.zip
+          body_path: release-notes.md
           generate_release_notes: true

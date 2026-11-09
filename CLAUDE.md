@@ -94,7 +94,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
   README (both languages), version bump, the release PR and verification. Claude cannot merge PRs; the user merges.
 - **Releases** come only from a **merged PR** whose branch is `release/v<major>.<minor>[.<patch>]` **and** that has
   the `release` label (`.github/workflows/release.yml`; the version comes from the branch name and the tag
-  `v<version>` is created on the merge commit). `ci.yml` only builds and tests on pushes and PRs.
+  `v<version>` is created on the merge commit). The release description is the version's CHANGELOG section
+  (`.github/scripts/Get-ReleaseNotes.ps1`) plus GitHub's generated PR list. `ci.yml` builds and tests on pushes and
+  PRs, and on `release/v*` PRs also fails when the CHANGELOG has no section for the version.
 
 ## Environment
 - Repo: `E:\Projects\DockSense` (the user keeps projects under `E:\Projects`). Windows 11, PowerShell 5.1 shell.

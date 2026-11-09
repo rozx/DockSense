@@ -12,8 +12,10 @@ A release is published by `.github/workflows/release.yml` only when **all three*
 3. the PR has the **`release`** label.
 
 The workflow reads the version from the branch name, runs the tests, builds self-contained single-file
-`DockSense-<version>-win-x64.zip` / `-win-arm64.zip`, tags the merge commit `v<version>`, and publishes the release
-with generated notes. **Never push `v*` tags by hand** and never create releases with `gh release create`.
+`DockSense-<version>-win-x64.zip` / `-win-arm64.zip`, tags the merge commit `v<version>`, and publishes the release.
+The release description is the version's CHANGELOG section (`.github/scripts/Get-ReleaseNotes.ps1`) followed by
+GitHub's generated PR list. CI fails on a release PR without that section. **Never push `v*` tags by hand** and
+never create releases with `gh release create`.
 
 Claude cannot merge the PR. The auto-mode classifier blocks merging, and the user wants to approve releases.
 Stop at step 8 and hand the merge to the user.
@@ -42,6 +44,9 @@ branch), and shows the branch and working-tree state. Start from an up-to-date, 
 - Two-part versions (`0.2`) are fine. Keep the scheme the project has been using.
 
 ### 3. Write the CHANGELOG entry
+This section becomes the GitHub release description word for word, so write it for the release page.
+Check it renders as expected with
+`./.github/scripts/Get-ReleaseNotes.ps1 -Version <version> -RepositoryUrl https://github.com/rozx/DockSense`.
 Edit `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)):
 - Add `## [<version>] - <YYYY-MM-DD>` directly under the intro, above the previous release.
 - Sort entries under `### Added`, `### Changed`, `### Fixed`, `### Removed` (only the sections that have entries).
@@ -107,7 +112,8 @@ gh run list --repo rozx/DockSense --workflow release.yml --limit 3
 gh run watch <run-id> --repo rozx/DockSense --exit-status --interval 15
 gh release view v<version> --repo rozx/DockSense --json name,tagName,url,assets | ConvertFrom-Json
 ```
-- Confirm that both zips are attached and the tag points at the merge commit.
+- Confirm that both zips are attached, the tag points at the merge commit, and the release description starts with
+  the CHANGELOG notes (`gh release view v<version> --json body`), not only GitHub's PR list.
 - Smoke-test the x64 build: download it into a fresh scratch folder, extract it, and run
   `DockSense.exe --probe <scratch>\probe.txt`. The report must list the adapters and a resolved mode.
 - If the workflow skipped the release job, check the branch name pattern and the label. A wrong label or branch

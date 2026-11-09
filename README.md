@@ -262,7 +262,7 @@ Releases are automated, but they only happen when **all three** of these are tru
 2. Its branch is named **`release/v<major>.<minor>`** or `release/v<major>.<minor>.<patch>`, for example `release/v0.2` or `release/v1.2.3`.
 3. The pull request has the **`release`** label.
 
-GitHub Actions then reads the version from the branch name, runs the tests, builds self-contained single-file executables for x64 and ARM64, tags the merge commit `v<version>`, and publishes the release with generated notes. Every other push or pull request only runs CI (build + tests).
+GitHub Actions then reads the version from the branch name, runs the tests, builds self-contained single-file executables for x64 and ARM64, tags the merge commit `v<version>`, and publishes the release. Its description is the version's section of [CHANGELOG.md](CHANGELOG.md), followed by GitHub's list of merged pull requests. CI fails on a release PR whose version has no CHANGELOG section. Every other push or pull request only runs CI (build + tests).
 
 ## Roadmap
 
