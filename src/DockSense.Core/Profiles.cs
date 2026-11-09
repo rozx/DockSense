@@ -85,6 +85,12 @@ public sealed record ModeProfile
     /// <summary>Also enter or leave FSE right away when the mode changes, not just at next sign-in.</summary>
     public bool FseApplyImmediately { get; init; }
 
+    /// <summary>
+    /// Leave FSE right away when switching from this mode to another one, unless the new mode's own live setting
+    /// (<see cref="FseApplyImmediately"/>) asks for something else. See <see cref="FsePlanner"/>.
+    /// </summary>
+    public bool FseExitOnLeave { get; init; }
+
     /// <summary>Programs started when this mode begins or ends (see <see cref="ProgramLaunch.When"/>).</summary>
     public IReadOnlyList<ProgramLaunch> Programs
     {
@@ -104,8 +110,9 @@ public sealed record ModeProfile
         && PowerPlan == other.PowerPlan
         && Fse == other.Fse
         && FseApplyImmediately == other.FseApplyImmediately
+        && FseExitOnLeave == other.FseExitOnLeave
         && IgpuMemoryMb == other.IgpuMemoryMb
         && Programs.SequenceEqual(other.Programs);
 
-    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, Programs.Count);
+    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, FseExitOnLeave, IgpuMemoryMb, Programs.Count);
 }

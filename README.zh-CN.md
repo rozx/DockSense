@@ -149,7 +149,7 @@ flowchart LR
 - **状态**：当前模式、当前电源计划、游戏模式降频检测、识别到的显卡和显示器，以及最近的活动记录。
 - **模式配置**：为每个模式选择：
   - 电源计划：*不更改*（由厂商软件决定）、*DockSense Performance*（外接显卡专用计划），或任意一个 Windows 电源计划（包括隐藏的计划）
-  - 登录时是否进入全屏体验，以及模式切换时是否**立即切换**
+  - 登录时是否进入全屏体验、进入该模式时是否**立即切换**，以及**离开此模式时是否退出**。进入的模式优先决定，例如掌机模式开启"离开此模式时退出"后，接上底座就会退出全屏体验，除非底座模式自己设置了立即切换。
   - **核显显存**（支持的 ASUS 设备；重启后生效）
   - 进入或离开该模式时**要运行的程序**。点击**测试**可以立即启动。
 - **电源计划**：以任意已有计划为基础新建计划（基于"高性能"的计划不受游戏模式降频影响），修改接通电源和使用电池时的设置，重命名或删除计划。
@@ -166,6 +166,7 @@ flowchart LR
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`、`DockSensePerformance` 或 `Specific`（配合 `planId`） |
 | `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`、`Desktop` 或 `FullScreenExperience`，下次登录时生效 |
 | `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | 模式切换时也立即进入或退出全屏体验 |
+| `handheld` / `docked` / `egpu` → `fseExitOnLeave` | `false` | 离开此模式时退出全屏体验，除非新模式的 `fseApplyImmediately` 另有设置 |
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | 写入固件的核显显存大小，单位 MB（`0` = 自动，`null` = 不更改），重启后生效 |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | 要启动的程序：`path`、`arguments`、`when`（`Enter`、`EnterOrStartup` 或 `Leave`）、`hidden`、`runAsAdministrator`、`enabled` |
 | `detection.settleSeconds` | `5` | 新模式需要保持多久才会生效 |

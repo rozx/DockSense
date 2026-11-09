@@ -262,4 +262,7 @@
   <data name="Toast_ProgramEnter" xml:space="preserve"><value>进入{0}模式</value></data>
   <data name="Toast_ProgramLeave" xml:space="preserve"><value>离开{0}模式</value></data>
   <data name="Toast_ProgramStartup" xml:space="preserve"><value>DockSense 在{0}模式下启动</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Prof_FseExitOnLeave" xml:space="preserve"><value>离开此模式时退出</value></data>
+  <data name="Prof_FseExitOnLeaveDesc" xml:space="preserve"><value>切换到其他模式时退出全屏体验，除非新模式自己的“立即切换”另有设置。</value></data>
 </root>

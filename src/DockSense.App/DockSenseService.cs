@@ -55,6 +55,7 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _lastApplied;
     private int _fseRequest;
     private bool _fseSwitching;
+    private (DockMode? Previous, DockMode Current) _fseTransition;
     private readonly Queue<ProgramBatch> _programBatches = new();
     private bool _programsRunning;
     private IgpuMemoryBootState? _igpuBoot;
@@ -425,29 +426,29 @@ public sealed class DockSenseService : IDisposable
 
     private void ApplyFse(DockMode mode, ModeProfile profile, ApplyReason reason)
     {
-        if (profile.Fse == FseStartup.Unchanged)
+        if (profile.Fse != FseStartup.Unchanged)
         {
-            return;
-        }
-
-        var wantFse = profile.Fse == FseStartup.FullScreenExperience;
-        if (FseSettings.IsAvailable && FseSettings.SetStartupToFse(wantFse))
-        {
-            Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
-            AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            var wantFse = profile.Fse == FseStartup.FullScreenExperience;
+            if (FseSettings.IsAvailable && FseSettings.SetStartupToFse(wantFse))
+            {
+                Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
+                AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            }
         }
 
         // Switching live while the user edits settings would yank the screen away; only real transitions do it.
-        if (profile.FseApplyImmediately && reason != ApplyReason.SettingsChanged)
+        // The new mode's live setting decides first, then "exit when leaving" of the mode being left.
+        if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
         {
+            _fseTransition = (_lastApplied, mode);
             _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
         }
     }
 
     /// <summary>
-    /// Brings the full screen experience in line with the current mode's profile. One switch runs at a time:
+    /// Brings the full screen experience in line with the latest mode transition. One switch runs at a time:
     /// <see cref="FullScreenExperience.Set"/> can wait on Windows' confirmation dialog, and if the mode changes
-    /// meanwhile, the running switch reconciles with the newest target when it returns.
+    /// meanwhile, the running switch reconciles with the newest transition when it returns.
     /// </summary>
     private async Task SwitchFseAsync(TimeSpan delay)
     {
@@ -484,15 +485,14 @@ public sealed class DockSenseService : IDisposable
 
     private async Task SwitchFseOnceAsync()
     {
-        // Always the latest mode and profile, so a switch that waited on a prompt cannot leave a stale state.
-        var mode = Mode;
-        var profile = Config.ProfileFor(mode);
-        if (Paused || !profile.FseApplyImmediately || profile.Fse == FseStartup.Unchanged)
+        // Always the latest transition, with the profiles as they are now, so a switch that waited on a prompt
+        // cannot leave a stale state.
+        var (previous, mode) = _fseTransition;
+        if (Paused || Mode != mode || FsePlanner.LiveTarget(Config, previous, mode) is not { } wantFse)
         {
             return;
         }
 
-        var wantFse = profile.Fse == FseStartup.FullScreenExperience;
         if (!FullScreenExperience.CanSet)
         {
             Log.Info($"{mode}: cannot switch the full screen experience live on this device (not supported, or no home app set).");

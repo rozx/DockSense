@@ -149,7 +149,7 @@ Some details:
 - **Status:** the current mode, the active plan, the Game Mode check, detected adapters and displays, and recent activity.
 - **Mode profiles:** for each mode, pick:
   - the power plan: *Don't change* (your vendor software decides), *DockSense Performance* (the eGPU-safe plan), or any Windows plan, including hidden ones
-  - the full screen experience at sign-in, and whether to **switch immediately** when the mode changes
+  - the full screen experience at sign-in, whether to **switch immediately** when entering the mode, and whether to **exit when leaving** it. The mode you enter decides first. For example, with *Exit when leaving* on for Handheld, docking leaves the full screen experience unless the Docked profile switches it itself.
   - the **iGPU memory** (on supported ASUS devices; applies after a restart)
   - **programs to run** when the mode begins or ends. **Test** starts one right away.
 - **Power plans:** create a plan from any existing one (High performance-based plans avoid the Game Mode throttle), edit its plugged-in and on-battery settings, rename or delete it.
@@ -166,6 +166,7 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`, `DockSensePerformance` or `Specific` (with `planId`) |
 | `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`, `Desktop` or `FullScreenExperience`, applied at the next sign-in |
 | `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | Also enter or leave the full screen experience as soon as the mode changes |
+| `handheld` / `docked` / `egpu` → `fseExitOnLeave` | `false` | Leave the full screen experience when switching away from this mode, unless the new mode's `fseApplyImmediately` decides otherwise |
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | iGPU memory in MB to store in the firmware (`0` = Auto, `null` = don't change). Applies after a restart |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | Programs to start: `path`, `arguments`, `when` (`Enter`, `EnterOrStartup` or `Leave`), `hidden`, `runAsAdministrator`, `enabled` |
 | `detection.settleSeconds` | `5` | How long a new mode must stay stable before it is applied |

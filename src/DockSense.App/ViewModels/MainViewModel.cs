@@ -270,6 +270,7 @@ public sealed partial class MainViewModel : ObservableObject
             profile.SelectedFse = config.Fse;
             profile.FseLiveSupported = fseLiveSupported;
             profile.FseLive = config.FseApplyImmediately;
+            profile.FseExitOnLeave = config.FseExitOnLeave;
             profile.FseLiveDescription = Loc.T(fseLiveSupported ? "Prof_FseLiveDesc" : "Prof_FseLiveUnsupported");
 
             profile.IgpuAvailable = igpu is not null;
@@ -439,6 +440,7 @@ public sealed partial class MainViewModel : ObservableObject
             PowerPlan = ParsePlanKey(profile.SelectedPlan),
             Fse = profile.SelectedFse,
             FseApplyImmediately = profile.FseLive,
+            FseExitOnLeave = profile.FseExitOnLeave,
             IgpuMemoryMb = profile.SelectedIgpu == ModeProfileViewModel.IgpuUnchanged ? null : profile.SelectedIgpu,
             Programs = profile.Programs.Select(p => p.ToModel()).ToList(),
         };
@@ -643,6 +645,7 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     public partial FseStartup SelectedFse { get; set; }
 
     [ObservableProperty] public partial bool FseLive { get; set; }
+    [ObservableProperty] public partial bool FseExitOnLeave { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FseLiveEnabled))]
@@ -703,6 +706,8 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     partial void OnSelectedFseChanged(FseStartup value) => owner.SaveProfile(this);
 
     partial void OnFseLiveChanged(bool value) => owner.SaveProfile(this);
+
+    partial void OnFseExitOnLeaveChanged(bool value) => owner.SaveProfile(this);
 
     partial void OnSelectedIgpuChanged(int value) => owner.SaveProfile(this);
 }

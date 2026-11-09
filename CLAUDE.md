@@ -57,7 +57,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - `src/DockSense.Core` (net10.0): pure logic, fully unit tested.
   - `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld) and `ModeStabilizer` (debounce)
   - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
-  - `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
+  - `FsePlanner` (live FSE target for a transition: the entered mode's `FseApplyImmediately` wins, then the left
+    mode's `FseExitOnLeave`), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
