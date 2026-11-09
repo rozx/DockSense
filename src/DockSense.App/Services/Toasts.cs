@@ -13,8 +13,14 @@ public static class Toasts
         ToastNotificationManagerCompat.OnActivated += _ => onActivated();
     }
 
+    /// <summary>
+    /// A mode change, or DockSense started by the user (<see cref="ModeApplied.IsStartup"/>): then the toast says it
+    /// is running in the background and where to find it.
+    /// </summary>
     public static void ShowModeApplied(ModeApplied applied)
     {
+        var modeTitle = Loc.T($"ModeTitle_{applied.Mode}");
+
         var detail = applied.Mode switch
         {
             DockMode.Egpu => Loc.F("ModeDetail_Egpu",
@@ -23,12 +29,24 @@ public static class Toasts
             _ => Loc.T("ModeDetail_Handheld"),
         };
 
-        var builder = new ToastContentBuilder()
-            .AddText(Loc.T($"ModeTitle_{applied.Mode}"))
-            .AddText(detail);
+        var builder = new ToastContentBuilder();
+        if (applied.IsStartup)
+        {
+            builder.AddText(Loc.T("Toast_Started")).AddText($"{modeTitle} · {detail}");
+        }
+        else
+        {
+            builder.AddText(modeTitle).AddText(detail);
+        }
+
         if (applied.PlanName is { } plan)
         {
             builder.AddText(Loc.F("Toast_Plan", plan));
+        }
+
+        if (applied.IsStartup)
+        {
+            builder.AddAttributionText(Loc.T("Toast_TrayHint"));
         }
 
         Show(builder, IconAssets.NameFor(applied.Mode), tag: "mode");

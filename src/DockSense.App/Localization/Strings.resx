@@ -256,8 +256,8 @@
   <data name="Toast_IgpuTitle" xml:space="preserve"><value>Restart to apply the iGPU memory</value></data>
   <data name="Toast_IgpuMessage" xml:space="preserve"><value>The iGPU gets {0} after the next restart.</value></data>
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
-  <data name="Set_NotifyProgram" xml:space="preserve"><value>Programs started</value></data>
-  <data name="Set_NotifyProgramDesc" xml:space="preserve"><value>Show a Windows notification when DockSense starts a program for a mode.</value></data>
+  <data name="Set_NotifyProgram" xml:space="preserve"><value>Profile programs</value></data>
+  <data name="Set_NotifyProgramDesc" xml:space="preserve"><value>Show a Windows notification when a mode profile starts one of your programs.</value></data>
   <data name="Toast_ProgramTitle" xml:space="preserve"><value>Started {0}</value></data>
   <data name="Toast_ProgramEnter" xml:space="preserve"><value>Entering {0} mode</value></data>
   <data name="Toast_ProgramLeave" xml:space="preserve"><value>Leaving {0} mode</value></data>
@@ -265,4 +265,10 @@
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
   <data name="Prof_FseExitOnLeave" xml:space="preserve"><value>Exit when leaving this mode</value></data>
   <data name="Prof_FseExitOnLeaveDesc" xml:space="preserve"><value>Leave the full screen experience when you switch to another mode, unless that mode&apos;s own &quot;Switch immediately&quot; says otherwise.</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Set_NotifyStartup" xml:space="preserve"><value>When you start DockSense</value></data>
+  <data name="Set_NotifyStartupDesc" xml:space="preserve"><value>Show a notification that DockSense is running in the background when you start it yourself. Not shown when it starts with Windows.</value></data>
+  <data name="Toast_Started" xml:space="preserve"><value>DockSense is running in the background</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Toast_TrayHint" xml:space="preserve"><value>Open it from the icon in the notification area</value></data>
 </root>

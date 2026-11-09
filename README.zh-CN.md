@@ -72,7 +72,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 - 🎮 **每个模式单独设置 Xbox 全屏体验**：比如掌机时使用全屏体验，接底座时使用桌面。模式切换时 DockSense 可以**立即切换**，而不只是在下次登录时生效。
 - 🚀 **模式切换时运行程序**：在进入或离开某个模式时（或 DockSense 在该模式下启动时）启动程序、脚本或网址，可以带参数、隐藏窗口或以管理员身份运行。
 - 🧠 **每个模式单独设置核显显存**（ROG Xbox Ally X 等 ASUS 掌机）：比如掌机时给核显 8 GB，接外接显卡时设为最小，把内存还给游戏。固件会在下次重启时应用，需要重启时 DockSense 会提醒你。
-- 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划；模式配置启动程序时也会通知。
+- 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划；模式配置启动程序时，以及手动启动 DockSense 时（提示它正在后台运行）也会通知。
 - 🩺 **诊断功能**：状态页会显示游戏模式降频是否影响当前计划；一键生成报告，列出显卡、显示器、电源计划和隐藏的覆盖参数。
 - 🌐 **中英双语**，支持浅色和深色主题，每种状态都有像素风托盘图标。
 - 🪶 **不需要管理员权限，不装驱动，不装服务**：使用公开文档化的 Windows API；可选的核显显存设置使用 ASUS ACPI 接口（与 Armoury Crate 相同）。
@@ -175,7 +175,7 @@ flowchart LR
 | `reassertPowerPlan` | `true` | 在受管理的模式下，其他软件修改计划时自动切回 |
 | `ui.language` | `system` | `system`、`en` 或 `zh-Hans` |
 | `ui.theme` | `System` | `System`、`Light` 或 `Dark` |
-| `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows 通知：模式切换、模式配置启动程序、出现问题 |
+| `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows 通知：手动启动 DockSense（登录时自动启动不通知）、模式切换、模式配置启动程序、出现问题 |
 
 ## 支持的硬件
 
