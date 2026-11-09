@@ -76,7 +76,7 @@
   <data name="Fse_Desktop" xml:space="preserve"><value>桌面</value></data>
   <data name="Fse_Fse" xml:space="preserve"><value>全屏体验</value></data>
   <data name="Prof_FseLive" xml:space="preserve"><value>立即切换</value></data>
-  <data name="Prof_FseLiveDesc" xml:space="preserve"><value>模式切换时立即进入或退出全屏体验。即将推出。</value></data>
+  <data name="Prof_FseLiveDesc" xml:space="preserve"><value>模式切换时立即进入或退出全屏体验，而不只是在下次登录时。</value></data>
   <data name="Prof_Current" xml:space="preserve"><value>当前模式</value></data>
 
   <data name="Det_Title" xml:space="preserve"><value>检测</value></data>
@@ -139,4 +139,136 @@
 
   <data name="Toast_Plan" xml:space="preserve"><value>电源计划：{0}</value></data>
   <data name="Toast_WarningTitle" xml:space="preserve"><value>DockSense 提示</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Nav_Plans" xml:space="preserve"><value>电源计划</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Common_ListSeparator" xml:space="preserve"><value>、</value></data>
+  <data name="Dash_FseNow" xml:space="preserve"><value>当前全屏体验</value></data>
+  <data name="Dash_Igpu" xml:space="preserve"><value>核显显存</value></data>
+  <data name="Dash_IgpuPendingTitle" xml:space="preserve"><value>重启后应用核显显存</value></data>
+  <data name="Dash_IgpuPendingMessage" xml:space="preserve"><value>下次重启后核显显存变为 {0}。</value></data>
+  <data name="Dash_RestartNow" xml:space="preserve"><value>立即重启</value></data>
+  <data name="Fse_Active" xml:space="preserve"><value>已进入</value></data>
+  <data name="Fse_Inactive" xml:space="preserve"><value>未进入</value></data>
+  <data name="Restart_Title" xml:space="preserve"><value>立即重启？</value></data>
+  <data name="Restart_Message" xml:space="preserve"><value>Windows 将立即重启，请先保存工作。有未保存内容的应用仍可以阻止重启。</value></data>
+  <data name="Restart_Confirm" xml:space="preserve"><value>重启</value></data>
+  <data name="Act_FseEntered" xml:space="preserve"><value>已进入全屏体验</value></data>
+  <data name="Act_FseLeft" xml:space="preserve"><value>已退出全屏体验</value></data>
+  <data name="Act_FseDeclined" xml:space="preserve"><value>已在 Windows 提示中取消全屏体验切换</value></data>
+  <data name="Act_FseFailed" xml:space="preserve"><value>无法切换全屏体验（{0}）</value></data>
+  <data name="Act_FseRestartBlocked" xml:space="preserve"><value>Windows 设置为重启电脑后进入全屏体验，因此 DockSense 没有立即切换，将在下次登录时生效。</value></data>
+  <data name="Act_IgpuMemory" xml:space="preserve"><value>核显显存已设为 {0}，重启后生效</value></data>
+  <data name="Act_ProgramStarted" xml:space="preserve"><value>已启动 {0}</value></data>
+  <data name="Act_ProgramFailed" xml:space="preserve"><value>无法启动 {0}：{1}</value></data>
+  <data name="Act_PlanSaved" xml:space="preserve"><value>已保存电源计划 {0}</value></data>
+  <data name="Act_PlanDeleted" xml:space="preserve"><value>已删除电源计划 {0}</value></data>
+  <data name="Prof_FseLiveUnsupported" xml:space="preserve"><value>此设备或 Windows 版本不支持。</value></data>
+  <data name="Prof_Igpu" xml:space="preserve"><value>核显显存</value></data>
+  <data name="Prof_IgpuDesc" xml:space="preserve"><value>为内置显卡保留的内存。保存在固件中，重启后生效。</value></data>
+  <data name="Igpu_Unchanged" xml:space="preserve"><value>不更改</value></data>
+  <data name="Igpu_Auto" xml:space="preserve"><value>自动</value></data>
+  <data name="Igpu_Mb" xml:space="preserve"><value>{0} MB</value></data>
+  <data name="Igpu_Gb" xml:space="preserve"><value>{0:0.#} GB</value></data>
+  <data name="Igpu_NotOffered" xml:space="preserve"><value>{0}（此设备不支持）</value></data>
+  <data name="Prof_Programs" xml:space="preserve"><value>运行程序</value></data>
+  <data name="Prof_ProgramsDesc" xml:space="preserve"><value>进入或离开此模式时启动程序或脚本。</value></data>
+  <data name="Prog_Add" xml:space="preserve"><value>添加程序</value></data>
+  <data name="Prog_Enabled" xml:space="preserve"><value>启用</value></data>
+  <data name="Prog_Path" xml:space="preserve"><value>程序</value></data>
+  <data name="Prog_PathPlaceholder" xml:space="preserve"><value>要打开的程序、脚本或文件</value></data>
+  <data name="Prog_Browse" xml:space="preserve"><value>浏览</value></data>
+  <data name="Prog_Remove" xml:space="preserve"><value>移除</value></data>
+  <data name="Prog_Arguments" xml:space="preserve"><value>参数（可选）</value></data>
+  <data name="Prog_When" xml:space="preserve"><value>运行时机</value></data>
+  <data name="Prog_WhenEnter" xml:space="preserve"><value>进入此模式时</value></data>
+  <data name="Prog_WhenEnterOrStartup" xml:space="preserve"><value>进入此模式时，以及 DockSense 启动时</value></data>
+  <data name="Prog_WhenLeave" xml:space="preserve"><value>离开此模式时</value></data>
+  <data name="Prog_Hidden" xml:space="preserve"><value>隐藏窗口</value></data>
+  <data name="Prog_Admin" xml:space="preserve"><value>以管理员身份运行</value></data>
+  <data name="Prog_Test" xml:space="preserve"><value>测试</value></data>
+  <data name="Prog_Starting" xml:space="preserve"><value>正在启动…</value></data>
+  <data name="Prog_Started" xml:space="preserve"><value>已启动</value></data>
+  <data name="Prog_Failed" xml:space="preserve"><value>失败：{0}</value></data>
+  <data name="Prog_BrowseTitle" xml:space="preserve"><value>选择程序</value></data>
+  <data name="Prog_FilterPrograms" xml:space="preserve"><value>程序和脚本</value></data>
+  <data name="Prog_FilterAll" xml:space="preserve"><value>所有文件</value></data>
+  <data name="Plans_Title" xml:space="preserve"><value>电源计划</value></data>
+  <data name="Plans_Subtitle" xml:space="preserve"><value>创建、编辑和删除 Windows 电源计划。模式配置可以使用其中任何一个，包括隐藏的计划。</value></data>
+  <data name="Plans_New" xml:space="preserve"><value>新建计划</value></data>
+  <data name="Plans_NewDesc" xml:space="preserve"><value>复制一个现有计划。基于“高性能”的计划不受游戏模式 CPU 降频影响。</value></data>
+  <data name="Plans_Name" xml:space="preserve"><value>名称</value></data>
+  <data name="Plans_NamePlaceholder" xml:space="preserve"><value>新计划的名称</value></data>
+  <data name="Plans_BasedOn" xml:space="preserve"><value>基于</value></data>
+  <data name="Plans_BaseRecommended" xml:space="preserve"><value>{0}（推荐）</value></data>
+  <data name="Plans_Create" xml:space="preserve"><value>创建</value></data>
+  <data name="Plans_DefaultName" xml:space="preserve"><value>我的电源计划</value></data>
+  <data name="Plans_All" xml:space="preserve"><value>所有计划</value></data>
+  <data name="Plans_Active" xml:space="preserve"><value>使用中</value></data>
+  <data name="Plans_Throttled" xml:space="preserve"><value>游戏模式降频</value></data>
+  <data name="Plans_ThrottledTip" xml:space="preserve"><value>平衡类计划：游戏在前台时，Windows 游戏模式会把 CPU 切换为最大节能。</value></data>
+  <data name="Plans_UsedBy" xml:space="preserve"><value>用于{0}</value></data>
+  <data name="PlanType_PowerSaver" xml:space="preserve"><value>节能类</value></data>
+  <data name="PlanType_HighPerformance" xml:space="preserve"><value>高性能类</value></data>
+  <data name="PlanType_Balanced" xml:space="preserve"><value>平衡类</value></data>
+  <data name="Plans_BuiltInNote" xml:space="preserve"><value>Windows 内置计划：可以修改设置，但不能重命名或删除。</value></data>
+  <data name="Plans_Ac" xml:space="preserve"><value>接通电源</value></data>
+  <data name="Plans_Dc" xml:space="preserve"><value>使用电池</value></data>
+  <data name="Plans_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Plans_Revert" xml:space="preserve"><value>还原</value></data>
+  <data name="Plans_Delete" xml:space="preserve"><value>删除</value></data>
+  <data name="Plans_Saved" xml:space="preserve"><value>已保存</value></data>
+  <data name="Plans_NoChanges" xml:space="preserve"><value>没有更改</value></data>
+  <data name="Plans_Error" xml:space="preserve"><value>Windows 拒绝了此更改：{0}</value></data>
+  <data name="Plans_DeleteTitle" xml:space="preserve"><value>删除电源计划？</value></data>
+  <data name="Plans_DeleteMessage" xml:space="preserve"><value>将删除“{0}”。此操作无法撤销。</value></data>
+  <data name="Plans_DeleteUsedMessage" xml:space="preserve"><value>将删除“{0}”。此操作无法撤销。{1}：这些模式配置将改为“不更改”。</value></data>
+  <data name="PS_MinState" xml:space="preserve"><value>最小处理器状态</value></data>
+  <data name="PS_MinState_Desc" xml:space="preserve"><value>数值越低，CPU 空闲时越凉快。</value></data>
+  <data name="PS_MaxState" xml:space="preserve"><value>最大处理器状态</value></data>
+  <data name="PS_MaxState_Desc" xml:space="preserve"><value>低于 100% 时，大多数 CPU 也会关闭加速。</value></data>
+  <data name="PS_Epp" xml:space="preserve"><value>能耗性能偏好 (EPP)</value></data>
+  <data name="PS_Epp_Desc" xml:space="preserve"><value>0 = 最高性能，100 = 最大节能。</value></data>
+  <data name="PS_Boost" xml:space="preserve"><value>处理器性能提升模式</value></data>
+  <data name="PS_Boost_Desc" xml:space="preserve"><value>CPU 超出基础频率加速的积极程度。</value></data>
+  <data name="PS_Boost_0" xml:space="preserve"><value>已禁用</value></data>
+  <data name="PS_Boost_1" xml:space="preserve"><value>已启用</value></data>
+  <data name="PS_Boost_2" xml:space="preserve"><value>积极</value></data>
+  <data name="PS_Boost_3" xml:space="preserve"><value>高效启用</value></data>
+  <data name="PS_Boost_4" xml:space="preserve"><value>高效积极</value></data>
+  <data name="PS_Boost_5" xml:space="preserve"><value>保证频率下积极</value></data>
+  <data name="PS_Boost_6" xml:space="preserve"><value>保证频率下高效积极</value></data>
+  <data name="PS_MaxFrequency" xml:space="preserve"><value>最大处理器频率</value></data>
+  <data name="PS_MaxFrequency_Desc" xml:space="preserve"><value>0 = 不限制。</value></data>
+  <data name="PS_CorePreference" xml:space="preserve"><value>异构线程调度</value></data>
+  <data name="PS_CorePreference_Desc" xml:space="preserve"><value>在同时具有性能核和能效核的 CPU 上，Windows 优先使用哪类核心。</value></data>
+  <data name="PS_CorePreference_0" xml:space="preserve"><value>所有处理器</value></data>
+  <data name="PS_CorePreference_1" xml:space="preserve"><value>性能处理器</value></data>
+  <data name="PS_CorePreference_2" xml:space="preserve"><value>优先性能处理器</value></data>
+  <data name="PS_CorePreference_3" xml:space="preserve"><value>能效处理器</value></data>
+  <data name="PS_CorePreference_4" xml:space="preserve"><value>优先能效处理器</value></data>
+  <data name="PS_CorePreference_5" xml:space="preserve"><value>自动</value></data>
+  <data name="PS_DisplayOff" xml:space="preserve"><value>在此时间后关闭显示器</value></data>
+  <data name="PS_DisplayOff_Desc" xml:space="preserve"><value>0 = 从不。</value></data>
+  <data name="PS_Sleep" xml:space="preserve"><value>在此时间后睡眠</value></data>
+  <data name="PS_Sleep_Desc" xml:space="preserve"><value>0 = 从不。</value></data>
+  <data name="Unit_Minutes" xml:space="preserve"><value>分钟</value></data>
+  <data name="Toast_IgpuTitle" xml:space="preserve"><value>重启后应用核显显存</value></data>
+  <data name="Toast_IgpuMessage" xml:space="preserve"><value>下次重启后核显显存变为 {0}。</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Set_NotifyProgram" xml:space="preserve"><value>配置中的程序</value></data>
+  <data name="Set_NotifyProgramDesc" xml:space="preserve"><value>模式配置启动你的程序时显示 Windows 通知。</value></data>
+  <data name="Toast_ProgramTitle" xml:space="preserve"><value>已启动 {0}</value></data>
+  <data name="Toast_ProgramEnter" xml:space="preserve"><value>进入{0}模式</value></data>
+  <data name="Toast_ProgramLeave" xml:space="preserve"><value>离开{0}模式</value></data>
+  <data name="Toast_ProgramStartup" xml:space="preserve"><value>DockSense 在{0}模式下启动</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Prof_FseExitOnLeave" xml:space="preserve"><value>离开此模式时退出</value></data>
+  <data name="Prof_FseExitOnLeaveDesc" xml:space="preserve"><value>切换到其他模式时退出全屏体验，除非新模式自己的“立即切换”另有设置。</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Set_NotifyStartup" xml:space="preserve"><value>手动启动 DockSense 时</value></data>
+  <data name="Set_NotifyStartupDesc" xml:space="preserve"><value>手动启动 DockSense 时显示通知，提示它正在后台运行。随 Windows 自动启动时不显示。</value></data>
+  <data name="Toast_Started" xml:space="preserve"><value>DockSense 正在后台运行</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Toast_TrayHint" xml:space="preserve"><value>可以从通知区域的托盘图标打开</value></data>
 </root>

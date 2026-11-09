@@ -22,7 +22,7 @@
 
 ---
 
-DockSense 运行在系统托盘里。它会监测外接显卡、外接显示器和电源的变化，判断掌机当前的使用方式，然后自动切换到对应的**电源计划**和 **Xbox 全屏体验**设置。插拔底座时，你不需要手动切换任何东西。
+DockSense 运行在系统托盘里。它会监测外接显卡、外接显示器和电源的变化，判断掌机当前的使用方式，然后自动切换到对应的**电源计划**和 **Xbox 全屏体验**，设置**核显显存**，并启动**你指定的程序**。插拔底座时，你不需要手动切换任何东西。
 
 这个项目源于一次问题排查：ASUS ROG Xbox Ally X 接上 RTX 5090 显卡坞后，游戏只有 50 帧左右，CPU 被压到了 **2 GHz / 12W**，而且只在游戏处于前台时才会这样。
 
@@ -68,11 +68,14 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 - 🔌 **自动识别模式**：掌机、底座（外接显示器）或外接显卡（雷电 / USB4 / OCuLink），并带防抖，插拔底座时不会来回跳。
 - ⚡ **每个模式使用不同的电源计划**：离开该模式时恢复之前的计划，还会自动创建一个不受游戏模式降频影响的"外接显卡专用"计划。
 - 🛡️ **保持你选的计划**：厂商软件（如 Armoury Crate）把计划切回去时会自动改回；如果有程序一直在抢，DockSense 会主动退让。
-- 🎮 **每个模式单独设置 Xbox 全屏体验**：比如掌机时开机进入全屏体验，接底座时进入桌面。
-- 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划。
+- 🛠️ **电源计划编辑器**：以任意已有计划为基础新建计划；分别为接通电源和使用电池时修改掌机上最常用的设置（处理器状态、EPP、加速模式、最大频率、核心偏好、关闭显示器和睡眠时间）；还可以重命名或删除计划。被隐藏的"高性能"类型计划也会列出来。
+- 🎮 **每个模式单独设置 Xbox 全屏体验**：比如掌机时使用全屏体验，接底座时使用桌面。模式切换时 DockSense 可以**立即切换**，而不只是在下次登录时生效。
+- 🚀 **模式切换时运行程序**：在进入或离开某个模式时（或 DockSense 在该模式下启动时）启动程序、脚本或网址，可以带参数、隐藏窗口或以管理员身份运行。
+- 🧠 **每个模式单独设置核显显存**（ROG Xbox Ally X 等 ASUS 掌机）：比如掌机时给核显 8 GB，接外接显卡时设为最小，把内存还给游戏。固件会在下次重启时应用，需要重启时 DockSense 会提醒你。
+- 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划；模式配置启动程序时，以及手动启动 DockSense 时（提示它正在后台运行）也会通知。
 - 🩺 **诊断功能**：状态页会显示游戏模式降频是否影响当前计划；一键生成报告，列出显卡、显示器、电源计划和隐藏的覆盖参数。
 - 🌐 **中英双语**，支持浅色和深色主题，每种状态都有像素风托盘图标。
-- 🪶 **不需要管理员权限，不装驱动，不装服务**：只使用公开文档化的 Windows 电源和设备 API。
+- 🪶 **不需要管理员权限，不装驱动，不装服务**：使用公开文档化的 Windows API；可选的核显显存设置使用 ASUS ACPI 接口（与 Armoury Crate 相同）。
 
 ## 工作原理
 
@@ -86,7 +89,7 @@ flowchart LR
     G --> W["等待稳定<br/>（默认 5 秒）"]
     D --> W
     H --> W
-    W --> A["应用配置<br/>电源计划 · 全屏体验"]
+    W --> A["应用配置<br/>电源计划 · 全屏体验<br/>核显显存 · 运行程序"]
     A --> N["通知"]
 ```
 
@@ -105,8 +108,12 @@ flowchart LR
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/profiles.zh-CN.png" alt="模式配置" /><p align="center"><b>模式配置</b>：每个模式的电源计划和全屏体验</p></td>
-    <td width="50%"><img src="docs/images/settings.zh-CN.png" alt="设置" /><p align="center"><b>设置</b>：语言、主题、开机自启、通知</p></td>
+    <td width="50%"><img src="docs/images/profiles.zh-CN.png" alt="模式配置" /><p align="center"><b>模式配置</b>：每个模式的电源计划、全屏体验、核显显存和程序</p></td>
+    <td width="50%"><img src="docs/images/plans.zh-CN.png" alt="电源计划" /><p align="center"><b>电源计划</b>：新建、编辑和删除计划</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/settings.zh-CN.png" alt="设置" /><p align="center"><b>设置</b>：语言、主题、开机自启、通知</p></td>
+    <td></td>
   </tr>
   <tr>
     <td><img src="docs/images/toast.png" alt="通知" /><p align="center">模式切换时的<b>系统通知</b></p></td>
@@ -140,10 +147,12 @@ flowchart LR
 
 - **托盘图标**：左键打开主窗口；右键可以暂停自动切换、立即重新检测，或者退出。
 - **状态**：当前模式、当前电源计划、游戏模式降频检测、识别到的显卡和显示器，以及最近的活动记录。
-- **模式配置**：为每个模式选择电源计划和全屏体验。电源计划有三种选法：
-  - *不更改*：由厂商软件决定
-  - *DockSense Performance*：外接显卡专用计划
-  - 任意一个已有的 Windows 电源计划
+- **模式配置**：为每个模式选择：
+  - 电源计划：*不更改*（由厂商软件决定）、*DockSense Performance*（外接显卡专用计划），或任意一个 Windows 电源计划（包括隐藏的计划）
+  - 登录时是否进入全屏体验、进入该模式时是否**立即切换**，以及**离开此模式时是否退出**。进入的模式优先决定，例如掌机模式开启"离开此模式时退出"后，接上底座就会退出全屏体验，除非底座模式自己设置了立即切换。
+  - **核显显存**（支持的 ASUS 设备；重启后生效）
+  - 进入或离开该模式时**要运行的程序**。点击**测试**可以立即启动。
+- **电源计划**：以任意已有计划为基础新建计划（基于"高性能"的计划不受游戏模式降频影响），修改接通电源和使用电池时的设置，重命名或删除计划。
 - **检测**：稳定等待时间、"仅在接通电源时识别为底座模式"，以及逐块显卡的手动指定（*始终 / 始终不视为外接显卡*）。
 
 关闭窗口后 DockSense 仍在托盘中运行；再次运行 DockSense.exe 会重新打开窗口。
@@ -156,13 +165,17 @@ flowchart LR
 |---|---|---|
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`、`DockSensePerformance` 或 `Specific`（配合 `planId`） |
 | `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`、`Desktop` 或 `FullScreenExperience`，下次登录时生效 |
+| `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | 模式切换时也立即进入或退出全屏体验 |
+| `handheld` / `docked` / `egpu` → `fseExitOnLeave` | `false` | 离开此模式时退出全屏体验，除非新模式的 `fseApplyImmediately` 另有设置 |
+| `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | 写入固件的核显显存大小，单位 MB（`0` = 自动，`null` = 不更改），重启后生效 |
+| `handheld` / `docked` / `egpu` → `programs` | `[]` | 要启动的程序：`path`、`arguments`、`when`（`Enter`、`EnterOrStartup` 或 `Leave`）、`hidden`、`runAsAdministrator`、`enabled` |
 | `detection.settleSeconds` | `5` | 新模式需要保持多久才会生效 |
 | `detection.dockedRequiresAcPower` | `false` | 仅在接通电源时才把外接显示器计入底座模式 |
 | `detection.forceEgpuInstanceIds` / `ignoreGpuInstanceIds` | `[]` | 逐块显卡的手动指定（PnP 实例 ID） |
 | `reassertPowerPlan` | `true` | 在受管理的模式下，其他软件修改计划时自动切回 |
 | `ui.language` | `system` | `system`、`en` 或 `zh-Hans` |
 | `ui.theme` | `System` | `System`、`Light` 或 `Dark` |
-| `ui.notifyOnModeChange` / `ui.notifyOnWarnings` | `true` | Windows 通知 |
+| `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows 通知：手动启动 DockSense（登录时自动启动不通知）、模式切换、模式配置启动程序、出现问题 |
 
 ## 支持的硬件
 
@@ -179,7 +192,19 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 <details>
 <summary><b>控制面板里找不到 "DockSense Performance" 计划？</b></summary>
 
-在 Modern Standby（现代待机）设备上，Windows 会把"高性能"类型的计划从控制面板和 `powercfg /list` 里隐藏起来。计划本身存在而且正常工作，可以用 `powercfg /getactivescheme` 查看，或者直接看状态页。
+在 Modern Standby（现代待机）设备上，Windows 会把"高性能"类型的计划从控制面板和 `powercfg /list` 里隐藏起来。计划本身存在而且正常工作。DockSense 的**电源计划**页面会列出所有计划，包括隐藏的；也可以用 `powercfg /getactivescheme` 查看，或者直接看状态页。
+</details>
+
+<details>
+<summary><b>为什么核显显存需要重启？</b></summary>
+
+为核显保留的内存（UMA 帧缓冲）由固件在开机时分配，和 Armoury Crate 里的设置一样。DockSense 会立即写入当前模式的大小，状态页随后显示"重启后生效"，并提供**立即重启**按钮。DockSense 永远不会自己重启，也只会写入固件本身提供的选项。如果拔掉外接显卡后不重启继续玩，旧的大小会一直保持到下次重启。大多数游戏两种情况下都能正常运行，因为 Windows 还会给核显分配共享内存。
+</details>
+
+<details>
+<summary><b>立即切换全屏体验不起作用？</b></summary>
+
+需要支持全屏体验的 Windows 版本（掌机上的 Windows 11，或开启了"Xbox 模式"），并且设置了主页应用（Xbox 应用，或 AnyFSE 等启动器）。如果 Windows 弹出确认，请选择不重启直接进入。如果 Windows 设置为进入时"重启以优化"，DockSense 不会立即切换，因为那会重启电脑；登录时的设置仍会在下次登录时生效。
 </details>
 
 <details>
@@ -197,9 +222,9 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 <details>
 <summary><b>怎么彻底卸载？</b></summary>
 
-1. 关闭 **开机自启**，然后从托盘退出。
-2. 删除 DockSense 所在的文件夹，以及 `%APPDATA%\DockSense` 和 `%LOCALAPPDATA%\DockSense`。
-3. 如果需要，用 `powercfg /delete <guid>` 删除电源计划。GUID 就是 `config.json` 里的 `dockSensePerformancePlanId`。
+1. 如果需要，在 **电源计划** 页面删除 DockSense Performance 计划（它不能是当前正在使用的计划，Windows 不允许删除正在使用的计划）。也可以用 `powercfg /delete <guid>`，GUID 就是 `config.json` 里的 `dockSensePerformancePlanId`。
+2. 关闭 **开机自启**，然后从托盘退出。
+3. 删除 DockSense 所在的文件夹，以及 `%APPDATA%\DockSense` 和 `%LOCALAPPDATA%\DockSense`。
 </details>
 
 <details>
@@ -222,8 +247,8 @@ dotnet run --project src/DockSense.App
 
 | 项目 | 用途 |
 |---|---|
-| `src/DockSense.Core` | 与平台无关的逻辑：模式判断、防抖、电源计划策略、配置（全部有单元测试） |
-| `src/DockSense.App` | WPF 托盘程序：Windows API（SetupAPI、显示配置、powrprof）、界面、通知 |
+| `src/DockSense.Core` | 与平台无关的逻辑：模式判断、防抖、电源计划策略、程序触发、电源设置目录、核显显存解码、配置（全部有单元测试） |
+| `src/DockSense.App` | WPF 托盘程序：Windows API（SetupAPI、显示配置、powrprof、gaming experience）、ASUS ACPI、界面、通知 |
 | `tests/DockSense.Core.Tests` | xUnit 测试，包括实测的 Ally X / XG Mobile 拔线过程 |
 | `tools/DockSense.IconGen` | 从 `Sprites.cs` 里的像素画生成所有图标 |
 
@@ -241,8 +266,12 @@ dotnet run --project src/DockSense.App
 
 ## 路线图
 
-- [ ] 模式切换时实时进入或退出全屏体验（目前只在登录时生效）
+- [x] 模式切换时实时进入或退出全屏体验，而不只是在登录时生效（v0.2）
+- [x] 电源计划编辑器（v0.2）
+- [x] 模式切换时运行程序（v0.2）
+- [x] ASUS 掌机上每个模式单独设置核显显存（v0.2）
 - [ ] 通过厂商接口为每个模式设置 TDP（ASUS、Lenovo 等）
+- [ ] 其他厂商掌机的核显显存设置
 - [ ] 按游戏单独配置
 - [ ] 通过 winget / Microsoft Store 分发
 - [ ] 代码签名

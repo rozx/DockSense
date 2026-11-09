@@ -13,8 +13,14 @@ public static class Toasts
         ToastNotificationManagerCompat.OnActivated += _ => onActivated();
     }
 
+    /// <summary>
+    /// A mode change, or DockSense started by the user (<see cref="ModeApplied.IsStartup"/>): then the toast says it
+    /// is running in the background and where to find it.
+    /// </summary>
     public static void ShowModeApplied(ModeApplied applied)
     {
+        var modeTitle = Loc.T($"ModeTitle_{applied.Mode}");
+
         var detail = applied.Mode switch
         {
             DockMode.Egpu => Loc.F("ModeDetail_Egpu",
@@ -23,15 +29,50 @@ public static class Toasts
             _ => Loc.T("ModeDetail_Handheld"),
         };
 
-        var builder = new ToastContentBuilder()
-            .AddText(Loc.T($"ModeTitle_{applied.Mode}"))
-            .AddText(detail);
+        var builder = new ToastContentBuilder();
+        if (applied.IsStartup)
+        {
+            builder.AddText(Loc.T("Toast_Started")).AddText($"{modeTitle} · {detail}");
+        }
+        else
+        {
+            builder.AddText(modeTitle).AddText(detail);
+        }
+
         if (applied.PlanName is { } plan)
         {
             builder.AddText(Loc.F("Toast_Plan", plan));
         }
 
+        if (applied.IsStartup)
+        {
+            builder.AddAttributionText(Loc.T("Toast_TrayHint"));
+        }
+
         Show(builder, IconAssets.NameFor(applied.Mode), tag: "mode");
+    }
+
+    public static void ShowProgramStarted(ProgramStarted started)
+    {
+        var mode = DockSenseService.ModeName(started.Mode);
+        var reason = started.AtStartup ? Loc.F("Toast_ProgramStartup", mode)
+            : started.Trigger == ProgramTrigger.Leave ? Loc.F("Toast_ProgramLeave", mode)
+            : Loc.F("Toast_ProgramEnter", mode);
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.F("Toast_ProgramTitle", started.Name))
+            .AddText(reason);
+
+        // One toast per program, so several programs started together all stay visible.
+        var tag = "program-" + started.Name;
+        Show(builder, IconAssets.NameFor(started.Mode), tag: tag.Length > 64 ? tag[..64] : tag);
+    }
+
+    public static void ShowRestartNeeded(int megabytes)
+    {
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.T("Toast_IgpuTitle"))
+            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)));
+        Show(builder, IconAssets.App, tag: "igpu");
     }
 
     public static void ShowWarning(string message)

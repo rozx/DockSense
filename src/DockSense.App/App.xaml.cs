@@ -1,5 +1,6 @@
 using System.Windows;
 using DockSense.App.Localization;
+using DockSense.App.Platform;
 using DockSense.App.Services;
 using DockSense.App.ViewModels;
 using DockSense.App.Views;
@@ -78,16 +79,35 @@ public partial class App : Application
         ApplyTheme(ui.Theme);
 
         Service = new DockSenseService(store);
-        Service.Start();
-        ViewModel = new MainViewModel(Service);
-        _tray = new TrayIconService(Service, ShowMainWindow, Quit);
 
+        // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
         Toasts.Initialize(() => Dispatcher.BeginInvoke(ShowMainWindow));
+        var showWindowAtStart = e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase);
+        var startedWithWindows = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
         Service.ModeApplied += applied =>
         {
-            if (!applied.IsStartup && Service.Config.Ui.NotifyOnModeChange)
+            // Started by hand, DockSense goes straight to the tray: say that it is running in the background.
+            // Not at sign-in (Start with Windows), and not when the window opens anyway.
+            var notify = applied.IsStartup
+                ? Service.Config.Ui.NotifyOnStartup && !startedWithWindows && !Service.IsFirstRun && !showWindowAtStart
+                : Service.Config.Ui.NotifyOnModeChange;
+            if (notify)
             {
                 Toasts.ShowModeApplied(applied);
+            }
+        };
+        Service.ProgramStarted += started =>
+        {
+            if (Service.Config.Ui.NotifyOnProgramStart)
+            {
+                Toasts.ShowProgramStarted(started);
+            }
+        };
+        Service.IgpuMemoryChanged += megabytes =>
+        {
+            if (Service.Config.Ui.NotifyOnModeChange)
+            {
+                Toasts.ShowRestartNeeded(megabytes);
             }
         };
         Service.Warning += message =>
@@ -98,13 +118,18 @@ public partial class App : Application
             }
         };
 
+        Service.Start();
+        AutoStart.UpgradeLegacyEntry();
+        ViewModel = new MainViewModel(Service);
+        _tray = new TrayIconService(Service, ShowMainWindow, Quit);
+
         // A second launch of DockSense.exe signals this instance to show its window.
         if (_showSignal is not null)
         {
             ThreadPool.RegisterWaitForSingleObject(_showSignal, (_, _) => Dispatcher.BeginInvoke(ShowMainWindow), null, Timeout.Infinite, executeOnlyOnce: false);
         }
 
-        if (Service.IsFirstRun || e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase))
+        if (Service.IsFirstRun || showWindowAtStart)
         {
             ShowMainWindow();
         }

@@ -22,7 +22,7 @@
 
 ---
 
-DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, works out how your handheld is being used, and applies the matching **power plan** and **Xbox full screen experience** setting. You don't have to switch anything by hand when you dock or undock.
+DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, and works out how your handheld is being used. Then it applies the matching **power plan** and **Xbox full screen experience**, sets the **iGPU memory** and starts **your own programs**. You don't have to switch anything by hand when you dock or undock.
 
 It started with one bug hunt: an ASUS ROG Xbox Ally X docked to an RTX 5090 was stuck at ~50 FPS with the CPU throttled to **2 GHz / 12 W**, and only while a game was in the foreground.
 
@@ -68,11 +68,14 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - 🔌 **Automatic mode detection.** Handheld, Docked (external display) or eGPU (Thunderbolt / USB4 / OCuLink), with debouncing so a dock being plugged in or out never causes flapping.
 - ⚡ **Per-mode power plans.** DockSense restores your previous plan when a mode ends, and creates an "eGPU-safe" plan that is immune to the Game Mode throttle.
 - 🛡️ **Keeps the plan you chose.** If vendor software (e.g. Armoury Crate) switches the plan back, DockSense re-applies it, and it backs off if something keeps fighting.
-- 🎮 **Xbox full screen experience per mode.** For example, boot into the full screen experience as a handheld and into the desktop when docked.
-- 🔔 **Native Windows notifications** when the mode changes, showing the detected GPU and the plan that was applied.
+- 🛠️ **Power plan editor.** Create plans from any existing plan, edit the settings that matter on a handheld (processor state, EPP, boost mode, max frequency, core preference, display and sleep timeouts) for plugged-in and on-battery use, and rename or delete plans. Hidden High Performance-type plans are listed too.
+- 🎮 **Xbox full screen experience per mode.** For example, use the full screen experience as a handheld and the desktop when docked. DockSense can switch it **right away** when the mode changes, not only at the next sign-in.
+- 🚀 **Run programs on mode changes.** Start a program, script or URL when a mode begins or ends (or when DockSense starts in it), with arguments, a hidden window or administrator rights.
+- 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed.
+- 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied), when a profile starts a program, and when you start DockSense yourself, so you know it is running in the background.
 - 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
 - 🌐 **English and 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **No admin rights, no driver, no service.** It uses only documented Windows power and device APIs.
+- 🪶 **No admin rights, no driver, no service.** It uses documented Windows APIs, plus the ASUS ACPI interface (the one Armoury Crate uses) for the optional iGPU memory setting.
 
 ## How it works
 
@@ -86,7 +89,7 @@ flowchart LR
     G --> W["Settle<br/>(default 5 s)"]
     D --> W
     H --> W
-    W --> A["Apply profile<br/>power plan · full screen experience"]
+    W --> A["Apply profile<br/>power plan · full screen experience<br/>iGPU memory · programs"]
     A --> N["Notification"]
 ```
 
@@ -105,8 +108,12 @@ Some details:
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/profiles.png" alt="Mode profiles" /><p align="center"><b>Mode profiles</b>: power plan and full screen experience per mode</p></td>
-    <td width="50%"><img src="docs/images/settings.png" alt="Settings" /><p align="center"><b>Settings</b>: language, theme, startup, notifications</p></td>
+    <td width="50%"><img src="docs/images/profiles.png" alt="Mode profiles" /><p align="center"><b>Mode profiles</b>: power plan, full screen experience, iGPU memory and programs per mode</p></td>
+    <td width="50%"><img src="docs/images/plans.png" alt="Power plans" /><p align="center"><b>Power plans</b>: create, edit and delete plans</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/settings.png" alt="Settings" /><p align="center"><b>Settings</b>: language, theme, startup, notifications</p></td>
+    <td></td>
   </tr>
   <tr>
     <td><img src="docs/images/toast.png" alt="Notification" /><p align="center"><b>Notification</b> when the mode changes</p></td>
@@ -140,10 +147,12 @@ Some details:
 
 - **Tray icon:** left-click opens the window. Right-click lets you pause automatic switching, re-check now, or exit.
 - **Status:** the current mode, the active plan, the Game Mode check, detected adapters and displays, and recent activity.
-- **Mode profiles:** pick the power plan and the full screen experience behavior for each mode. The choices are:
-  - *Don't change*: your vendor software decides
-  - *DockSense Performance*: the eGPU-safe plan
-  - any existing Windows plan
+- **Mode profiles:** for each mode, pick:
+  - the power plan: *Don't change* (your vendor software decides), *DockSense Performance* (the eGPU-safe plan), or any Windows plan, including hidden ones
+  - the full screen experience at sign-in, whether to **switch immediately** when entering the mode, and whether to **exit when leaving** it. The mode you enter decides first. For example, with *Exit when leaving* on for Handheld, docking leaves the full screen experience unless the Docked profile switches it itself.
+  - the **iGPU memory** (on supported ASUS devices; applies after a restart)
+  - **programs to run** when the mode begins or ends. **Test** starts one right away.
+- **Power plans:** create a plan from any existing one (High performance-based plans avoid the Game Mode throttle), edit its plugged-in and on-battery settings, rename or delete it.
 - **Detection:** settle time, "Docked only when plugged in", and per-adapter overrides (*Always / Never an eGPU*).
 
 Closing the window keeps DockSense running in the tray. Launching DockSense.exe again brings the window back.
@@ -156,13 +165,17 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 |---|---|---|
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`, `DockSensePerformance` or `Specific` (with `planId`) |
 | `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`, `Desktop` or `FullScreenExperience`, applied at the next sign-in |
+| `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | Also enter or leave the full screen experience as soon as the mode changes |
+| `handheld` / `docked` / `egpu` → `fseExitOnLeave` | `false` | Leave the full screen experience when switching away from this mode, unless the new mode's `fseApplyImmediately` decides otherwise |
+| `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | iGPU memory in MB to store in the firmware (`0` = Auto, `null` = don't change). Applies after a restart |
+| `handheld` / `docked` / `egpu` → `programs` | `[]` | Programs to start: `path`, `arguments`, `when` (`Enter`, `EnterOrStartup` or `Leave`), `hidden`, `runAsAdministrator`, `enabled` |
 | `detection.settleSeconds` | `5` | How long a new mode must stay stable before it is applied |
 | `detection.dockedRequiresAcPower` | `false` | Count external displays only while plugged in |
 | `detection.forceEgpuInstanceIds` / `ignoreGpuInstanceIds` | `[]` | Per-adapter overrides (PnP instance IDs) |
 | `reassertPowerPlan` | `true` | Switch back when other software changes the plan in a managed mode |
 | `ui.language` | `system` | `system`, `en` or `zh-Hans` |
 | `ui.theme` | `System` | `System`, `Light` or `Dark` |
-| `ui.notifyOnModeChange` / `ui.notifyOnWarnings` | `true` | Windows notifications |
+| `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows notifications when you start DockSense yourself (not at sign-in), on mode changes, for programs started by a profile, and for problems |
 
 ## Supported hardware
 
@@ -179,7 +192,19 @@ Tested it on another device? Please [open an issue](https://github.com/rozx/Dock
 <details>
 <summary><b>I can't find "DockSense Performance" in Control Panel.</b></summary>
 
-On Modern Standby devices, Windows hides High Performance-type plans from Control Panel and `powercfg /list`. The plan exists and works. Check `powercfg /getactivescheme`, or look at the Status page.
+On Modern Standby devices, Windows hides High Performance-type plans from Control Panel and `powercfg /list`. The plan exists and works. DockSense's **Power plans** page lists every plan, hidden ones included. You can also check `powercfg /getactivescheme` or the Status page.
+</details>
+
+<details>
+<summary><b>Why does the iGPU memory need a restart?</b></summary>
+
+The memory reserved for the built-in GPU (the UMA frame buffer) is set by the firmware while the PC starts, the same as in Armoury Crate. DockSense stores the size for the current mode right away. Status then shows the new size as pending, with a **Restart now** button. DockSense never restarts on its own, and it only writes sizes that the firmware itself offers. If you unplug an eGPU and keep playing without restarting, the old size stays in effect until the next restart. Most games run fine either way, because Windows also lends the iGPU shared memory.
+</details>
+
+<details>
+<summary><b>Switching the full screen experience right away doesn't work.</b></summary>
+
+It needs a Windows build with the full screen experience (Windows 11 on a handheld, or with "Xbox mode" enabled) and a home app (the Xbox app, or a launcher such as AnyFSE). If Windows asks for confirmation, choose to start without restarting. When Windows is set to *Restart to optimize* on entering, DockSense won't switch live, because that would restart the PC; the setting still applies at the next sign-in.
 </details>
 
 <details>
@@ -197,9 +222,9 @@ No. That was the old workaround. With an eGPU connected, DockSense uses a plan t
 <details>
 <summary><b>How do I uninstall DockSense completely?</b></summary>
 
-1. Turn off **Start with Windows**, then exit from the tray.
-2. Delete the DockSense folder, plus `%APPDATA%\DockSense` and `%LOCALAPPDATA%\DockSense`.
-3. Optionally remove the plan with `powercfg /delete <guid>`. The GUID is `dockSensePerformancePlanId` in `config.json`.
+1. Optionally delete the DockSense Performance plan on the **Power plans** page while it isn't active (Windows can't delete the active plan). `powercfg /delete <guid>` works too; the GUID is `dockSensePerformancePlanId` in `config.json`.
+2. Turn off **Start with Windows**, then exit from the tray.
+3. Delete the DockSense folder, plus `%APPDATA%\DockSense` and `%LOCALAPPDATA%\DockSense`.
 </details>
 
 <details>
@@ -222,8 +247,8 @@ dotnet run --project src/DockSense.App
 
 | Project | Purpose |
 |---|---|
-| `src/DockSense.Core` | Platform-independent logic: mode resolution, debouncing, power plan policy, config (fully unit tested) |
-| `src/DockSense.App` | WPF tray app: Windows APIs (SetupAPI, display config, powrprof), UI, notifications |
+| `src/DockSense.Core` | Platform-independent logic: mode resolution, debouncing, power plan policy, program triggers, power setting catalog, iGPU memory decoding, config (fully unit tested) |
+| `src/DockSense.App` | WPF tray app: Windows APIs (SetupAPI, display config, powrprof, gaming experience), ASUS ACPI, UI, notifications |
 | `tests/DockSense.Core.Tests` | xUnit tests, including the measured Ally X / XG Mobile unplug sequence |
 | `tools/DockSense.IconGen` | Generates every icon from the pixel-art grids in `Sprites.cs` |
 
@@ -241,8 +266,12 @@ GitHub Actions then reads the version from the branch name, runs the tests, buil
 
 ## Roadmap
 
-- [ ] Switch the full screen experience live when the mode changes, not only at sign-in
+- [x] Switch the full screen experience live when the mode changes, not only at sign-in (v0.2)
+- [x] Power plan editor (v0.2)
+- [x] Run programs on mode changes (v0.2)
+- [x] iGPU memory per mode on ASUS handhelds (v0.2)
 - [ ] Per-mode TDP via vendor interfaces (ASUS, Lenovo, ...)
+- [ ] iGPU memory on other vendors' handhelds
 - [ ] Per-game profiles
 - [ ] winget / Microsoft Store distribution
 - [ ] Code signing

@@ -35,24 +35,47 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - **Armoury Crate** resets the active plan (to its Turbo/Performance/Silent plan) on AC/DC changes, mode changes and helper restarts.
   DockSense must re-assert the plan it wants (listen for `GUID_ACTIVE_POWERSCHEME`), with a loop guard.
 - **FSE** (`HKCU\Software\Microsoft\Windows\CurrentVersion\GamingConfiguration`): `StartupToGamingHome` (0/1) controls
-  boot-into-FSE. `GamingHomeApp` is the home app (the user's machine has AnyFSE set). There is no official API or URI for a live toggle;
-  `Win+F11` toggles it, so a live switch has to know the current state first (still to be researched).
+  boot-into-FSE. `GamingHomeApp` is the home app (the user's machine has AnyFSE set).
+  - Live state and switching use the public gaming experience API (`gamingexperience.h`, API set
+    `api-ms-win-gaming-experience-l1-1-0`): `IsGamingFullScreenExperienceSupported/Active`, `CanSetGamingFullScreenExperience`
+    (all return BOOL), `SetGamingFullScreenExperience(BOOL)` (HRESULT; it can block on Windows' confirmation dialog, and
+    `E_ABORT` means the user stayed). There is also a change notification. These calls work unelevated; don't use `Win+F11`.
+  - `GamingConfiguration\SystemDialogResults\EnterGamingPostureConfirmation`: 0 = ask, **1 = restart the PC**, 2 = start
+    now. DockSense never enters live when it is 1 (unless `EnterGamingPostureConfirmation_NoReboot` = 1). The exit value
+    is `ExitGamingPostureConfirmation` (1 = no prompt).
+  - While docked to the XG Mobile, the internal panel is not an active display path.
+- **iGPU memory (UMA frame buffer)**: `\\.\ATKACPI` opens without admin. `DeviceIoControl(0x0022240C)`, DSTS `0x53545344` /
+  DEVS `0x53564544`, device `0x000600C4` (VRAM_MEM). On RC74XA BIOS 303 the reply status is `0x00030012`: 512 MB units,
+  Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
+  Changes apply only after a **restart**. The legacy `0x000600C1` (APU_MEM) is unsupported here and has unsafe raw values;
+  never write it. Only write raw values the firmware lists. Source: G-Helper `AsusACPI.cs`.
+- **Plan enumeration**: `PowerEnumerate` skips hidden High Performance-type plans (High performance, Power saver,
+  Ultimate) on Modern Standby. `HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes` lists them all and is
+  readable without admin, but it also holds the power mode overlays (`961cc777`, `3af9b8d9`, `ded574b5`), which are not plans.
 
 ## Architecture
 - `src/DockSense.Core` (net10.0): pure logic, fully unit tested.
   - `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld) and `ModeStabilizer` (debounce)
   - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
-  - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`
+  - `FsePlanner` (live FSE target for a transition: the entered mode's `FseApplyImmediately` wins, then the left
+    mode's `FseExitOnLeave`), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
+    well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply)
+  - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
+    custom equality because of its `Programs` list.
 - `src/DockSense.App` (net10.0-windows10.0.19041.0, WPF + WPF-UI 4.3):
   - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
     and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
-    AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, AutoStart (HKCU Run), GameModeDiagnostics.
-  - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied` and `Warning` events.
+    AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
+    `ProgramLauncher`, AutoStart (HKCU Run), GameModeDiagnostics.
+  - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
+    `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
+    Plan create/save/delete go through it so the activity log and config stay in sync.
   - `Services/`: `Appearance` (minimal zinc palette with a monochrome accent; it overrides WPF-UI brush keys in
     Application.Resources and follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications),
     `TrayIconService` (H.NotifyIcon), `IconAssets`.
-  - `ViewModels/MainViewModel` (CommunityToolkit.Mvvm partial properties) is shared by all pages. The pages are
-    Status, Mode profiles, Detection, Settings and About.
+  - `ViewModels/MainViewModel` (CommunityToolkit.Mvvm partial properties) is shared by all pages, with
+    `PlanListViewModel` (Power plans page) and `ProgramItemViewModel`. The pages are Status, Mode profiles, Power plans,
+    Detection, Settings and About. Confirmations use `Services/Dialogs` (WPF-UI `ContentDialogHost` in MainWindow).
   - `Localization/`: `Strings.resx` and `Strings.zh-Hans.resx`, `Loc` with live switching, and XAML `{loc:T Key}`.
   - Custom `Program.Main` (App.xaml is a Page): single instance via mutex, plus a named event that makes a second
     launch show the window. `--probe <file>` writes a read-only report.
@@ -88,7 +111,11 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - WPF projects do not import `System.IO` implicitly (the csproj adds it). XML comments in csproj files must not
   contain `--`.
 - UI screenshots: launch with `--show`, then render the window with `PrintWindow` (PW_RENDERFULLCONTENT) so other
-  windows on top don't spoil the capture. Use UI Automation to click the navigation items. New tools (dotnet, git, gh) may be
+  windows on top don't spoil the capture. WPF-UI nav items and content inside `ItemsControl` cards expose no Invoke pattern
+  to UI Automation, and posted mouse messages are ignored, so click with a real `SetCursorPos` + `mouse_event`. Make the
+  script per-monitor DPI aware, check `WindowFromPoint` first, and restore the cursor. The user types with a Chinese
+  IME ("." becomes "。"), so paste text through the clipboard instead of `SendKeys`, and restore the clipboard.
+  The installed v0.1 runs from `C:\Program Files (x86)\DockSense`; stop it before testing a build and restart it afterwards. New tools (dotnet, git, gh) may be
   missing from PATH in older sessions; refresh with
   `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`.
 - Read-only hardware check: `src\DockSense.App\bin\Debug\net10.0-windows\DockSense.exe --probe <file>` writes a report

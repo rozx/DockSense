@@ -14,6 +14,25 @@ public sealed record ActivityEntry(DateTime Time, string Message);
 /// <summary>Raised after a mode's profile has been applied.</summary>
 public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string? PlanName, bool IsStartup);
 
+/// <summary>Raised after DockSense started a program configured for a mode.</summary>
+/// <param name="Name">Short display name, e.g. "steam.exe".</param>
+/// <param name="Mode">The mode being entered, or for <see cref="ProgramTrigger.Leave"/> programs the mode being left.</param>
+/// <param name="Trigger">Why it ran.</param>
+/// <param name="AtStartup">True when it ran because DockSense started in <paramref name="Mode"/>.</param>
+public sealed record ProgramStarted(string Name, DockMode Mode, ProgramTrigger Trigger, bool AtStartup);
+
+/// <summary>Programs to start for one profile application, with the transition that caused it.</summary>
+internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs);
+
+/// <summary>Why a mode's profile is being applied.</summary>
+internal enum ApplyReason
+{
+    Startup,
+    ModeChange,
+    Resumed,
+    SettingsChanged,
+}
+
 /// <summary>
 /// Ties detection, debouncing and profile application together. Everything runs on the UI thread: Windows
 /// notifications only schedule a re-check, and dispatcher timers do the work.
@@ -23,12 +42,23 @@ public sealed class DockSenseService : IDisposable
     private const int MaxActivity = 50;
     private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(1500);
 
+    /// <summary>At sign-in the shell may still be starting FSE; wait before checking and switching it.</summary>
+    private static readonly TimeSpan StartupFseDelay = TimeSpan.FromSeconds(10);
+
     private readonly ConfigStore _configStore;
+    private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
     private readonly DispatcherTimer _settleTimer = new();
     private SystemNotifications? _notifications;
     private ModeStabilizer _stabilizer = new(DockMode.Handheld, TimeSpan.Zero);
     private PowerPlanController _planController = new();
+    private DockMode? _lastApplied;
+    private int _fseRequest;
+    private bool _fseSwitching;
+    private (DockMode? Previous, DockMode Current) _fseTransition;
+    private readonly Queue<ProgramBatch> _programBatches = new();
+    private bool _programsRunning;
+    private IgpuMemoryBootState? _igpuBoot;
 
     public DockSenseService(ConfigStore configStore)
     {
@@ -46,6 +76,12 @@ public sealed class DockSenseService : IDisposable
     /// <summary>Raised for problems the user should know about.</summary>
     public event Action<string>? Warning;
 
+    /// <summary>Raised after a program configured for a mode was started (not for the Test button).</summary>
+    public event Action<ProgramStarted>? ProgramStarted;
+
+    /// <summary>Raised after a new iGPU memory size (in MB, 0 = Auto) was stored; it applies after a restart.</summary>
+    public event Action<int>? IgpuMemoryChanged;
+
     public ObservableCollection<ActivityEntry> Activity { get; } = [];
 
     public DockMode Mode => _stabilizer.Current;
@@ -57,6 +93,17 @@ public sealed class DockSenseService : IDisposable
     public DockSenseConfig Config { get; private set; } = new();
 
     public GameModeReport? GameMode { get; private set; }
+
+    /// <summary>The firmware's iGPU memory options, or null when the device does not offer the setting.</summary>
+    public IgpuMemoryOptions? IgpuMemory { get; private set; }
+
+    /// <summary>iGPU memory in effect during this Windows session, in MB (0 = Auto); null if unknown.</summary>
+    public int? IgpuMemoryEffectiveMb => IgpuMemory is { } options && _igpuBoot is { } boot ? options.ToMb(boot.EffectiveRaw) : null;
+
+    /// <summary>iGPU memory that applies after the next restart, in MB, or null when nothing is pending.</summary>
+    public int? IgpuMemoryPendingMb => IgpuMemory is { } options && _igpuBoot is { } boot && options.CurrentRaw != boot.EffectiveRaw
+        ? options.ToMb(options.CurrentRaw)
+        : null;
 
     /// <summary>True when config.json did not exist at startup (first run).</summary>
     public bool IsFirstRun { get; private set; }
@@ -72,6 +119,7 @@ public sealed class DockSenseService : IDisposable
             _configStore.Save(Config);
         }
 
+        InitializeIgpuMemory();
         Snapshot = TakeSnapshot() ?? new DeviceSnapshot([], [], OnAcPower: true);
         var mode = ModeResolver.Resolve(Snapshot, Config.Detection);
         _stabilizer = new ModeStabilizer(mode, SettleTime);
@@ -79,12 +127,13 @@ public sealed class DockSenseService : IDisposable
 
         Log.Info($"Started. {Describe(Snapshot)} -> {mode}");
         AddActivity(Loc.F("Act_Started", ModeName(mode)));
-        ApplyProfile(mode, "startup", isStartup: true);
+        ApplyProfile(mode, ApplyReason.Startup);
 
         // Register only after the initial apply: Windows immediately reports the current plan, which is then ours.
         _notifications = new SystemNotifications();
         _notifications.HardwareChanged += ScheduleRescan;
         _notifications.ActivePlanChanged += OnActivePlanChanged;
+        FullScreenExperience.Subscribe(() => _dispatcher.BeginInvoke(RaiseStatusChanged));
     }
 
     public void ScheduleRescan(string reason)
@@ -107,7 +156,7 @@ public sealed class DockSenseService : IDisposable
         if (!paused)
         {
             Snapshot = TakeSnapshot() ?? Snapshot;
-            ApplyProfile(_stabilizer.Current, "resumed", isStartup: false);
+            ApplyProfile(_stabilizer.Current, ApplyReason.Resumed);
         }
 
         RaiseStatusChanged();
@@ -145,14 +194,99 @@ public sealed class DockSenseService : IDisposable
         }
     }
 
+    // ------------------------------------------------------------------ Power plan editor
+
+    /// <summary>Creates a plan as a copy of <paramref name="source"/>. Throws <see cref="Win32Exception"/> on failure.</summary>
+    public Guid CreatePlan(string name, Guid source)
+    {
+        var plan = PowerPlans.Create(name, source);
+        Log.Info($"Created power plan {PowerPlans.Describe(plan)} from {PowerPlans.Describe(source)}.");
+        AddActivity(Loc.F("Act_PlanCreated", name));
+        RaiseStatusChanged();
+        return plan;
+    }
+
+    /// <summary>Renames a plan and writes changed setting values. Throws <see cref="Win32Exception"/> on failure.</summary>
+    public void SavePlan(Guid plan, string? newName, IReadOnlyList<(PowerSettingDefinition Setting, bool Ac, uint Value)> values)
+    {
+        if (newName is not null)
+        {
+            PowerPlans.Rename(plan, newName);
+        }
+
+        foreach (var (setting, ac, value) in values)
+        {
+            PowerPlans.WriteValue(plan, setting.Subgroup, setting.Setting, ac, value);
+            foreach (var twin in setting.Twins)
+            {
+                // The efficiency-class copy may not exist on CPUs without hybrid cores; that is fine.
+                if (PowerPlans.ReadValue(plan, setting.Subgroup, twin, ac) is not null)
+                {
+                    PowerPlans.WriteValue(plan, setting.Subgroup, twin, ac, value);
+                }
+            }
+        }
+
+        PowerPlans.ReapplyIfActive(plan);
+        Log.Info($"Saved power plan {PowerPlans.Describe(plan)}: {values.Count} value(s) changed{(newName is null ? string.Empty : ", renamed")}.");
+        AddActivity(Loc.F("Act_PlanSaved", PowerPlans.GetName(plan) ?? newName ?? plan.ToString()));
+        RaiseStatusChanged();
+    }
+
+    /// <summary>
+    /// Deletes a plan. Mode profiles that used it fall back to "don't change". Throws <see cref="Win32Exception"/>
+    /// when Windows refuses (e.g. the plan is active).
+    /// </summary>
+    public void DeletePlan(Guid plan)
+    {
+        var name = PowerPlans.GetName(plan) ?? plan.ToString();
+        PowerPlans.Delete(plan);
+        Log.Info($"Deleted power plan {name} {{{plan}}}.");
+        AddActivity(Loc.F("Act_PlanDeleted", name));
+
+        // Both explicit choices of this plan and the "DockSense Performance" choice when this was that plan;
+        // otherwise the next apply would silently create the plan again.
+        static ModeProfile Release(ModeProfile profile, Guid plan, bool wasDockSensePlan) => profile.PowerPlan switch
+        {
+            { Kind: PowerPlanKind.Specific, PlanId: { } id } when id == plan => profile with { PowerPlan = PowerPlanChoice.Unmanaged },
+            { Kind: PowerPlanKind.DockSensePerformance } when wasDockSensePlan => profile with { PowerPlan = PowerPlanChoice.Unmanaged },
+            _ => profile,
+        };
+
+        UpdateConfig(c =>
+        {
+            var wasDockSensePlan = c.DockSensePerformancePlanId == plan;
+            return c with
+            {
+                Handheld = Release(c.Handheld, plan, wasDockSensePlan),
+                Docked = Release(c.Docked, plan, wasDockSensePlan),
+                Egpu = Release(c.Egpu, plan, wasDockSensePlan),
+                DockSensePerformancePlanId = wasDockSensePlan ? null : c.DockSensePerformancePlanId,
+            };
+        }, reapply: false);
+        RaiseStatusChanged();
+    }
+
+    /// <summary>Starts a configured program right away (the "Test" button). Returns null or an error message.</summary>
+    public static Task<string?> TestProgramAsync(ProgramLaunch program) => Task.Run(() => ProgramLauncher.Start(program));
+
     public void Dispose()
     {
+        FullScreenExperience.Unsubscribe();
         _notifications?.Dispose();
         _rescanTimer.Stop();
         _settleTimer.Stop();
     }
 
     public static string ModeName(DockMode mode) => Loc.T($"Mode_{mode}");
+
+    /// <summary>"8 GB", "512 MB" or "Auto".</summary>
+    public static string FormatMemory(int megabytes) => megabytes switch
+    {
+        0 => Loc.T("Igpu_Auto"),
+        < 1024 => Loc.F("Igpu_Mb", megabytes),
+        _ => Loc.F("Igpu_Gb", megabytes / 1024.0),
+    };
 
     private TimeSpan SettleTime => TimeSpan.FromSeconds(Math.Clamp(Config.Detection.SettleSeconds, 0, 120));
 
@@ -182,11 +316,11 @@ public sealed class DockSenseService : IDisposable
         {
             Log.Info($"Mode changed to {observed}. {Describe(Snapshot)}");
             AddActivity(Loc.F("Act_ModeChanged", ModeName(observed)));
-            ApplyProfile(observed, "mode change", isStartup: false);
+            ApplyProfile(observed, ApplyReason.ModeChange);
         }
         else if (force)
         {
-            ApplyProfile(_stabilizer.Current, "settings changed", isStartup: false, announce: false);
+            ApplyProfile(_stabilizer.Current, ApplyReason.SettingsChanged);
         }
         else if (_stabilizer.PendingDueAt is { } due)
         {
@@ -199,7 +333,7 @@ public sealed class DockSenseService : IDisposable
         RaiseStatusChanged();
     }
 
-    private void ApplyProfile(DockMode mode, string reason, bool isStartup, bool announce = true)
+    private void ApplyProfile(DockMode mode, ApplyReason reason)
     {
         if (Paused)
         {
@@ -209,23 +343,33 @@ public sealed class DockSenseService : IDisposable
 
         var profile = Config.ProfileFor(mode);
         ApplyPowerPlan(mode, profile, reason);
-        ApplyFse(mode, profile);
+        ApplyFse(mode, profile, reason);
+        ApplyIgpuMemory(mode, profile);
+        StartPrograms(mode, reason);
+        _lastApplied = mode;
 
-        if (announce && Snapshot is not null)
+        if (reason != ApplyReason.SettingsChanged && Snapshot is not null)
         {
-            ModeApplied?.Invoke(new ModeApplied(mode, Snapshot, SafeGetActivePlanName(), isStartup));
+            ModeApplied?.Invoke(new ModeApplied(mode, Snapshot, SafeGetActivePlanName(), reason == ApplyReason.Startup));
         }
 
         RaiseStatusChanged();
     }
 
-    private void ApplyPowerPlan(DockMode mode, ModeProfile profile, string reason)
+    private void ApplyPowerPlan(DockMode mode, ModeProfile profile, ApplyReason reason)
     {
         try
         {
             var target = ResolvePlan(profile.PowerPlan);
             var active = PowerPlans.GetActive();
             var toActivate = _planController.OnModeApplied(target, active, PowerPlans.Balanced);
+            if (toActivate is { } restore && !PowerPlans.Exists(restore))
+            {
+                // The plan to go back to was deleted (e.g. on the Power plans page) while this mode was active.
+                Log.Warn($"The plan to restore {{{restore}}} no longer exists; using Balanced instead.");
+                toActivate = active == PowerPlans.Balanced ? null : PowerPlans.Balanced;
+            }
+
             if (toActivate is { } plan)
             {
                 PowerPlans.SetActive(plan);
@@ -278,25 +422,272 @@ public sealed class DockSenseService : IDisposable
         return created;
     }
 
-    private void ApplyFse(DockMode mode, ModeProfile profile)
+    // ------------------------------------------------------------------ Full screen experience
+
+    private void ApplyFse(DockMode mode, ModeProfile profile, ApplyReason reason)
     {
-        if (profile.Fse == FseStartup.Unchanged || !FseSettings.IsAvailable)
+        if (profile.Fse != FseStartup.Unchanged)
+        {
+            var wantFse = profile.Fse == FseStartup.FullScreenExperience;
+            if (FseSettings.IsAvailable && FseSettings.SetStartupToFse(wantFse))
+            {
+                Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
+                AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            }
+        }
+
+        // Switching live while the user edits settings would yank the screen away; only real transitions do it.
+        // The new mode's live setting decides first, then "exit when leaving" of the mode being left.
+        if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
+        {
+            _fseTransition = (_lastApplied, mode);
+            _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
+        }
+    }
+
+    /// <summary>
+    /// Brings the full screen experience in line with the latest mode transition. One switch runs at a time:
+    /// <see cref="FullScreenExperience.Set"/> can wait on Windows' confirmation dialog, and if the mode changes
+    /// meanwhile, the running switch reconciles with the newest transition when it returns.
+    /// </summary>
+    private async Task SwitchFseAsync(TimeSpan delay)
+    {
+        var request = ++_fseRequest;
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay);
+        }
+
+        if (request != _fseRequest || _fseSwitching)
+        {
+            return; // A newer request takes over, or the running switch will pick this one up.
+        }
+
+        _fseSwitching = true;
+        try
+        {
+            while (true)
+            {
+                var handled = _fseRequest;
+                await SwitchFseOnceAsync();
+                if (_fseRequest == handled)
+                {
+                    break; // Nothing changed while switching.
+                }
+            }
+        }
+        finally
+        {
+            _fseSwitching = false;
+            RaiseStatusChanged();
+        }
+    }
+
+    private async Task SwitchFseOnceAsync()
+    {
+        // Always the latest transition, with the profiles as they are now, so a switch that waited on a prompt
+        // cannot leave a stale state.
+        var (previous, mode) = _fseTransition;
+        if (Paused || Mode != mode || FsePlanner.LiveTarget(Config, previous, mode) is not { } wantFse)
         {
             return;
         }
 
-        var wantFse = profile.Fse == FseStartup.FullScreenExperience;
-        if (FseSettings.SetStartupToFse(wantFse))
+        if (!FullScreenExperience.CanSet)
         {
-            Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
-            AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            Log.Info($"{mode}: cannot switch the full screen experience live on this device (not supported, or no home app set).");
+            return;
         }
 
-        if (profile.FseApplyImmediately)
+        if (FullScreenExperience.IsActive == wantFse)
         {
-            Log.Info($"{mode}: live FSE switching is not implemented yet; the setting applies at next sign-in.");
+            return;
+        }
+
+        if (wantFse && FseSettings.RestartsOnEnter)
+        {
+            Log.Warn("Windows is set to restart the PC to enter the full screen experience; not switching live.");
+            NotifyWarning(Loc.T("Act_FseRestartBlocked"));
+            return;
+        }
+
+        Log.Info($"{mode}: {(wantFse ? "entering" : "leaving")} the full screen experience.");
+        var result = await Task.Run(() => FullScreenExperience.Set(wantFse));
+        if (result >= 0)
+        {
+            AddActivity(Loc.T(wantFse ? "Act_FseEntered" : "Act_FseLeft"));
+        }
+        else if (result == FullScreenExperience.E_ABORT)
+        {
+            Log.Info("The full screen experience switch was declined at the Windows prompt.");
+            AddActivity(Loc.T("Act_FseDeclined"));
+        }
+        else
+        {
+            Log.Warn($"Switching the full screen experience failed: HRESULT 0x{result:X8}.");
+            NotifyWarning(Loc.F("Act_FseFailed", $"0x{result:X8}"));
         }
     }
+
+    // ------------------------------------------------------------------ iGPU memory
+
+    private void InitializeIgpuMemory()
+    {
+        IgpuMemory = SafeReadIgpuMemory();
+        if (IgpuMemory is not { } options)
+        {
+            return;
+        }
+
+        // The value stored in the firmware when this boot session is first seen is the one in effect now.
+        var boot = CurrentBoot();
+        var saved = StateStore.LoadIgpuMemory();
+        if (saved?.Boot is { } savedBoot && savedBoot.IsSameBoot(boot))
+        {
+            _igpuBoot = saved;
+        }
+        else
+        {
+            _igpuBoot = new IgpuMemoryBootState(boot, options.CurrentRaw);
+            StateStore.SaveIgpuMemory(_igpuBoot);
+        }
+
+        Log.Info($"iGPU memory: {options.ToMb(_igpuBoot.EffectiveRaw)} MB in effect, {options.ToMb(options.CurrentRaw)} MB stored in the firmware.");
+    }
+
+    private void ApplyIgpuMemory(DockMode mode, ModeProfile profile)
+    {
+        if (profile.IgpuMemoryMb is not { } target || IgpuMemory is null)
+        {
+            return;
+        }
+
+        // Re-read: Armoury Crate or another tool may have changed it since.
+        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
+        if (IgpuMemory.RawToWrite(target) is not { } raw)
+        {
+            if (IgpuMemory.RawFor(target) is null)
+            {
+                Log.Warn($"{mode}: the firmware does not offer {target} MB of iGPU memory; not changing it.");
+            }
+
+            return;
+        }
+
+        try
+        {
+            if (!AsusAcpi.WriteIgpuMemory(raw))
+            {
+                Log.Warn($"{mode}: the firmware rejected iGPU memory {target} MB.");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error($"{mode}: could not set iGPU memory", ex);
+            return;
+        }
+
+        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory with { CurrentRaw = raw };
+        Log.Info($"{mode}: iGPU memory set to {target} MB; it applies after a restart.");
+        AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(target)));
+        if (IgpuMemoryPendingMb is not null)
+        {
+            IgpuMemoryChanged?.Invoke(target);
+        }
+    }
+
+    /// <summary>This boot: Windows' boot counter (readable without admin) plus the start time as a fallback.</summary>
+    private static BootSession CurrentBoot()
+    {
+        uint? bootId = null;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters");
+            bootId = key?.GetValue("BootId") is int id ? unchecked((uint)id) : null;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warn($"Could not read the boot counter: {ex.Message}");
+        }
+
+        return new BootSession(bootId, DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64));
+    }
+
+    private static IgpuMemoryOptions? SafeReadIgpuMemory()
+    {
+        try
+        {
+            return AsusAcpi.ReadIgpuMemory();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Could not read the iGPU memory setting: {ex.Message}");
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------ Programs
+
+    private void StartPrograms(DockMode mode, ApplyReason reason)
+    {
+        if (reason == ApplyReason.SettingsChanged)
+        {
+            return;
+        }
+
+        var atStartup = reason == ApplyReason.Startup;
+        var programs = ProgramPlanner.Select(Config, _lastApplied, mode, atStartup);
+        if (programs.Count > 0)
+        {
+            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs));
+            if (!_programsRunning)
+            {
+                _ = RunProgramBatchesAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs queued batches one after another, each in order, off the UI thread (an elevated launch waits for the
+    /// UAC prompt). One runner for all transitions, so a later batch's Leave programs never overtake the rest of
+    /// an earlier batch that is still waiting on a prompt.
+    /// </summary>
+    private async Task RunProgramBatchesAsync()
+    {
+        _programsRunning = true;
+        try
+        {
+            while (_programBatches.TryDequeue(out var batch))
+            {
+                foreach (var program in batch.Programs)
+                {
+                    var name = ProgramLauncher.DisplayName(program);
+                    var error = await Task.Run(() => ProgramLauncher.Start(program));
+                    if (error is null)
+                    {
+                        Log.Info($"Started {program.Path} {program.Arguments}".TrimEnd());
+                        AddActivity(Loc.F("Act_ProgramStarted", name));
+                        var mode = program.When == ProgramTrigger.Leave && batch.Previous is { } left ? left : batch.Current;
+                        ProgramStarted?.Invoke(new ProgramStarted(name, mode, program.When, batch.AtStartup));
+                    }
+                    else
+                    {
+                        Log.Warn($"Could not start {program.Path}: {error}");
+                        NotifyWarning(Loc.F("Act_ProgramFailed", name, error));
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _programsRunning = false;
+            RaiseStatusChanged();
+        }
+    }
+
+    // ------------------------------------------------------------------ Notifications from Windows
 
     private void OnActivePlanChanged(Guid newActive)
     {
@@ -316,13 +707,17 @@ public sealed class DockSenseService : IDisposable
         else if (_planController.GaveUp)
         {
             Log.Warn($"Another program keeps switching the power plan (now {PowerPlans.Describe(newActive)}); giving up until the next mode change.");
-            var message = Loc.T("Act_GaveUp");
-            AddActivity(message);
-            Warning?.Invoke(message);
+            NotifyWarning(Loc.T("Act_GaveUp"));
         }
 
         StateStore.Save(_planController.State);
         RaiseStatusChanged();
+    }
+
+    private void NotifyWarning(string message)
+    {
+        AddActivity(message);
+        Warning?.Invoke(message);
     }
 
     private void RaiseStatusChanged()

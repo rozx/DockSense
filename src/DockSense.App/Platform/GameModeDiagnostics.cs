@@ -16,9 +16,11 @@ public sealed record GameModeReport(
     /// Game Mode is on, the active plan is Balanced-type, and the provisioned Balanced GameMode profile sets a
     /// power-saving EPP or prefers efficient cores.
     /// </summary>
-    public bool ThrottlesActivePlan =>
+    public bool ThrottlesActivePlan => ActivePlanPersonality == 2 && ThrottlesBalancedPlans;
+
+    /// <summary>True when every Balanced-type plan gets the throttling GameMode profile while a game is in the foreground.</summary>
+    public bool ThrottlesBalancedPlans =>
         GameModeEnabled
-        && ActivePlanPersonality == 2
         && Overrides.Any(o => o.Scheme == "Balanced" && o.AcValue is { } v &&
             (o.Setting.StartsWith("Energy performance preference", StringComparison.Ordinal) ? v >= 80 : v is 3 or 4));
 }

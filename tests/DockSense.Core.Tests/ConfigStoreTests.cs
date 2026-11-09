@@ -33,7 +33,13 @@ public sealed class ConfigStoreTests : IDisposable
         var planId = Guid.NewGuid();
         var original = new DockSenseConfig
         {
-            Docked = new ModeProfile { PowerPlan = PowerPlanChoice.Specific(planId), Fse = FseStartup.Unchanged, FseApplyImmediately = true },
+            Docked = new ModeProfile
+            {
+                PowerPlan = PowerPlanChoice.Specific(planId),
+                Fse = FseStartup.Unchanged,
+                FseApplyImmediately = true,
+                Programs = [new ProgramLaunch { Path = @"%LOCALAPPDATA%\Tool\tool.exe", Arguments = "--fast", When = ProgramTrigger.Leave, Hidden = true }],
+            },
             Detection = new DetectionOptions { DockedRequiresAcPower = true, SettleSeconds = 8, ForceEgpuInstanceIds = [@"PCI\VEN_10DE&DEV_2684\X"] },
             ReassertPowerPlan = false,
             DockSensePerformancePlanId = planId,
@@ -45,6 +51,7 @@ public sealed class ConfigStoreTests : IDisposable
         var loaded = store.Load();
 
         Assert.Equal(original.Docked, loaded.Docked);
+        Assert.Equal(original.Docked.Programs, loaded.Docked.Programs);
         Assert.Equal(PowerPlanKind.Specific, loaded.Docked.PowerPlan.Kind);
         Assert.Equal(planId, loaded.Docked.PowerPlan.PlanId);
         Assert.True(loaded.Detection.DockedRequiresAcPower);
@@ -66,6 +73,21 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.False(config.ReassertPowerPlan);
         Assert.Equal("system", config.Ui.Language);
         Assert.True(config.Ui.NotifyOnModeChange);
+        Assert.True(config.Ui.NotifyOnProgramStart);
+        Assert.True(config.Ui.NotifyOnStartup);
+    }
+
+    [Fact]
+    public void Null_or_missing_program_list_means_no_programs()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(ConfigPath, """{ "handheld": { "programs": null }, "docked": { "fse": "Desktop" } }""");
+
+        var config = new ConfigStore(ConfigPath).Load();
+
+        Assert.Empty(config.Handheld.Programs);
+        Assert.Empty(config.Docked.Programs);
+        Assert.Equal(new ModeProfile { Fse = FseStartup.Desktop }, config.Docked);
     }
 
     [Fact]

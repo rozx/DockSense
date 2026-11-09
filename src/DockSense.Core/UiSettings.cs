@@ -18,6 +18,12 @@ public sealed record UiSettings
     /// <summary>Show a Windows notification when the mode changes.</summary>
     public bool NotifyOnModeChange { get; init; } = true;
 
+    /// <summary>Show a Windows notification when DockSense starts (e.g. at sign-in), with the mode and plan.</summary>
+    public bool NotifyOnStartup { get; init; } = true;
+
+    /// <summary>Show a Windows notification when DockSense starts a program configured for a mode.</summary>
+    public bool NotifyOnProgramStart { get; init; } = true;
+
     /// <summary>Show a Windows notification for problems (e.g. another program keeps changing the power plan).</summary>
     public bool NotifyOnWarnings { get; init; } = true;
 }
