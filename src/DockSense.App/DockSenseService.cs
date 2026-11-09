@@ -45,6 +45,8 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _lastApplied;
     private int _fseRequest;
     private bool _fseSwitching;
+    private readonly Queue<IReadOnlyList<ProgramLaunch>> _programBatches = new();
+    private bool _programsRunning;
     private IgpuMemoryBootState? _igpuBoot;
 
     public DockSenseService(ConfigStore configStore)
@@ -625,30 +627,48 @@ public sealed class DockSenseService : IDisposable
         var programs = ProgramPlanner.Select(Config, _lastApplied, mode, reason == ApplyReason.Startup);
         if (programs.Count > 0)
         {
-            _ = StartProgramsAsync(programs);
+            _programBatches.Enqueue(programs);
+            if (!_programsRunning)
+            {
+                _ = RunProgramBatchesAsync();
+            }
         }
     }
 
-    private async Task StartProgramsAsync(IReadOnlyList<ProgramLaunch> programs)
+    /// <summary>
+    /// Runs queued batches one after another, each in order, off the UI thread (an elevated launch waits for the
+    /// UAC prompt). One runner for all transitions, so a later batch's Leave programs never overtake the rest of
+    /// an earlier batch that is still waiting on a prompt.
+    /// </summary>
+    private async Task RunProgramBatchesAsync()
     {
-        // One after another, in order, off the UI thread (an elevated launch waits for the UAC prompt).
-        foreach (var program in programs)
+        _programsRunning = true;
+        try
         {
-            var name = ProgramLauncher.DisplayName(program);
-            var error = await Task.Run(() => ProgramLauncher.Start(program));
-            if (error is null)
+            while (_programBatches.TryDequeue(out var batch))
             {
-                Log.Info($"Started {program.Path} {program.Arguments}".TrimEnd());
-                AddActivity(Loc.F("Act_ProgramStarted", name));
-            }
-            else
-            {
-                Log.Warn($"Could not start {program.Path}: {error}");
-                NotifyWarning(Loc.F("Act_ProgramFailed", name, error));
+                foreach (var program in batch)
+                {
+                    var name = ProgramLauncher.DisplayName(program);
+                    var error = await Task.Run(() => ProgramLauncher.Start(program));
+                    if (error is null)
+                    {
+                        Log.Info($"Started {program.Path} {program.Arguments}".TrimEnd());
+                        AddActivity(Loc.F("Act_ProgramStarted", name));
+                    }
+                    else
+                    {
+                        Log.Warn($"Could not start {program.Path}: {error}");
+                        NotifyWarning(Loc.F("Act_ProgramFailed", name, error));
+                    }
+                }
             }
         }
-
-        RaiseStatusChanged();
+        finally
+        {
+            _programsRunning = false;
+            RaiseStatusChanged();
+        }
     }
 
     // ------------------------------------------------------------------ Notifications from Windows
