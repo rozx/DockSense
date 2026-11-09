@@ -9,6 +9,10 @@ internal static class ProgramLauncher
 {
     private const int ERROR_CANCELLED = 1223;
 
+    /// <summary>Windows PowerShell, present on every supported Windows version (runs .ps1 scripts).</summary>
+    private static readonly string WindowsPowerShell = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
+
     /// <summary>A short display name for a configured program, e.g. "steam.exe".</summary>
     public static string DisplayName(ProgramLaunch program)
     {
@@ -24,9 +28,11 @@ internal static class ProgramLauncher
     public static string? Start(ProgramLaunch program)
     {
         var path = Environment.ExpandEnvironmentVariables(program.Path.Trim().Trim('"'));
-        var info = new ProcessStartInfo(path)
+        var (fileName, arguments) = ProgramCommandLine.Resolve(
+            path, Environment.ExpandEnvironmentVariables(program.Arguments ?? string.Empty), WindowsPowerShell);
+        var info = new ProcessStartInfo(fileName)
         {
-            Arguments = Environment.ExpandEnvironmentVariables(program.Arguments ?? string.Empty),
+            Arguments = arguments,
             UseShellExecute = true,
             WindowStyle = program.Hidden ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
             Verb = program.RunAsAdministrator ? "runas" : string.Empty,
