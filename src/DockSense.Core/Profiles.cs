@@ -42,6 +42,39 @@ public sealed record PowerPlanChoice
     public static PowerPlanChoice Specific(Guid planId) => new() { Kind = PowerPlanKind.Specific, PlanId = planId };
 }
 
+/// <summary>When a <see cref="ProgramLaunch"/> runs.</summary>
+public enum ProgramTrigger
+{
+    /// <summary>When the device switches into the mode.</summary>
+    Enter,
+
+    /// <summary>When the device switches into the mode, and when DockSense starts in the mode (e.g. at sign-in).</summary>
+    EnterOrStartup,
+
+    /// <summary>When the device switches out of the mode.</summary>
+    Leave,
+}
+
+/// <summary>A program DockSense starts on a mode change, e.g. a launcher, a fan tool or a script.</summary>
+public sealed record ProgramLaunch
+{
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Program, script or document to open. Environment variables such as %LOCALAPPDATA% are expanded.</summary>
+    public string Path { get; init; } = string.Empty;
+
+    /// <summary>Command-line arguments. Environment variables are expanded.</summary>
+    public string Arguments { get; init; } = string.Empty;
+
+    public ProgramTrigger When { get; init; } = ProgramTrigger.Enter;
+
+    /// <summary>Start without a visible window (useful for scripts and console tools).</summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>Start elevated. Windows shows a UAC prompt each time.</summary>
+    public bool RunAsAdministrator { get; init; }
+}
+
 /// <summary>What DockSense applies when a mode becomes active.</summary>
 public sealed record ModeProfile
 {
@@ -49,6 +82,30 @@ public sealed record ModeProfile
 
     public FseStartup Fse { get; init; } = FseStartup.Unchanged;
 
-    /// <summary>Experimental: also enter or leave FSE right away when the mode changes, not just at next sign-in.</summary>
+    /// <summary>Also enter or leave FSE right away when the mode changes, not just at next sign-in.</summary>
     public bool FseApplyImmediately { get; init; }
+
+    /// <summary>Programs started when this mode begins or ends (see <see cref="ProgramLaunch.When"/>).</summary>
+    public IReadOnlyList<ProgramLaunch> Programs
+    {
+        get;
+        init => field = value ?? []; // "programs": null in a hand-edited config means none
+    } = [];
+
+    /// <summary>
+    /// iGPU memory (UMA frame buffer) in MB to store in the firmware for this mode; 0 = Auto, null = don't change.
+    /// Takes effect at the next restart. Only on devices whose firmware offers the setting (see <see cref="IgpuMemoryOptions"/>).
+    /// </summary>
+    public int? IgpuMemoryMb { get; init; }
+
+    // Value equality for the program list too, so an unchanged profile compares equal after a JSON round trip.
+    public bool Equals(ModeProfile? other) =>
+        other is not null
+        && PowerPlan == other.PowerPlan
+        && Fse == other.Fse
+        && FseApplyImmediately == other.FseApplyImmediately
+        && IgpuMemoryMb == other.IgpuMemoryMb
+        && Programs.SequenceEqual(other.Programs);
+
+    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, Programs.Count);
 }

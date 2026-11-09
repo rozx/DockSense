@@ -5,6 +5,13 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:loc="clr-namespace:DockSense.App.Localization"
     Title="Profiles">
+    <Page.Resources>
+        <!-- One setting row: label and description on the left, the control on the right. -->
+        <Style x:Key="SettingRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+    </Page.Resources>
+
     <StackPanel Margin="32,16,32,32">
         <TextBlock Style="{StaticResource PageTitle}" Text="{loc:T Prof_Title}" />
         <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_Subtitle}" Margin="0,4,0,16" />
@@ -34,7 +41,8 @@
 
                             <Separator Margin="0,18,0,14" />
 
-                            <Grid Margin="0,0,0,14">
+                            <!-- Power plan -->
+                            <Grid Style="{StaticResource SettingRow}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -47,13 +55,15 @@
                                     Grid.Column="1"
                                     Width="360"
                                     VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_PowerPlan}"
                                     DisplayMemberPath="Label"
                                     ItemsSource="{Binding PlanOptions}"
                                     SelectedValue="{Binding SelectedPlan}"
                                     SelectedValuePath="Value" />
                             </Grid>
 
-                            <Grid Margin="0,0,0,14">
+                            <!-- Full screen experience at sign-in -->
+                            <Grid Style="{StaticResource SettingRow}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -66,23 +76,156 @@
                                     Grid.Column="1"
                                     Width="360"
                                     VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_Fse}"
                                     DisplayMemberPath="Label"
                                     ItemsSource="{Binding FseOptions}"
                                     SelectedValue="{Binding SelectedFse}"
                                     SelectedValuePath="Value" />
                             </Grid>
 
-                            <Grid Opacity="0.6">
+                            <!-- Switch the full screen experience right away -->
+                            <Grid Style="{StaticResource SettingRow}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,24,0">
                                     <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_FseLive}" />
-                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_FseLiveDesc}" FontSize="12" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding FseLiveDescription}" FontSize="12" />
                                 </StackPanel>
-                                <ui:ToggleSwitch Grid.Column="1" IsEnabled="False" VerticalAlignment="Center" />
+                                <ui:ToggleSwitch
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_FseLive}"
+                                    IsChecked="{Binding FseLive}"
+                                    IsEnabled="{Binding FseLiveEnabled}" />
                             </Grid>
+
+                            <!-- iGPU memory (ASUS firmware setting, applies after a restart) -->
+                            <Grid Style="{StaticResource SettingRow}" Visibility="{Binding IgpuAvailable, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,24,0">
+                                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_Igpu}" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_IgpuDesc}" FontSize="12" />
+                                </StackPanel>
+                                <ComboBox
+                                    Grid.Column="1"
+                                    Width="360"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_Igpu}"
+                                    DisplayMemberPath="Label"
+                                    ItemsSource="{Binding IgpuOptions}"
+                                    SelectedValue="{Binding SelectedIgpu}"
+                                    SelectedValuePath="Value" />
+                            </Grid>
+
+                            <!-- Programs -->
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,24,0">
+                                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_Programs}" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_ProgramsDesc}" FontSize="12" />
+                                </StackPanel>
+                                <ui:Button
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prog_Add}"
+                                    Command="{Binding AddProgramCommand}"
+                                    Content="{loc:T Prog_Add}"
+                                    Icon="{ui:SymbolIcon Add24}" />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Programs}" Margin="0,10,0,0" Visibility="{Binding HasPrograms, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border
+                                            Margin="0,0,0,8"
+                                            Padding="12"
+                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ui:ToggleSwitch
+                                                        VerticalAlignment="Center"
+                                                        AutomationProperties.Name="{loc:T Prog_Enabled}"
+                                                        IsChecked="{Binding Enabled}"
+                                                        ToolTip="{loc:T Prog_Enabled}" />
+                                                    <ui:TextBox
+                                                        Grid.Column="1"
+                                                        Margin="12,0,8,0"
+                                                        AutomationProperties.Name="{loc:T Prog_Path}"
+                                                        PlaceholderText="{loc:T Prog_PathPlaceholder}"
+                                                        Text="{Binding Path}" />
+                                                    <ui:Button
+                                                        Grid.Column="2"
+                                                        Margin="0,0,8,0"
+                                                        AutomationProperties.Name="{loc:T Prog_Browse}"
+                                                        Command="{Binding BrowseCommand}"
+                                                        Content="{loc:T Prog_Browse}"
+                                                        Icon="{ui:SymbolIcon FolderOpen24}" />
+                                                    <ui:Button
+                                                        Grid.Column="3"
+                                                        AutomationProperties.Name="{loc:T Prog_Remove}"
+                                                        Command="{Binding RemoveCommand}"
+                                                        Icon="{ui:SymbolIcon Delete24}"
+                                                        ToolTip="{loc:T Prog_Remove}" />
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ui:TextBox
+                                                        Margin="0,0,8,0"
+                                                        AutomationProperties.Name="{loc:T Prog_Arguments}"
+                                                        PlaceholderText="{loc:T Prog_Arguments}"
+                                                        Text="{Binding Arguments}" />
+                                                    <ComboBox
+                                                        Grid.Column="1"
+                                                        Width="300"
+                                                        AutomationProperties.Name="{loc:T Prog_When}"
+                                                        DisplayMemberPath="Label"
+                                                        ItemsSource="{Binding DataContext.WhenOptions, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        SelectedValue="{Binding When}"
+                                                        SelectedValuePath="Value" />
+                                                </Grid>
+                                                <DockPanel Margin="0,8,0,0">
+                                                    <ui:Button
+                                                        DockPanel.Dock="Right"
+                                                        AutomationProperties.Name="{loc:T Prog_Test}"
+                                                        Command="{Binding TestCommand}"
+                                                        Content="{loc:T Prog_Test}"
+                                                        Icon="{ui:SymbolIcon Play24}" />
+                                                    <CheckBox Content="{loc:T Prog_Hidden}" IsChecked="{Binding Hidden}" Margin="0,0,16,0" />
+                                                    <CheckBox Content="{loc:T Prog_Admin}" IsChecked="{Binding RunAsAdministrator}" Margin="0,0,16,0" />
+                                                    <TextBlock
+                                                        Style="{StaticResource Secondary}"
+                                                        Margin="0,0,12,0"
+                                                        VerticalAlignment="Center"
+                                                        FontSize="12"
+                                                        Text="{Binding TestStatus}"
+                                                        ToolTip="{Binding TestStatus}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        TextWrapping="NoWrap" />
+                                                </DockPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </ui:Card>
                 </DataTemplate>

@@ -12,6 +12,11 @@ public partial class ProfilesPage : Page
     public ProfilesPage() => InitializeComponent();
 }
 
+public partial class PlansPage : Page
+{
+    public PlansPage() => InitializeComponent();
+}
+
 public partial class DetectionPage : Page
 {
     public DetectionPage() => InitializeComponent();

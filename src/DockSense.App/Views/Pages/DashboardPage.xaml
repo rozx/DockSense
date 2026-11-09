@@ -54,8 +54,16 @@
                             <TextBlock Text="{Binding PlanName}" FontWeight="SemiBold" Margin="0,2,0,0" />
                         </StackPanel>
                         <StackPanel Margin="0,0,40,6">
+                            <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_FseNow}" FontSize="12" />
+                            <TextBlock Text="{Binding FseNowText}" FontWeight="SemiBold" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,40,6">
                             <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Fse}" FontSize="12" />
                             <TextBlock Text="{Binding FseText}" FontWeight="SemiBold" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,40,6" Visibility="{Binding IgpuAvailable, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Igpu}" FontSize="12" />
+                            <TextBlock Text="{Binding IgpuText}" FontWeight="SemiBold" Margin="0,2,0,0" />
                         </StackPanel>
                         <StackPanel Margin="0,0,40,6">
                             <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Power}" FontSize="12" />
@@ -83,6 +91,24 @@
                         Icon="{ui:SymbolIcon Pause24}" />
                 </StackPanel>
             </Grid>
+        </ui:Card>
+
+        <!-- iGPU memory waiting for a restart -->
+        <ui:Card Margin="0,12,0,0" Padding="16,12" Visibility="{Binding IgpuPending, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <ui:Button
+                    DockPanel.Dock="Right"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="{loc:T Dash_RestartNow}"
+                    Command="{Binding RestartCommand}"
+                    Content="{loc:T Dash_RestartNow}"
+                    Icon="{ui:SymbolIcon ArrowClockwise24}" />
+                <Ellipse Style="{StaticResource Dot}" Fill="#FBBF24" Margin="2,0,12,0" />
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Dash_IgpuPendingTitle}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding IgpuPendingMessage}" />
+                </StackPanel>
+            </DockPanel>
         </ui:Card>
 
         <!-- Game Mode throttle check -->

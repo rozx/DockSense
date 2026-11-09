@@ -39,6 +39,7 @@
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="{loc:T Nav_Status}" Icon="{ui:SymbolIcon Home24}" TargetPageType="{x:Type pages:DashboardPage}" />
                 <ui:NavigationViewItem Content="{loc:T Nav_Profiles}" Icon="{ui:SymbolIcon Options24}" TargetPageType="{x:Type pages:ProfilesPage}" />
+                <ui:NavigationViewItem Content="{loc:T Nav_Plans}" Icon="{ui:SymbolIcon Flash24}" TargetPageType="{x:Type pages:PlansPage}" />
                 <ui:NavigationViewItem Content="{loc:T Nav_Detection}" Icon="{ui:SymbolIcon ScanDash24}" TargetPageType="{x:Type pages:DetectionPage}" />
                 <ui:NavigationViewItem Content="{loc:T Nav_Settings}" Icon="{ui:SymbolIcon Settings24}" TargetPageType="{x:Type pages:SettingsPage}" />
             </ui:NavigationView.MenuItems>
@@ -46,5 +47,8 @@
                 <ui:NavigationViewItem Content="{loc:T Nav_About}" Icon="{ui:SymbolIcon Info24}" TargetPageType="{x:Type pages:AboutPage}" />
             </ui:NavigationView.FooterMenuItems>
         </ui:NavigationView>
+
+        <!-- Confirmation dialogs (Services/Dialogs) appear on top of everything. -->
+        <ui:ContentDialogHost x:Name="DialogHost" Grid.Row="0" Grid.RowSpan="2" />
     </Grid>
 </ui:FluentWindow>

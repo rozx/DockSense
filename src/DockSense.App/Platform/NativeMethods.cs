@@ -214,6 +214,13 @@ internal static class NativeMethods
     public static extern uint PowerReadACValueIndex(
         IntPtr rootPowerKey, ref Guid schemeGuid, ref Guid subGroupOfPowerSettingsGuid, ref Guid powerSettingGuid, out uint acValueIndex);
 
+    [DllImport("powrprof.dll")]
+    public static extern uint PowerReadDCValueIndex(
+        IntPtr rootPowerKey, ref Guid schemeGuid, ref Guid subGroupOfPowerSettingsGuid, ref Guid powerSettingGuid, out uint dcValueIndex);
+
+    [DllImport("powrprof.dll")]
+    public static extern uint PowerDeleteScheme(IntPtr rootPowerKey, ref Guid schemeGuid);
+
     /// <summary>NO_SUBGROUP_GUID: settings that belong to no subgroup, such as the scheme personality.</summary>
     public static readonly Guid NO_SUBGROUP_GUID = new("fea3413e-7e05-4911-9a71-700331f1c294");
 

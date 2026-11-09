@@ -29,6 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _service = service;
         Profiles = [new ModeProfileViewModel(DockMode.Handheld, this), new ModeProfileViewModel(DockMode.Docked, this), new ModeProfileViewModel(DockMode.Egpu, this)];
+        Plans = new PlanListViewModel(service);
         _service.StatusChanged += (_, _) => Refresh();
         Loc.Instance.PropertyChanged += (_, _) => Refresh();
         Refresh();
@@ -43,6 +44,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool IsPaused { get; set; }
     [ObservableProperty] public partial string PlanName { get; set; } = string.Empty;
     [ObservableProperty] public partial string FseText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string FseNowText { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IgpuAvailable { get; set; }
+    [ObservableProperty] public partial string IgpuText { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IgpuPending { get; set; }
+    [ObservableProperty] public partial string IgpuPendingMessage { get; set; } = string.Empty;
     [ObservableProperty] public partial string PowerText { get; set; } = string.Empty;
     [ObservableProperty] public partial string PauseButtonText { get; set; } = string.Empty;
     [ObservableProperty] public partial InfoBarSeverity ThrottleSeverity { get; set; }
@@ -58,6 +64,10 @@ public sealed partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------------ Profiles page
 
     public IReadOnlyList<ModeProfileViewModel> Profiles { get; }
+
+    // ------------------------------------------------------------------ Power plans page
+
+    public PlanListViewModel Plans { get; }
 
     // ------------------------------------------------------------------ Detection page
 
@@ -100,6 +110,25 @@ public sealed partial class MainViewModel : ObservableObject
     private void OpenConfig() => Open(_service.ConfigPath);
 
     [RelayCommand]
+    private static async Task Restart()
+    {
+        if (!await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), Loc.T("Restart_Message"), Loc.T("Restart_Confirm")))
+        {
+            return;
+        }
+
+        try
+        {
+            // No /f: Windows still asks apps with unsaved work before restarting.
+            Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warn($"Could not restart: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
     private static void OpenLog() => Open(Log.FilePath);
 
     [RelayCommand]
@@ -126,8 +155,10 @@ public sealed partial class MainViewModel : ObservableObject
         _syncing = true;
         try
         {
+            var plans = PowerPlans.ListAll();
             RefreshStatus();
-            RefreshProfiles();
+            RefreshProfiles(plans);
+            Plans.Refresh(plans, SafeActivePlan());
             RefreshDetection();
             RefreshSettings();
             OnPropertyChanged(nameof(VersionText));
@@ -162,7 +193,20 @@ public sealed partial class MainViewModel : ObservableObject
             false => Loc.T("Common_Off"),
             null => Loc.T("Common_NotAvailable"),
         };
+        FseNowText = FullScreenExperience.IsActive switch
+        {
+            true => Loc.T("Fse_Active"),
+            false => Loc.T("Fse_Inactive"),
+            null => Loc.T("Common_NotAvailable"),
+        };
         PowerText = Loc.T(snapshot?.OnAcPower == false ? "Power_Battery" : "Power_Ac");
+
+        IgpuAvailable = _service.IgpuMemory is not null;
+        var effective = _service.IgpuMemoryEffectiveMb;
+        var pending = _service.IgpuMemoryPendingMb;
+        IgpuText = effective is { } now ? DockSenseService.FormatMemory(now) : Loc.T("Common_Unknown");
+        IgpuPending = pending is not null;
+        IgpuPendingMessage = pending is { } next ? Loc.F("Dash_IgpuPendingMessage", DockSenseService.FormatMemory(next)) : string.Empty;
 
         var gameMode = _service.GameMode;
         if (gameMode is null || !gameMode.GameModeEnabled || gameMode.Overrides.Count == 0)
@@ -187,15 +231,23 @@ public sealed partial class MainViewModel : ObservableObject
             new HardwareItem(string.IsNullOrEmpty(d.Name) ? Loc.T("Dash_Displays") : d.Name, Loc.T(d.IsInternal ? "Badge_BuiltIn" : "Badge_External"), !d.IsInternal)));
     }
 
-    private void RefreshProfiles()
+    private void RefreshProfiles(IReadOnlyList<PlanInfo> plans)
     {
-        var planOptions = BuildPlanOptions();
+        var planOptions = BuildPlanOptions(plans);
         var fseOptions = new List<Option<FseStartup>>
         {
             new(FseStartup.Unchanged, Loc.T("Fse_Unchanged")),
             new(FseStartup.Desktop, Loc.T("Fse_Desktop")),
             new(FseStartup.FullScreenExperience, Loc.T("Fse_Fse")),
         };
+        var whenOptions = new List<Option<ProgramTrigger>>
+        {
+            new(ProgramTrigger.Enter, Loc.T("Prog_WhenEnter")),
+            new(ProgramTrigger.EnterOrStartup, Loc.T("Prog_WhenEnterOrStartup")),
+            new(ProgramTrigger.Leave, Loc.T("Prog_WhenLeave")),
+        };
+        var fseLiveSupported = FullScreenExperience.IsSupported;
+        var igpu = _service.IgpuMemory;
 
         foreach (var profile in Profiles)
         {
@@ -215,10 +267,46 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             profile.SelectedFse = config.Fse;
+            profile.FseLiveSupported = fseLiveSupported;
+            profile.FseLive = config.FseApplyImmediately;
+            profile.FseLiveDescription = Loc.T(fseLiveSupported ? "Prof_FseLiveDesc" : "Prof_FseLiveUnsupported");
+
+            profile.IgpuAvailable = igpu is not null;
+            var igpuOptions = BuildIgpuOptions(igpu, config.IgpuMemoryMb);
+            if (!profile.IgpuOptions.SequenceEqual(igpuOptions))
+            {
+                profile.IgpuOptions = igpuOptions;
+            }
+
+            profile.SelectedIgpu = config.IgpuMemoryMb ?? ModeProfileViewModel.IgpuUnchanged;
+
+            if (!profile.WhenOptions.SequenceEqual(whenOptions))
+            {
+                profile.WhenOptions = whenOptions;
+            }
+
+            profile.SyncPrograms(config.Programs);
         }
     }
 
-    private List<Option<string>> BuildPlanOptions()
+    private static List<Option<int>> BuildIgpuOptions(IgpuMemoryOptions? igpu, int? configured)
+    {
+        var options = new List<Option<int>> { new(ModeProfileViewModel.IgpuUnchanged, Loc.T("Igpu_Unchanged")) };
+        if (igpu is not null)
+        {
+            options.AddRange(igpu.SizesMb.Select(mb => new Option<int>(mb, DockSenseService.FormatMemory(mb))));
+        }
+
+        // A size from another device's config stays visible instead of silently changing.
+        if (configured is { } mb && options.All(o => o.Value != mb))
+        {
+            options.Add(new Option<int>(mb, Loc.F("Igpu_NotOffered", DockSenseService.FormatMemory(mb))));
+        }
+
+        return options;
+    }
+
+    private List<Option<string>> BuildPlanOptions(IReadOnlyList<PlanInfo> plans)
     {
         var options = new List<Option<string>>
         {
@@ -226,20 +314,14 @@ public sealed partial class MainViewModel : ObservableObject
             new("docksense", Loc.T("Plan_DockSense")),
         };
 
+        // All plans, including hidden High Performance-type ones (e.g. created on the Power plans page).
         var ownPlan = _service.Config.DockSensePerformancePlanId;
-        try
-        {
-            options.AddRange(PowerPlans.List()
-                .Where(p => p.Id != ownPlan)
-                .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
-                .Select(p => new Option<string>(p.Id.ToString(), p.Name)));
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warn($"Could not list power plans: {ex.Message}");
-        }
+        options.AddRange(plans
+            .Where(p => p.Id != ownPlan)
+            .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(p => new Option<string>(p.Id.ToString(), p.Name)));
 
-        // Keep plans that are configured but hidden from the list (e.g. other High Performance-type plans).
+        // Keep plans that are configured but no longer exist, so the choice stays visible.
         foreach (var profile in Profiles)
         {
             var choice = _service.Config.ProfileFor(profile.Mode).PowerPlan;
@@ -354,6 +436,9 @@ public sealed partial class MainViewModel : ObservableObject
         {
             PowerPlan = ParsePlanKey(profile.SelectedPlan),
             Fse = profile.SelectedFse,
+            FseApplyImmediately = profile.FseLive,
+            IgpuMemoryMb = profile.SelectedIgpu == ModeProfileViewModel.IgpuUnchanged ? null : profile.SelectedIgpu,
+            Programs = profile.Programs.Select(p => p.ToModel()).ToList(),
         };
 
         _service.UpdateConfig(config => profile.Mode switch
@@ -488,6 +573,18 @@ public sealed partial class MainViewModel : ObservableObject
         _ => PowerPlanChoice.Unmanaged,
     };
 
+    private static Guid? SafeActivePlan()
+    {
+        try
+        {
+            return PowerPlans.GetActive();
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {
         var list = items.ToList();
@@ -530,11 +627,74 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     [ObservableProperty] public partial IReadOnlyList<Option<string>> PlanOptions { get; set; } = [];
     [ObservableProperty] public partial string? SelectedPlan { get; set; }
     [ObservableProperty] public partial IReadOnlyList<Option<FseStartup>> FseOptions { get; set; } = [];
-    [ObservableProperty] public partial FseStartup SelectedFse { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FseLiveEnabled))]
+    public partial FseStartup SelectedFse { get; set; }
+
+    [ObservableProperty] public partial bool FseLive { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FseLiveEnabled))]
+    public partial bool FseLiveSupported { get; set; }
+
+    [ObservableProperty] public partial string FseLiveDescription { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IgpuAvailable { get; set; }
+    [ObservableProperty] public partial IReadOnlyList<Option<int>> IgpuOptions { get; set; } = [];
+    [ObservableProperty] public partial int SelectedIgpu { get; set; } = IgpuUnchanged;
+    [ObservableProperty] public partial IReadOnlyList<Option<ProgramTrigger>> WhenOptions { get; set; } = [];
+
+    /// <summary>"Don't change" in the iGPU memory list.</summary>
+    public const int IgpuUnchanged = -1;
+
+    /// <summary>The live switch needs a target (desktop or FSE) and the Windows API.</summary>
+    public bool FseLiveEnabled => FseLiveSupported && SelectedFse != FseStartup.Unchanged;
+
+    public System.Collections.ObjectModel.ObservableCollection<ProgramItemViewModel> Programs { get; } = [];
+
+    public bool HasPrograms => Programs.Count > 0;
+
+    [RelayCommand]
+    private void AddProgram()
+    {
+        Programs.Add(new ProgramItemViewModel(this, new ProgramLaunch()));
+        OnPropertyChanged(nameof(HasPrograms));
+        owner.SaveProfile(this);
+    }
+
+    internal void RemoveProgram(ProgramItemViewModel program)
+    {
+        Programs.Remove(program);
+        OnPropertyChanged(nameof(HasPrograms));
+        owner.SaveProfile(this);
+    }
+
+    internal void ProgramsChanged() => owner.SaveProfile(this);
+
+    /// <summary>Rebuilds the list only when the saved config differs, so typing and focus are not disturbed.</summary>
+    internal void SyncPrograms(IReadOnlyList<ProgramLaunch> programs)
+    {
+        if (Programs.Select(p => p.ToModel()).SequenceEqual(programs.Select(p => p with { Path = p.Path.Trim() })))
+        {
+            return;
+        }
+
+        Programs.Clear();
+        foreach (var program in programs)
+        {
+            Programs.Add(new ProgramItemViewModel(this, program));
+        }
+
+        OnPropertyChanged(nameof(HasPrograms));
+    }
 
     partial void OnSelectedPlanChanged(string? value) => owner.SaveProfile(this);
 
     partial void OnSelectedFseChanged(FseStartup value) => owner.SaveProfile(this);
+
+    partial void OnFseLiveChanged(bool value) => owner.SaveProfile(this);
+
+    partial void OnSelectedIgpuChanged(int value) => owner.SaveProfile(this);
 }
 
 public sealed partial class AdapterOverrideViewModel(string instanceId, MainViewModel owner) : ObservableObject

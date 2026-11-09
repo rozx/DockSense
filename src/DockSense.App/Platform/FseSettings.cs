@@ -11,6 +11,7 @@ internal static class FseSettings
     private const string KeyPath = @"Software\Microsoft\Windows\CurrentVersion\GamingConfiguration";
     private const string StartupValue = "StartupToGamingHome";
     private const string HomeAppValue = "GamingHomeApp";
+    private const string DialogResultsPath = KeyPath + @"\SystemDialogResults";
 
     /// <summary>True when this Windows build has the FSE configuration key (FSE is available on the device).</summary>
     public static bool IsAvailable
@@ -39,6 +40,21 @@ internal static class FseSettings
         {
             using var key = Registry.CurrentUser.OpenSubKey(KeyPath);
             return key?.GetValue(HomeAppValue) as string;
+        }
+    }
+
+    /// <summary>
+    /// True when Windows is set to restart the PC to enter FSE ("Restart to optimize" remembered in the enter
+    /// confirmation dialog). DockSense never enters FSE live in that case.
+    /// </summary>
+    public static bool RestartsOnEnter
+    {
+        get
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(DialogResultsPath);
+            var choice = key?.GetValue("EnterGamingPostureConfirmation") as int?;
+            var noReboot = key?.GetValue("EnterGamingPostureConfirmation_NoReboot") as int?;
+            return choice == 1 && noReboot != 1;
         }
     }
 

@@ -13,6 +13,7 @@ public partial class MainWindow : FluentWindow
         DataContext = viewModel;
         InitializeComponent();
         RootNavigation.SetPageProviderService(new PageProvider(viewModel));
+        Services.Dialogs.Host = DialogHost;
 
         // The NavigationView selects an item on its own while loading; open the Status page once the window has
         // rendered and everything is idle, so ours is the last navigation.

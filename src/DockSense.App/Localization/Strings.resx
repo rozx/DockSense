@@ -76,7 +76,7 @@
   <data name="Fse_Desktop" xml:space="preserve"><value>Desktop</value></data>
   <data name="Fse_Fse" xml:space="preserve"><value>Full screen experience</value></data>
   <data name="Prof_FseLive" xml:space="preserve"><value>Switch immediately</value></data>
-  <data name="Prof_FseLiveDesc" xml:space="preserve"><value>Enter or leave the full screen experience the moment the mode changes. Coming soon.</value></data>
+  <data name="Prof_FseLiveDesc" xml:space="preserve"><value>Enter or leave the full screen experience as soon as the mode changes, not only at the next sign-in.</value></data>
   <data name="Prof_Current" xml:space="preserve"><value>Active now</value></data>
 
   <data name="Det_Title" xml:space="preserve"><value>Detection</value></data>
@@ -139,4 +139,120 @@
 
   <data name="Toast_Plan" xml:space="preserve"><value>Power plan: {0}</value></data>
   <data name="Toast_WarningTitle" xml:space="preserve"><value>DockSense needs your attention</value></data>
+  <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
+  <data name="Nav_Plans" xml:space="preserve"><value>Power plans</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_ListSeparator" xml:space="preserve"><value>, </value></data>
+  <data name="Dash_FseNow" xml:space="preserve"><value>Full screen experience now</value></data>
+  <data name="Dash_Igpu" xml:space="preserve"><value>iGPU memory</value></data>
+  <data name="Dash_IgpuPendingTitle" xml:space="preserve"><value>Restart to apply the iGPU memory</value></data>
+  <data name="Dash_IgpuPendingMessage" xml:space="preserve"><value>The iGPU gets {0} after the next restart.</value></data>
+  <data name="Dash_RestartNow" xml:space="preserve"><value>Restart now</value></data>
+  <data name="Fse_Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Fse_Inactive" xml:space="preserve"><value>Not active</value></data>
+  <data name="Restart_Title" xml:space="preserve"><value>Restart now?</value></data>
+  <data name="Restart_Message" xml:space="preserve"><value>Windows restarts right away. Save your work first. Apps with unsaved changes can still stop the restart.</value></data>
+  <data name="Restart_Confirm" xml:space="preserve"><value>Restart</value></data>
+  <data name="Act_FseEntered" xml:space="preserve"><value>Entered the full screen experience</value></data>
+  <data name="Act_FseLeft" xml:space="preserve"><value>Left the full screen experience</value></data>
+  <data name="Act_FseDeclined" xml:space="preserve"><value>The full screen experience switch was cancelled at the Windows prompt</value></data>
+  <data name="Act_FseFailed" xml:space="preserve"><value>Could not switch the full screen experience ({0})</value></data>
+  <data name="Act_FseRestartBlocked" xml:space="preserve"><value>Windows is set to restart the PC to enter the full screen experience, so DockSense did not switch right away. The change applies at next sign-in.</value></data>
+  <data name="Act_IgpuMemory" xml:space="preserve"><value>iGPU memory set to {0}. It applies after a restart.</value></data>
+  <data name="Act_ProgramStarted" xml:space="preserve"><value>Started {0}</value></data>
+  <data name="Act_ProgramFailed" xml:space="preserve"><value>Could not start {0}: {1}</value></data>
+  <data name="Act_PlanSaved" xml:space="preserve"><value>Saved the power plan {0}</value></data>
+  <data name="Act_PlanDeleted" xml:space="preserve"><value>Deleted the power plan {0}</value></data>
+  <data name="Prof_FseLiveUnsupported" xml:space="preserve"><value>Not available on this device or Windows version.</value></data>
+  <data name="Prof_Igpu" xml:space="preserve"><value>iGPU memory</value></data>
+  <data name="Prof_IgpuDesc" xml:space="preserve"><value>Memory reserved for the built-in GPU. Stored in the firmware; applies after a restart.</value></data>
+  <data name="Igpu_Unchanged" xml:space="preserve"><value>Don&apos;t change</value></data>
+  <data name="Igpu_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="Igpu_Mb" xml:space="preserve"><value>{0} MB</value></data>
+  <data name="Igpu_Gb" xml:space="preserve"><value>{0:0.#} GB</value></data>
+  <data name="Igpu_NotOffered" xml:space="preserve"><value>{0} (not offered by this device)</value></data>
+  <data name="Prof_Programs" xml:space="preserve"><value>Run programs</value></data>
+  <data name="Prof_ProgramsDesc" xml:space="preserve"><value>Start programs or scripts when this mode begins or ends.</value></data>
+  <data name="Prog_Add" xml:space="preserve"><value>Add program</value></data>
+  <data name="Prog_Enabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="Prog_Path" xml:space="preserve"><value>Program</value></data>
+  <data name="Prog_PathPlaceholder" xml:space="preserve"><value>Program, script or file to open</value></data>
+  <data name="Prog_Browse" xml:space="preserve"><value>Browse</value></data>
+  <data name="Prog_Remove" xml:space="preserve"><value>Remove</value></data>
+  <data name="Prog_Arguments" xml:space="preserve"><value>Arguments (optional)</value></data>
+  <data name="Prog_When" xml:space="preserve"><value>When to run</value></data>
+  <data name="Prog_WhenEnter" xml:space="preserve"><value>When entering this mode</value></data>
+  <data name="Prog_WhenEnterOrStartup" xml:space="preserve"><value>When entering, and when DockSense starts</value></data>
+  <data name="Prog_WhenLeave" xml:space="preserve"><value>When leaving this mode</value></data>
+  <data name="Prog_Hidden" xml:space="preserve"><value>Hide window</value></data>
+  <data name="Prog_Admin" xml:space="preserve"><value>Run as administrator</value></data>
+  <data name="Prog_Test" xml:space="preserve"><value>Test</value></data>
+  <data name="Prog_Starting" xml:space="preserve"><value>Starting…</value></data>
+  <data name="Prog_Started" xml:space="preserve"><value>Started</value></data>
+  <data name="Prog_Failed" xml:space="preserve"><value>Failed: {0}</value></data>
+  <data name="Prog_BrowseTitle" xml:space="preserve"><value>Choose a program</value></data>
+  <data name="Prog_FilterPrograms" xml:space="preserve"><value>Programs and scripts</value></data>
+  <data name="Prog_FilterAll" xml:space="preserve"><value>All files</value></data>
+  <data name="Plans_Title" xml:space="preserve"><value>Power plans</value></data>
+  <data name="Plans_Subtitle" xml:space="preserve"><value>Create, edit and delete Windows power plans. Mode profiles can use any of them, including hidden ones.</value></data>
+  <data name="Plans_New" xml:space="preserve"><value>New plan</value></data>
+  <data name="Plans_NewDesc" xml:space="preserve"><value>Copies an existing plan. Plans based on High performance are not slowed down by the Game Mode CPU throttle.</value></data>
+  <data name="Plans_Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Plans_NamePlaceholder" xml:space="preserve"><value>Name of the new plan</value></data>
+  <data name="Plans_BasedOn" xml:space="preserve"><value>Based on</value></data>
+  <data name="Plans_BaseRecommended" xml:space="preserve"><value>{0} (recommended)</value></data>
+  <data name="Plans_Create" xml:space="preserve"><value>Create</value></data>
+  <data name="Plans_DefaultName" xml:space="preserve"><value>My power plan</value></data>
+  <data name="Plans_All" xml:space="preserve"><value>All plans</value></data>
+  <data name="Plans_Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Plans_Throttled" xml:space="preserve"><value>Game Mode throttle</value></data>
+  <data name="Plans_ThrottledTip" xml:space="preserve"><value>Balanced-type plan: Windows Game Mode switches the CPU to maximum power saving while a game is in the foreground.</value></data>
+  <data name="Plans_UsedBy" xml:space="preserve"><value>Used by {0}</value></data>
+  <data name="PlanType_PowerSaver" xml:space="preserve"><value>Power saver type</value></data>
+  <data name="PlanType_HighPerformance" xml:space="preserve"><value>High performance type</value></data>
+  <data name="PlanType_Balanced" xml:space="preserve"><value>Balanced type</value></data>
+  <data name="Plans_BuiltInNote" xml:space="preserve"><value>Built-in Windows plan: you can change its settings, but not rename or delete it.</value></data>
+  <data name="Plans_Ac" xml:space="preserve"><value>Plugged in</value></data>
+  <data name="Plans_Dc" xml:space="preserve"><value>On battery</value></data>
+  <data name="Plans_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Plans_Revert" xml:space="preserve"><value>Revert</value></data>
+  <data name="Plans_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Plans_Saved" xml:space="preserve"><value>Saved</value></data>
+  <data name="Plans_NoChanges" xml:space="preserve"><value>Nothing changed</value></data>
+  <data name="Plans_Error" xml:space="preserve"><value>Windows refused the change: {0}</value></data>
+  <data name="Plans_DeleteTitle" xml:space="preserve"><value>Delete power plan?</value></data>
+  <data name="Plans_DeleteMessage" xml:space="preserve"><value>&quot;{0}&quot; will be deleted. This can&apos;t be undone.</value></data>
+  <data name="Plans_DeleteUsedMessage" xml:space="preserve"><value>&quot;{0}&quot; will be deleted. This can&apos;t be undone. {1}: those mode profiles will be set to &quot;Don&apos;t change&quot;.</value></data>
+  <data name="PS_MinState" xml:space="preserve"><value>Minimum processor state</value></data>
+  <data name="PS_MinState_Desc" xml:space="preserve"><value>Lower values let the CPU idle cooler.</value></data>
+  <data name="PS_MaxState" xml:space="preserve"><value>Maximum processor state</value></data>
+  <data name="PS_MaxState_Desc" xml:space="preserve"><value>Below 100% also turns off boost on most CPUs.</value></data>
+  <data name="PS_Epp" xml:space="preserve"><value>Energy performance preference</value></data>
+  <data name="PS_Epp_Desc" xml:space="preserve"><value>0 = maximum performance, 100 = maximum power saving.</value></data>
+  <data name="PS_Boost" xml:space="preserve"><value>Processor boost mode</value></data>
+  <data name="PS_Boost_Desc" xml:space="preserve"><value>How eagerly the CPU boosts above its base clock.</value></data>
+  <data name="PS_Boost_0" xml:space="preserve"><value>Disabled</value></data>
+  <data name="PS_Boost_1" xml:space="preserve"><value>Enabled</value></data>
+  <data name="PS_Boost_2" xml:space="preserve"><value>Aggressive</value></data>
+  <data name="PS_Boost_3" xml:space="preserve"><value>Efficient enabled</value></data>
+  <data name="PS_Boost_4" xml:space="preserve"><value>Efficient aggressive</value></data>
+  <data name="PS_Boost_5" xml:space="preserve"><value>Aggressive at guaranteed</value></data>
+  <data name="PS_Boost_6" xml:space="preserve"><value>Efficient aggressive at guaranteed</value></data>
+  <data name="PS_MaxFrequency" xml:space="preserve"><value>Maximum processor frequency</value></data>
+  <data name="PS_MaxFrequency_Desc" xml:space="preserve"><value>0 = no limit.</value></data>
+  <data name="PS_CorePreference" xml:space="preserve"><value>Heterogeneous thread scheduling</value></data>
+  <data name="PS_CorePreference_Desc" xml:space="preserve"><value>Which cores Windows prefers on CPUs with performance and efficiency cores.</value></data>
+  <data name="PS_CorePreference_0" xml:space="preserve"><value>All processors</value></data>
+  <data name="PS_CorePreference_1" xml:space="preserve"><value>Performant processors</value></data>
+  <data name="PS_CorePreference_2" xml:space="preserve"><value>Prefer performant processors</value></data>
+  <data name="PS_CorePreference_3" xml:space="preserve"><value>Efficient processors</value></data>
+  <data name="PS_CorePreference_4" xml:space="preserve"><value>Prefer efficient processors</value></data>
+  <data name="PS_CorePreference_5" xml:space="preserve"><value>Automatic</value></data>
+  <data name="PS_DisplayOff" xml:space="preserve"><value>Turn off the display after</value></data>
+  <data name="PS_DisplayOff_Desc" xml:space="preserve"><value>0 = never.</value></data>
+  <data name="PS_Sleep" xml:space="preserve"><value>Sleep after</value></data>
+  <data name="PS_Sleep_Desc" xml:space="preserve"><value>0 = never.</value></data>
+  <data name="Unit_Minutes" xml:space="preserve"><value>min</value></data>
+  <data name="Toast_IgpuTitle" xml:space="preserve"><value>Restart to apply the iGPU memory</value></data>
+  <data name="Toast_IgpuMessage" xml:space="preserve"><value>The iGPU gets {0} after the next restart.</value></data>
 </root>

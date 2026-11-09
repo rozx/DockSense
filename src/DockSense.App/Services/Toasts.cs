@@ -34,6 +34,14 @@ public static class Toasts
         Show(builder, IconAssets.NameFor(applied.Mode), tag: "mode");
     }
 
+    public static void ShowRestartNeeded(int megabytes)
+    {
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.T("Toast_IgpuTitle"))
+            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)));
+        Show(builder, IconAssets.App, tag: "igpu");
+    }
+
     public static void ShowWarning(string message)
     {
         var builder = new ToastContentBuilder()

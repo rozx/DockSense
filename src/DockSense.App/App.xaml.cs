@@ -78,16 +78,21 @@ public partial class App : Application
         ApplyTheme(ui.Theme);
 
         Service = new DockSenseService(store);
-        Service.Start();
-        ViewModel = new MainViewModel(Service);
-        _tray = new TrayIconService(Service, ShowMainWindow, Quit);
 
+        // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
         Toasts.Initialize(() => Dispatcher.BeginInvoke(ShowMainWindow));
         Service.ModeApplied += applied =>
         {
             if (!applied.IsStartup && Service.Config.Ui.NotifyOnModeChange)
             {
                 Toasts.ShowModeApplied(applied);
+            }
+        };
+        Service.IgpuMemoryChanged += megabytes =>
+        {
+            if (Service.Config.Ui.NotifyOnModeChange)
+            {
+                Toasts.ShowRestartNeeded(megabytes);
             }
         };
         Service.Warning += message =>
@@ -97,6 +102,10 @@ public partial class App : Application
                 Toasts.ShowWarning(message);
             }
         };
+
+        Service.Start();
+        ViewModel = new MainViewModel(Service);
+        _tray = new TrayIconService(Service, ShowMainWindow, Quit);
 
         // A second launch of DockSense.exe signals this instance to show its window.
         if (_showSignal is not null)

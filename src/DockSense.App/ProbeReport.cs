@@ -48,11 +48,30 @@ internal static class ProbeReport
         text.AppendLine($"Active power plan:   {PowerPlans.Describe(PowerPlans.GetActive())}");
         var dockSensePlan = config.DockSensePerformancePlanId;
         text.AppendLine($"DockSense plan:      {(dockSensePlan is { } id ? PowerPlans.Describe(id) : "not created yet")}");
+        text.AppendLine("All power plans:");
+        foreach (var plan in PowerPlans.ListAll())
+        {
+            var type = plan.Personality switch { 0 => "Power saver", 1 => "High performance", 2 => "Balanced", _ => "unknown" };
+            text.AppendLine($"  {plan.Name} {{{plan.Id}}} ({type} type)");
+        }
 
         text.AppendLine();
         text.AppendLine($"FSE available:       {FseSettings.IsAvailable}");
         text.AppendLine($"FSE at sign-in:      {FseSettings.StartupToFse?.ToString() ?? "-"}");
         text.AppendLine($"FSE home app:        {FseSettings.HomeApp ?? "-"}");
+        text.AppendLine($"FSE live API:        supported {FullScreenExperience.IsSupported}, active {FullScreenExperience.IsActive?.ToString() ?? "-"}, can switch {FullScreenExperience.CanSet}");
+        text.AppendLine($"FSE enter restarts:  {FseSettings.RestartsOnEnter}");
+
+        text.AppendLine();
+        if (AsusAcpi.ReadIgpuMemory() is { } igpu)
+        {
+            text.AppendLine($"iGPU memory:         {igpu.ToMb(igpu.CurrentRaw)} MB stored in the firmware (raw 0x{igpu.CurrentRaw:X})");
+            text.AppendLine($"iGPU memory options: {string.Join(", ", igpu.SizesMb.Select(mb => mb == 0 ? "Auto" : $"{mb} MB"))}");
+        }
+        else
+        {
+            text.AppendLine("iGPU memory:         not adjustable on this device");
+        }
 
         var gameMode = GameModeDiagnostics.Read();
         text.AppendLine();
