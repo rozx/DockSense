@@ -4,9 +4,9 @@ using DockSense.Core;
 namespace DockSense.App;
 
 /// <summary>What the firmware's iGPU memory setting was when this Windows session started.</summary>
-/// <param name="BootTimeUtc">When Windows started; identifies the boot session.</param>
+/// <param name="Boot">The boot session this was recorded in.</param>
 /// <param name="EffectiveRaw">The raw firmware value in effect during this boot session.</param>
-internal sealed record IgpuMemoryBootState(DateTime BootTimeUtc, uint EffectiveRaw);
+internal sealed record IgpuMemoryBootState(BootSession Boot, uint EffectiveRaw);
 
 /// <summary>Runtime state that must survive restarts of DockSense (not user settings).</summary>
 internal static class StateStore

@@ -44,6 +44,7 @@ public sealed class DockSenseService : IDisposable
     private PowerPlanController _planController = new();
     private DockMode? _lastApplied;
     private int _fseRequest;
+    private bool _fseSwitching;
     private IgpuMemoryBootState? _igpuBoot;
 
     public DockSenseService(ConfigStore configStore)
@@ -227,17 +228,25 @@ public sealed class DockSenseService : IDisposable
         Log.Info($"Deleted power plan {name} {{{plan}}}.");
         AddActivity(Loc.F("Act_PlanDeleted", name));
 
-        static ModeProfile Release(ModeProfile profile, Guid plan) =>
-            profile.PowerPlan is { Kind: PowerPlanKind.Specific, PlanId: { } id } && id == plan
-                ? profile with { PowerPlan = PowerPlanChoice.Unmanaged }
-                : profile;
-
-        UpdateConfig(c => c with
+        // Both explicit choices of this plan and the "DockSense Performance" choice when this was that plan;
+        // otherwise the next apply would silently create the plan again.
+        static ModeProfile Release(ModeProfile profile, Guid plan, bool wasDockSensePlan) => profile.PowerPlan switch
         {
-            Handheld = Release(c.Handheld, plan),
-            Docked = Release(c.Docked, plan),
-            Egpu = Release(c.Egpu, plan),
-            DockSensePerformancePlanId = c.DockSensePerformancePlanId == plan ? null : c.DockSensePerformancePlanId,
+            { Kind: PowerPlanKind.Specific, PlanId: { } id } when id == plan => profile with { PowerPlan = PowerPlanChoice.Unmanaged },
+            { Kind: PowerPlanKind.DockSensePerformance } when wasDockSensePlan => profile with { PowerPlan = PowerPlanChoice.Unmanaged },
+            _ => profile,
+        };
+
+        UpdateConfig(c =>
+        {
+            var wasDockSensePlan = c.DockSensePerformancePlanId == plan;
+            return c with
+            {
+                Handheld = Release(c.Handheld, plan, wasDockSensePlan),
+                Docked = Release(c.Docked, plan, wasDockSensePlan),
+                Egpu = Release(c.Egpu, plan, wasDockSensePlan),
+                DockSensePerformancePlanId = wasDockSensePlan ? null : c.DockSensePerformancePlanId,
+            };
         }, reapply: false);
         RaiseStatusChanged();
     }
@@ -416,11 +425,16 @@ public sealed class DockSenseService : IDisposable
         // Switching live while the user edits settings would yank the screen away; only real transitions do it.
         if (profile.FseApplyImmediately && reason != ApplyReason.SettingsChanged)
         {
-            _ = SwitchFseAsync(mode, wantFse, reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
+            _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
         }
     }
 
-    private async Task SwitchFseAsync(DockMode mode, bool wantFse, TimeSpan delay)
+    /// <summary>
+    /// Brings the full screen experience in line with the current mode's profile. One switch runs at a time:
+    /// <see cref="FullScreenExperience.Set"/> can wait on Windows' confirmation dialog, and if the mode changes
+    /// meanwhile, the running switch reconciles with the newest target when it returns.
+    /// </summary>
+    private async Task SwitchFseAsync(TimeSpan delay)
     {
         var request = ++_fseRequest;
         if (delay > TimeSpan.Zero)
@@ -428,14 +442,42 @@ public sealed class DockSenseService : IDisposable
             await Task.Delay(delay);
         }
 
-        // A newer mode change, a pause or a profile edit since then wins.
+        if (request != _fseRequest || _fseSwitching)
+        {
+            return; // A newer request takes over, or the running switch will pick this one up.
+        }
+
+        _fseSwitching = true;
+        try
+        {
+            while (true)
+            {
+                var handled = _fseRequest;
+                await SwitchFseOnceAsync();
+                if (_fseRequest == handled)
+                {
+                    break; // Nothing changed while switching.
+                }
+            }
+        }
+        finally
+        {
+            _fseSwitching = false;
+            RaiseStatusChanged();
+        }
+    }
+
+    private async Task SwitchFseOnceAsync()
+    {
+        // Always the latest mode and profile, so a switch that waited on a prompt cannot leave a stale state.
+        var mode = Mode;
         var profile = Config.ProfileFor(mode);
-        if (request != _fseRequest || Paused || Mode != mode || !profile.FseApplyImmediately
-            || profile.Fse != (wantFse ? FseStartup.FullScreenExperience : FseStartup.Desktop))
+        if (Paused || !profile.FseApplyImmediately || profile.Fse == FseStartup.Unchanged)
         {
             return;
         }
 
+        var wantFse = profile.Fse == FseStartup.FullScreenExperience;
         if (!FullScreenExperience.CanSet)
         {
             Log.Info($"{mode}: cannot switch the full screen experience live on this device (not supported, or no home app set).");
@@ -470,8 +512,6 @@ public sealed class DockSenseService : IDisposable
             Log.Warn($"Switching the full screen experience failed: HRESULT 0x{result:X8}.");
             NotifyWarning(Loc.F("Act_FseFailed", $"0x{result:X8}"));
         }
-
-        RaiseStatusChanged();
     }
 
     // ------------------------------------------------------------------ iGPU memory
@@ -485,15 +525,15 @@ public sealed class DockSenseService : IDisposable
         }
 
         // The value stored in the firmware when this boot session is first seen is the one in effect now.
-        var bootTime = DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+        var boot = CurrentBoot();
         var saved = StateStore.LoadIgpuMemory();
-        if (saved is not null && (saved.BootTimeUtc - bootTime).Duration() < TimeSpan.FromMinutes(2))
+        if (saved?.Boot is { } savedBoot && savedBoot.IsSameBoot(boot))
         {
             _igpuBoot = saved;
         }
         else
         {
-            _igpuBoot = new IgpuMemoryBootState(bootTime, options.CurrentRaw);
+            _igpuBoot = new IgpuMemoryBootState(boot, options.CurrentRaw);
             StateStore.SaveIgpuMemory(_igpuBoot);
         }
 
@@ -540,6 +580,24 @@ public sealed class DockSenseService : IDisposable
         {
             IgpuMemoryChanged?.Invoke(target);
         }
+    }
+
+    /// <summary>This boot: Windows' boot counter (readable without admin) plus the start time as a fallback.</summary>
+    private static BootSession CurrentBoot()
+    {
+        uint? bootId = null;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters");
+            bootId = key?.GetValue("BootId") is int id ? unchecked((uint)id) : null;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warn($"Could not read the boot counter: {ex.Message}");
+        }
+
+        return new BootSession(bootId, DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64));
     }
 
     private static IgpuMemoryOptions? SafeReadIgpuMemory()
