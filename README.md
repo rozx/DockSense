@@ -138,7 +138,7 @@ Some details:
 
 1. Download `DockSense-<version>-win-x64.zip` from the **[latest release](https://github.com/rozx/DockSense/releases/latest)**.
 2. Extract it anywhere, for example `%LOCALAPPDATA%\Programs\DockSense`, and run **DockSense.exe**.
-3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in.
+3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in. This also covers booting straight into the Xbox full screen experience, where Windows normally holds startup apps back until you switch to the desktop.
 
 > [!NOTE]
 > The executable is not code-signed yet, so Windows SmartScreen may warn on first run (**More info → Run anyway**).

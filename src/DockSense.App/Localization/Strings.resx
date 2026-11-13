@@ -106,7 +106,7 @@
   <data name="Theme_Dark" xml:space="preserve"><value>Dark</value></data>
   <data name="Set_Behavior" xml:space="preserve"><value>Behavior</value></data>
   <data name="Set_Startup" xml:space="preserve"><value>Start with Windows</value></data>
-  <data name="Set_StartupDesc" xml:space="preserve"><value>Run DockSense in the system tray when you sign in.</value></data>
+  <data name="Set_StartupDesc" xml:space="preserve"><value>Run DockSense in the system tray when you sign in, also when Windows starts in the full screen experience.</value></data>
   <data name="Set_Reassert" xml:space="preserve"><value>Keep the chosen power plan</value></data>
   <data name="Set_ReassertDesc" xml:space="preserve"><value>Switch back when other software (such as Armoury Crate) changes the plan in a managed mode.</value></data>
   <data name="Set_Notifications" xml:space="preserve"><value>Notifications</value></data>

@@ -106,7 +106,7 @@
   <data name="Theme_Dark" xml:space="preserve"><value>深色</value></data>
   <data name="Set_Behavior" xml:space="preserve"><value>行为</value></data>
   <data name="Set_Startup" xml:space="preserve"><value>开机自启</value></data>
-  <data name="Set_StartupDesc" xml:space="preserve"><value>登录 Windows 时在系统托盘中运行 DockSense。</value></data>
+  <data name="Set_StartupDesc" xml:space="preserve"><value>登录 Windows 时在系统托盘中运行 DockSense，开机直接进入全屏体验时也一样。</value></data>
   <data name="Set_Reassert" xml:space="preserve"><value>保持所选电源计划</value></data>
   <data name="Set_ReassertDesc" xml:space="preserve"><value>在受管理的模式下，其他软件（如 Armoury Crate）更改计划时自动切回。</value></data>
   <data name="Set_Notifications" xml:space="preserve"><value>通知</value></data>

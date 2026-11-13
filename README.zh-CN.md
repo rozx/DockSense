@@ -138,7 +138,7 @@ flowchart LR
 
 1. 从 **[最新版本](https://github.com/rozx/DockSense/releases/latest)** 下载 `DockSense-<版本>-win-x64.zip`。
 2. 解压到任意位置（例如 `%LOCALAPPDATA%\Programs\DockSense`），运行 **DockSense.exe**。
-3. 第一次运行会打开主窗口，之后会安静地在托盘里启动。在 **设置 → 开机自启** 里打开，登录 Windows 时就会自动运行。
+3. 第一次运行会打开主窗口，之后会安静地在托盘里启动。在 **设置 → 开机自启** 里打开，登录 Windows 时就会自动运行。开机直接进入 Xbox 全屏体验时也会运行（Windows 默认会把自启动程序推迟到第一次切换到桌面之后）。
 
 > [!NOTE]
 > 目前可执行文件还没有代码签名，第一次运行时 Windows SmartScreen 可能会拦截，点击 **更多信息 → 仍要运行** 即可。

@@ -44,6 +44,12 @@ Details and raw data: `docs/game-mode-throttle.md`.
     now. DockSense never enters live when it is 1 (unless `EnterGamingPostureConfirmation_NoReboot` = 1). The exit value
     is `ExitGamingPostureConfirmation` (1 = no prompt).
   - While docked to the XG Mobile, the internal panel is not an active display path.
+  - **Startup apps in FSE**: when `StartupToGamingHome` = 1, Windows holds Run-key apps back until the first switch to
+    the desktop. Settings > Apps > Startup then shows a per-app dropdown instead of the On/Off switch. "Start at log in"
+    is stored as DWORD 1 named after the Run value in `GamingConfiguration\Startup\Run` (HKCU). Verified on 2026-11-13:
+    with it, DockSense started 34 s after sign-in in FSE; without it, never. "Off" disables the entry through
+    `Explorer\StartupApproved\Run`. The Settings dropdown does not read the value back on build 26300 (it always shows
+    "Start when exiting to desktop"), so don't trust the UI. `AutoStart` writes the value for DockSense.
 - **iGPU memory (UMA frame buffer)**: `\\.\ATKACPI` opens without admin. `DeviceIoControl(0x0022240C)`, DSTS `0x53545344` /
   DEVS `0x53564544`, device `0x000600C4` (VRAM_MEM). On RC74XA BIOS 303 the reply status is `0x00030012`: 512 MB units,
   Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
@@ -66,7 +72,7 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
     and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
     AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
-    `ProgramLauncher`, AutoStart (HKCU Run), GameModeDiagnostics.
+    `ProgramLauncher`, AutoStart (HKCU Run, plus the FSE "Start at log in" value), GameModeDiagnostics.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.

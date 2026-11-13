@@ -2,6 +2,12 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Start with Windows now works when Windows boots into the Xbox full screen experience.** Windows holds startup apps back until the first switch to the desktop, so DockSense was not running in Handheld mode after a restart. DockSense now marks its own startup entry as *Start at log in* (the per-app choice under Windows Settings → Apps → Startup). Existing installs are updated the next time DockSense runs.
+
 ## [0.2] - 2026-11-09
 
 ### Added

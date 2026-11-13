@@ -120,6 +120,7 @@ public partial class App : Application
 
         Service.Start();
         AutoStart.UpgradeLegacyEntry();
+        AutoStart.EnsureStartsInXboxMode();
         ViewModel = new MainViewModel(Service);
         _tray = new TrayIconService(Service, ShowMainWindow, Quit);
 
