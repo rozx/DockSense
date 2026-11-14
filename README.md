@@ -224,13 +224,17 @@ No. That was the old workaround. With an eGPU connected, DockSense uses a plan t
 <details>
 <summary><b>How do updates work, and what does DockSense send?</b></summary>
 
-Once a day DockSense asks GitHub for the latest release of this repository. The request carries nothing but the DockSense version in the user agent. Choose under **Settings → Updates**:
+Once a day DockSense asks GitHub for the latest release of this repository (a check that fails, for example offline, is tried again a few hours later). The request carries nothing but the DockSense version in the user agent. Choose under **Settings → Updates**:
 
 - **Tell me** (default): a notification and a card on the Status page. **Install update** downloads the release, checks it and restarts DockSense. Your mode and power plan stay as they are, and no profile programs run again.
 - **Install automatically**: the release is downloaded in the background and goes in the next time DockSense starts, so it never restarts in the middle of a game.
 - **Don't check**: no requests at all. **Check now** still works.
 
-The zip is only taken from this repository's releases, and its size and SHA-256 must match what GitHub publishes for the release. DockSense is a single file, so the update renames the running `DockSense.exe` to `DockSense.exe.old`, puts the new one in its place, and removes the old file afterwards. If DockSense sits in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for that one step, and automatic updates wait for your click. The builds are not code-signed yet, so the checksum shows that the download is the file on GitHub, not who built it.
+The zip is only taken from this repository's releases, and its size and SHA-256 must match what GitHub publishes for the release. DockSense is a single file: it exits, the downloaded version renames the old `DockSense.exe` to `DockSense.exe.old`, takes its place and starts. The old file is removed at the next start.
+
+If DockSense sits in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for the file swap, and automatic updates wait for your click. The approved step checks the zip against GitHub once more by itself before it touches anything, and there Windows removes the old file at the next restart of the PC.
+
+The builds are not code-signed yet, so the checksum shows that the download is the file on GitHub, not who built it.
 </details>
 
 <details>

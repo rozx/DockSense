@@ -117,8 +117,10 @@ public sealed class DockSenseService : IDisposable
     /// True when this instance takes over from one that was just running (after an update). The profile is applied
     /// like a settings change: no live full screen switch, no programs and no notification.
     /// </param>
-    public void Start(bool restarted = false)
+    /// <param name="paused">Start with automatic switching paused: no profile is applied until it is resumed.</param>
+    public void Start(bool restarted = false, bool paused = false)
     {
+        Paused = paused;
         IsFirstRun = !File.Exists(_configStore.FilePath);
         Config = _configStore.Load(Log.Warn);
         if (IsFirstRun)

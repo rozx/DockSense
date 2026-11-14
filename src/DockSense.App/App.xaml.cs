@@ -12,6 +12,9 @@ public partial class App : Application
 {
     private const string ShowArgument = "--show";
 
+    /// <summary>Start with automatic switching paused (passed on when DockSense restarts itself while paused).</summary>
+    private const string PausedArgument = "--paused";
+
     private readonly EventWaitHandle? _showSignal;
     private TrayIconService? _tray;
     private MainWindow? _window;
@@ -69,20 +72,24 @@ public partial class App : Application
         Shutdown();
     }
 
-    /// <summary>After an update was installed: start the new version and leave. It comes back the way this one looks.</summary>
-    private void RestartForUpdate()
+    /// <summary>
+    /// The arguments that bring DockSense back the way it is now, for the restart after an update: quietly, with
+    /// the window open if it is open now, and paused if switching is paused.
+    /// </summary>
+    private IReadOnlyList<string> RelaunchArguments()
     {
-        List<string> args = [UpdateInstaller.AfterUpdateArgument, UpdateInstaller.RestartedArgument];
+        List<string> args = [UpdateInstaller.RestartedArgument];
         if (_window?.IsVisible == true)
         {
             args.Add(ShowArgument);
         }
 
-        // If the new version cannot be started, this one keeps running; the update takes effect at the next start.
-        if (UpdateInstaller.Relaunch(args))
+        if (Service.Paused)
         {
-            Quit();
+            args.Add(PausedArgument);
         }
+
+        return args;
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -140,11 +147,11 @@ public partial class App : Application
             }
         };
 
-        Service.Start(restarted);
+        Service.Start(restarted, paused: e.Args.Contains(PausedArgument, StringComparer.OrdinalIgnoreCase));
         AutoStart.UpgradeLegacyEntry();
         AutoStart.EnsureStartsInXboxMode();
 
-        Updates = new UpdateService(Service, RestartForUpdate);
+        Updates = new UpdateService(Service, RelaunchArguments, Quit);
         Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsAtNextStart);
         Updates.Start();
 

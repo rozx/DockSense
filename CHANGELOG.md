@@ -9,7 +9,8 @@ All notable changes to DockSense are documented here. The format follows [Keep a
 - **Updates from inside DockSense.** Once a day DockSense asks GitHub whether a newer release exists (Settings → Updates; it can be turned off). By default it tells you with a notification and a card on the Status page, and **Install update** downloads the release, checks it and restarts DockSense. With *Install automatically*, the release is downloaded in the background and installed the next time DockSense starts, never while it is running.
   - The download is only taken from this repository's releases, and its size and SHA-256 must match what GitHub publishes for the release.
   - Restarting for an update keeps the mode and power plan, and does not run profile programs or switch the full screen experience again.
-  - If DockSense is in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for the file swap, and automatic updates wait for your click.
+  - If DockSense is in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for the file swap, and automatic updates wait for your click. The approved step checks the download against GitHub once more by itself.
+  - Updating while automatic switching is paused keeps it paused.
 - New `updates` setting in `config.json`: `Off`, `Notify` (default) or `Automatic`.
 - The diagnostic report shows the update setting and whether the install folder is writable.
 

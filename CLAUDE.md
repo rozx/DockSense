@@ -90,15 +90,27 @@ Details and raw data: `docs/game-mode-throttle.md`.
     launch show the window. `--probe <file>` writes a read-only report.
   - **Updates** (`Services/UpdateService`, `Platform/UpdateInstaller`, state in `%LOCALAPPDATA%\DockSense\update.json`
     and `updates\`): daily query of the GitHub latest release, download of the `-win-<arch>.zip` asset, size and
-    SHA-256 check against the digest GitHub publishes, then the running single-file exe is renamed to
-    `DockSense.exe.old` and the new one is **copied** in (a move would keep the per-user ACL).
-    - Automatic mode installs in `Program.Main` at the next start, before any UI. The Status card installs on click.
-      DockSense never restarts itself unasked.
-    - `--after-update`: the new process waits for the old one's mutex. `--restarted`: start quietly
-      (`ApplyReason.Restarted`: no live FSE switch, no programs, no toast). `--apply-update <exe> <sha256>`: the
-      elevated half for protected folders; it only replaces its own exe with a newer DockSense.
+    SHA-256 check against the digest GitHub publishes, extraction of `DockSense.exe` into `updates\`.
+    - **Never replace the file of a running single-file DockSense that still has work to do.** The runtime reads
+      assemblies from the exe on demand, so after a swap the next assembly load reads the wrong file and fails
+      (seen as `FileNotFoundException: System.Diagnostics.Process`). It only shows when the two builds differ, so
+      test updates with builds of different code, not two publishes of the same commit.
+    - So the running DockSense only starts the installer and exits. The installer is the **downloaded exe itself**:
+      `<download> --install-update <installed exe> <pid>[,<elevated pid>] [args...]` waits for the pid to exit,
+      writes itself to `DockSense.exe.new`, renames installed to `.old` and `.new` to the real name, then starts it
+      with the args plus `--after-update`. Older versions call this on newer ones, so its arguments are a contract:
+      never change their meaning.
+    - Protected folder: the installed exe runs elevated as `--apply-update <release zip> <pid>`. It trusts nothing it
+      is handed: it hashes the zip (one handle, held to the last extracted byte), asks GitHub whether that digest is
+      a newer release, waits for the pid, then replaces its own file from the zip. Everything it does after the
+      swap already ran once before it. The unelevated installer waits for the version to change and relaunches.
+    - Automatic mode starts the installer from `Program.Main` at the next start, before any UI (writable folders
+      only). The Status card installs on click. DockSense never restarts itself unasked.
+    - `--restarted`: start quietly (`ApplyReason.Restarted`: no live FSE switch, no programs, no toast).
+      `--paused`: start paused (passed on when DockSense restarts itself while paused).
     - Development builds (a `DockSense.dll` next to the exe) cannot self-update; they link to the release page.
       Test with two single-file publishes of different `-p:Version` (see the release workflow's publish command).
+      The real UAC path can only be exercised from 0.3 on, because the download must know `--install-update`.
 - No admin rights are needed, with one exception: updating a copy in a protected folder (the user's own install is
   in `C:\Program Files (x86)\DockSense`) asks for UAC once per update.
 - `tests/DockSense.Core.Tests` (xUnit).

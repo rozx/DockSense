@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Windows.Threading;
 using DockSense.App.Localization;
 using DockSense.App.Platform;
@@ -19,6 +18,8 @@ public enum UpdateStage
 
     /// <summary>Downloaded and verified; installing needs a restart of DockSense.</summary>
     Ready,
+
+    /// <summary>Handed to the installer; DockSense is about to exit.</summary>
     Installing,
 }
 
@@ -34,26 +35,36 @@ public sealed class UpdateService : IDisposable
 {
     private static readonly TimeSpan FirstCheckDelay = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(30);
+
+    /// <summary>A failed background check (offline, rate limit) is not repeated sooner than this.</summary>
+    private static readonly TimeSpan RetryAfterFailure = TimeSpan.FromHours(3);
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
-    private static readonly HttpClient Http = CreateClient();
+    private static readonly HttpClient Http = UpdateInstaller.CreateHttpClient();
 
     private readonly DockSenseService _service;
-    private readonly Action _restart;
+    private readonly Func<IReadOnlyList<string>> _relaunchArguments;
+    private readonly Action _exit;
     private readonly DispatcherTimer _timer = new() { Interval = FirstCheckDelay };
     private UpdateState _state = new();
     private StagedUpdate? _staged;
+    private DateTimeOffset? _lastFailure;
     private bool _busy;
 
-    /// <param name="restart">Starts the installed version and exits this one.</param>
-    public UpdateService(DockSenseService service, Action restart)
+    /// <param name="relaunchArguments">The arguments that bring DockSense back the way it is now.</param>
+    /// <param name="exit">Exits DockSense, so the installer can replace it.</param>
+    public UpdateService(DockSenseService service, Func<IReadOnlyList<string>> relaunchArguments, Action exit)
     {
         _service = service;
-        _restart = restart;
+        _relaunchArguments = relaunchArguments;
+        _exit = exit;
         _timer.Tick += (_, _) =>
         {
             _timer.Interval = PollInterval;
-            if (_service.Config.Updates != UpdateMode.Off && UpdatePlanner.IsCheckDue(_state.LastCheck, DateTimeOffset.Now))
+            var now = DateTimeOffset.Now;
+            if (_service.Config.Updates != UpdateMode.Off
+                && UpdatePlanner.IsCheckDue(_state.LastCheck, now)
+                && (_lastFailure is not { } failed || failed > now || now - failed >= RetryAfterFailure))
             {
                 _ = CheckAsync(manual: false);
             }
@@ -85,8 +96,7 @@ public sealed class UpdateService : IDisposable
     public bool CanInstall => UpdateInstaller.CanSelfUpdate && (_staged is not null || Offer?.Asset is not null);
 
     /// <summary>True when the update goes in at the next start without any click.</summary>
-    public bool InstallsAtNextStart =>
-        _service.Config.Updates == UpdateMode.Automatic && UpdateInstaller.CanSelfUpdate && !NeedsElevation && Offer?.Asset is not null;
+    public bool InstallsAtNextStart => _service.Config.Updates == UpdateMode.Automatic && !NeedsElevation && CanInstall;
 
     public void Start()
     {
@@ -129,6 +139,7 @@ public sealed class UpdateService : IDisposable
             using var timeout = new CancellationTokenSource(CheckTimeout);
             var json = await Http.GetStringAsync(UpdatePlanner.FeedUrl, timeout.Token);
             var offer = UpdatePlanner.Offer(ReleaseFeed.Parse(json), AppInfo.Version, AppInfo.Architecture);
+            _lastFailure = null;
             _state = _state with { LastCheck = DateTimeOffset.Now };
             Stage = Adopt(offer);
             if (offer is not null && _state.NotifiedVersion != ReleaseVersion.Format(offer.Version))
@@ -147,6 +158,7 @@ public sealed class UpdateService : IDisposable
         {
             var reason = ex is OperationCanceledException ? "the request timed out" : ex.Message;
             Log.Warn($"Could not check for updates: {reason}");
+            _lastFailure = DateTimeOffset.Now;
             Stage = before;
             if (manual)
             {
@@ -165,7 +177,7 @@ public sealed class UpdateService : IDisposable
         }
     }
 
-    /// <summary>Downloads the update if needed, installs it and restarts DockSense. Asked for by the user.</summary>
+    /// <summary>Downloads the update if needed, hands it to the installer and exits DockSense. Asked for by the user.</summary>
     public async Task InstallAsync()
     {
         if (_busy || !CanInstall)
@@ -187,13 +199,16 @@ public sealed class UpdateService : IDisposable
         Error = null;
         Stage = UpdateStage.Installing;
         RaiseChanged();
+        var checkAgain = false;
         try
         {
-            switch (await Task.Run(() => UpdateInstaller.Install(staged)))
+            var arguments = _relaunchArguments();
+            switch (await Task.Run(() => UpdateInstaller.Begin(staged, arguments)))
             {
-                case InstallResult.Installed:
-                    Log.Info($"Installed DockSense {staged.Version}; restarting.");
-                    _restart();
+                case InstallResult.Started:
+                    // The installer waits for this process to exit, installs, and starts DockSense again.
+                    Log.Info($"Installing DockSense {staged.Version}; exiting so the installer can replace this version.");
+                    _exit();
                     return;
 
                 case InstallResult.Declined:
@@ -209,13 +224,16 @@ public sealed class UpdateService : IDisposable
         }
         catch (InvalidDataException ex)
         {
-            // The download is no longer what was verified: drop it and offer a fresh one.
+            // The download is no longer what was verified, or part of it is gone: drop it and offer a fresh one.
             Log.Warn($"Discarding the downloaded update: {ex.Message}");
             Forget(staged);
             Error = Loc.F("Upd_InstallFailed", ex.Message);
             Stage = Offer?.Asset is not null ? UpdateStage.Available : UpdateStage.Idle;
+
+            // An offer restored from an earlier run has no download link; ask GitHub for it again.
+            checkAgain = Stage == UpdateStage.Idle;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Warn($"Could not install the update: {ex.Message}");
             Error = Loc.F("Upd_InstallFailed", ex.Message);
@@ -225,6 +243,12 @@ public sealed class UpdateService : IDisposable
         {
             _busy = false;
             RaiseChanged();
+        }
+
+        if (checkAgain)
+        {
+            Offer = null;
+            await CheckAsync(manual: true);
         }
     }
 
@@ -271,7 +295,7 @@ public sealed class UpdateService : IDisposable
                 DownloadPercent = percent;
                 RaiseChanged();
             });
-            _staged = await UpdateInstaller.DownloadAsync(Http, offer, progress, timeout.Token);
+            _staged = await UpdateInstaller.DownloadAsync(Http, offer, keepZip: NeedsElevation, progress, timeout.Token);
             _state = _state with { Staged = _staged };
             StateStore.SaveUpdate(_state);
             Log.Info($"Downloaded and verified DockSense {_staged.Version}.");
@@ -300,12 +324,4 @@ public sealed class UpdateService : IDisposable
     }
 
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
-
-    private static HttpClient CreateClient()
-    {
-        var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        // GitHub's API rejects requests without a user agent. Nothing else identifies the machine or the user.
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("DockSense", AppInfo.VersionText));
-        return client;
-    }
 }

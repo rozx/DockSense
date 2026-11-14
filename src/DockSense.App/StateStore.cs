@@ -12,7 +12,11 @@ internal sealed record IgpuMemoryBootState(BootSession Boot, uint EffectiveRaw);
 /// <param name="Version">The release version, as in its tag (e.g. "0.3").</param>
 /// <param name="Path">The extracted DockSense.exe in the updates folder.</param>
 /// <param name="Sha256">Lower-case hex digest of that file, checked again right before it is installed.</param>
-internal sealed record StagedUpdate(string Version, string Path, string Sha256);
+/// <param name="ZipPath">
+/// The release zip it came from, kept when installing needs administrator approval: the elevated step checks the zip
+/// against GitHub by itself and takes the executable from it.
+/// </param>
+internal sealed record StagedUpdate(string Version, string Path, string Sha256, string? ZipPath = null);
 
 /// <summary>What the updater remembers between runs.</summary>
 /// <param name="LastCheck">When GitHub was last asked successfully.</param>
@@ -47,7 +51,7 @@ internal static class StateStore
         {
             return File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path)) : null;
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Log.Warn($"Ignoring unreadable state file {fileName}: {ex.Message}");
             return null;
@@ -61,7 +65,7 @@ internal static class StateStore
             Directory.CreateDirectory(Log.DataDirectory);
             File.WriteAllText(Path.Combine(Log.DataDirectory, fileName), JsonSerializer.Serialize(state));
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Warn($"Could not save {fileName}: {ex.Message}");
         }

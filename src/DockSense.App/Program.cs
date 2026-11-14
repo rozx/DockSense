@@ -18,7 +18,12 @@ internal static class Program
             return 0;
         }
 
-        // DockSense.exe --apply-update <new exe> <sha256>: the elevated step of an update in a protected folder.
+        // The two halves of an update (see UpdateInstaller). Neither shows any UI.
+        if (args.Length > 0 && args[0].Equals(UpdateInstaller.InstallArgument, StringComparison.OrdinalIgnoreCase))
+        {
+            return UpdateInstaller.InstallFromCommandLine(args);
+        }
+
         if (args.Length > 0 && args[0].Equals(UpdateInstaller.ApplyArgument, StringComparison.OrdinalIgnoreCase))
         {
             return UpdateInstaller.ApplyFromCommandLine(args);
@@ -28,7 +33,7 @@ internal static class Program
         using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockSense.Show");
         if (!isFirstInstance && args.Contains(UpdateInstaller.AfterUpdateArgument, StringComparer.OrdinalIgnoreCase))
         {
-            // Started by the version this one replaces, which is on its way out.
+            // Started by the installer right after the previous version exited; it may not be quite gone yet.
             isFirstInstance = WaitForPreviousInstance(singleInstance);
         }
 
@@ -39,7 +44,7 @@ internal static class Program
             return 0;
         }
 
-        // Automatic updates go in here, before anything is shown; the new version then takes over.
+        // Automatic updates go in here, before anything is shown: the installer takes over once this process exits.
         if (UpdateInstaller.TryInstallAtStartup(args))
         {
             return 0;
