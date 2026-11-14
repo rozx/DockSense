@@ -520,8 +520,8 @@ public sealed partial class MainViewModel : ObservableObject
             UpdateStage.Downloading => Loc.F("Upd_Downloading", _updates.DownloadPercent),
             UpdateStage.Installing => Loc.T("Upd_Installing"),
             _ when !_updates.CanInstall => Loc.F("Upd_ManualMessage", AppInfo.VersionText),
-            UpdateStage.Ready => Loc.T(_updates.NeedsElevation ? "Upd_ReadyElevated" : "Upd_ReadyMessage"),
             _ when _updates.InstallsAtNextStart => Loc.F("Upd_AutomaticMessage", AppInfo.VersionText),
+            UpdateStage.Ready => Loc.T(_updates.NeedsElevation ? "Upd_ReadyElevated" : "Upd_ReadyMessage"),
             _ => Loc.F(_updates.NeedsElevation ? "Upd_AvailableElevated" : "Upd_AvailableMessage", AppInfo.VersionText),
         };
 

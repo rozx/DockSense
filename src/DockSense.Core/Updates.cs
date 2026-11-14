@@ -69,45 +69,80 @@ public static class ReleaseFeed
 {
     private const string DigestPrefix = "sha256:";
 
-    /// <summary>Returns the release, or null for drafts, pre-releases and anything that is not a release.</summary>
+    /// <summary>
+    /// Reads the "latest release" response. Returns the release, or null for drafts, pre-releases and anything that
+    /// is not a release.
+    /// </summary>
     public static ReleaseInfo? Parse(string json)
     {
         try
         {
             using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || IsTrue(root, "draft") || IsTrue(root, "prerelease"))
-            {
-                return null;
-            }
-
-            if (ReleaseVersion.Parse(Text(root, "tag_name")) is not { } version)
-            {
-                return null;
-            }
-
-            var assets = new List<ReleaseAsset>();
-            if (root.TryGetProperty("assets", out var list) && list.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in list.EnumerateArray())
-                {
-                    if (item.ValueKind == JsonValueKind.Object
-                        && Text(item, "name") is { } name
-                        && Text(item, "browser_download_url") is { } url
-                        && item.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes))
-                    {
-                        assets.Add(new ReleaseAsset(name, url, bytes, ParseDigest(Text(item, "digest"))));
-                    }
-                }
-            }
-
-            var page = Text(root, "html_url");
-            return new ReleaseInfo(version, UpdatePlanner.IsRepositoryUrl(page) ? page! : UpdatePlanner.ReleasesUrl, assets);
+            return ParseRelease(document.RootElement);
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    /// <summary>Reads the "list releases" response: every real release in it, in the order GitHub gives them.</summary>
+    public static IReadOnlyList<ReleaseInfo> ParseAll(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var releases = new List<ReleaseInfo>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (ParseRelease(item) is { } release)
+                {
+                    releases.Add(release);
+                }
+            }
+
+            return releases;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static ReleaseInfo? ParseRelease(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object || IsTrue(root, "draft") || IsTrue(root, "prerelease"))
+        {
+            return null;
+        }
+
+        if (ReleaseVersion.Parse(Text(root, "tag_name")) is not { } version)
+        {
+            return null;
+        }
+
+        var assets = new List<ReleaseAsset>();
+        if (root.TryGetProperty("assets", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in list.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Object
+                    && Text(item, "name") is { } name
+                    && Text(item, "browser_download_url") is { } url
+                    && item.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes))
+                {
+                    assets.Add(new ReleaseAsset(name, url, bytes, ParseDigest(Text(item, "digest"))));
+                }
+            }
+        }
+
+        var page = Text(root, "html_url");
+        return new ReleaseInfo(version, UpdatePlanner.IsRepositoryUrl(page) ? page! : UpdatePlanner.ReleasesUrl, assets);
     }
 
     private static string? ParseDigest(string? digest)
@@ -135,6 +170,9 @@ public static class UpdatePlanner
     public const string ReleasesUrl = RepositoryUrl + "/releases/latest";
     public const string FeedUrl = "https://api.github.com/repos/rozx/DockSense/releases/latest";
 
+    /// <summary>The newest releases, for checking a download that may no longer be the latest one.</summary>
+    public const string ReleaseListUrl = "https://api.github.com/repos/rozx/DockSense/releases?per_page=50";
+
     /// <summary>Larger than any real build; a release that claims more is not downloaded.</summary>
     public const long MaxDownloadBytes = 512L * 1024 * 1024;
 
@@ -159,6 +197,19 @@ public static class UpdatePlanner
             && a.Size is > 0 and <= MaxDownloadBytes
             && IsDownloadUrl(a.DownloadUrl));
         return new UpdateOffer(latest.Version, latest.PageUrl, asset);
+    }
+
+    /// <summary>
+    /// Finds the release that a downloaded zip belongs to: one that is newer than <paramref name="current"/> and
+    /// whose download for this architecture has exactly that SHA-256. Null when no listed release matches. The
+    /// release need not be the latest: a newer one may have come out since the zip was downloaded.
+    /// </summary>
+    public static UpdateOffer? FindRelease(IEnumerable<ReleaseInfo> releases, Version current, string architecture, string zipSha256)
+    {
+        ArgumentNullException.ThrowIfNull(releases);
+        return releases
+            .Select(release => Offer(release, current, architecture))
+            .FirstOrDefault(offer => string.Equals(offer?.Asset?.Sha256, zipSha256, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>True when a daily check is due. A clock that went backwards counts as due.</summary>

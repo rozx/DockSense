@@ -109,9 +109,12 @@ Details and raw data: `docs/game-mode-throttle.md`.
       with the args plus `--after-update`. Older versions call this on newer ones, so its arguments are a contract:
       never change their meaning.
     - Protected folder: the installed exe runs elevated as `--apply-update <release zip> <pid>`. It trusts nothing it
-      is handed: it hashes the zip (one handle, held to the last extracted byte), asks GitHub whether that digest is
-      a newer release, waits for the pid, then replaces its own file from the zip. Everything it does after the
-      swap already ran once before it. The unelevated installer waits for the version to change and relaunches.
+      is handed: it hashes the zip (one handle, held to the last extracted byte), asks GitHub's release **list**
+      whether that digest is a release newer than itself (not only the latest: a newer one may have come out since
+      the download), waits for the pid, then replaces its own file from the zip. Everything it does after the swap
+      already ran once before it. The unelevated installer waits for the version to change and relaunches.
+    - When the update did not go in, the installer starts the old version with `--update-failed`: the card says so
+      and the next check runs at the first tick, whatever the last check says.
     - Automatic mode starts the installer from `Program.Main` at the next start, before any UI (writable folders
       only). The Status card installs on click. DockSense never restarts itself unasked.
     - `--restarted=<mode>`: the mode whose profile the previous instance had applied. If it is still the mode, the

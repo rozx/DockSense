@@ -155,6 +155,40 @@ public sealed class UpdatesTests
         Assert.Null(UpdatePlanner.Offer(With(asset with { DownloadUrl = "https://example.com/DockSense-0.3-win-x64.zip" }), current, "x64")!.Asset);
     }
 
+    [Fact]
+    public void The_release_list_gives_every_real_release()
+    {
+        var older = Feed.Replace("v0.3", "v0.2.1").Replace("\"prerelease\": false", "\"prerelease\": false ");
+        var draft = Feed.Replace("v0.3", "v0.4").Replace("\"draft\": false", "\"draft\": true");
+
+        var releases = ReleaseFeed.ParseAll($"[{draft},{Feed},{older}]");
+
+        Assert.Equal([new Version(0, 3, 0), new Version(0, 2, 1)], releases.Select(r => r.Version));
+        Assert.Empty(ReleaseFeed.ParseAll("not json"));
+        Assert.Empty(ReleaseFeed.ParseAll(Feed)); // one release is not a list
+    }
+
+    [Fact]
+    public void A_downloaded_zip_is_matched_to_its_release_even_when_a_newer_one_exists()
+    {
+        const string newerDigest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        ReleaseInfo Release(string version, string digest) => new(
+            ReleaseVersion.Parse(version)!,
+            UpdatePlanner.ReleasesUrl,
+            [new ReleaseAsset($"DockSense-{version}-win-x64.zip", DownloadUrl, 1000, digest)]);
+        ReleaseInfo[] releases = [Release("0.4", newerDigest), Release("0.3", Digest), Release("0.2.1", "bbbb")];
+
+        // The zip of 0.3, downloaded before 0.4 came out, is still a release newer than 0.2.1.
+        Assert.Equal(new Version(0, 3, 0), UpdatePlanner.FindRelease(releases, new Version(0, 2, 1), "x64", Digest.ToUpperInvariant())!.Version);
+        Assert.Equal(new Version(0, 4, 0), UpdatePlanner.FindRelease(releases, new Version(0, 2, 1), "x64", newerDigest)!.Version);
+
+        // Not newer than what is installed, another architecture, or no release at all.
+        Assert.Null(UpdatePlanner.FindRelease(releases, new Version(0, 3, 0), "x64", Digest));
+        Assert.Null(UpdatePlanner.FindRelease(releases, new Version(0, 2, 1), "arm64", Digest));
+        Assert.Null(UpdatePlanner.FindRelease(releases, new Version(0, 2, 1), "x64", "cccc"));
+        Assert.Null(UpdatePlanner.FindRelease([], new Version(0, 2, 1), "x64", Digest));
+    }
+
     [Theory]
     [InlineData("https://github.com/rozx/DockSense/releases/download/v0.3/DockSense-0.3-win-x64.zip", true)]
     [InlineData("HTTPS://GitHub.com/rozx/DockSense/releases/download/v0.3/a.zip", true)]

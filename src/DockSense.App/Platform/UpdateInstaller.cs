@@ -52,6 +52,9 @@ internal static class UpdateInstaller
     /// <summary>Passed to the new version by the installer. Marks the first start after an update.</summary>
     public const string AfterUpdateArgument = "--after-update";
 
+    /// <summary>Passed by the installer when the update did not go in and the old version is started again.</summary>
+    public const string FailedArgument = "--update-failed";
+
     /// <summary>
     /// <c>--restarted=&lt;mode&gt;</c>, passed when DockSense replaces a running instance: the mode whose profile that
     /// instance had applied. The new instance carries on from there and applies nothing again.
@@ -62,7 +65,12 @@ internal static class UpdateInstaller
     private const string ProductName = "DockSense";
     private const int ErrorCancelled = 1223;
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan ElevatedSwapTimeout = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// Longer than the elevated process can take (30 s for GitHub, <see cref="ExitTimeout"/>, then the copy). The
+    /// wait normally ends earlier, when that process is gone.
+    /// </summary>
+    private static readonly TimeSpan ElevatedSwapTimeout = TimeSpan.FromMinutes(5);
 
     public static string UpdatesDirectory { get; } = Path.Combine(Log.DataDirectory, "updates");
 
@@ -209,6 +217,13 @@ internal static class UpdateInstaller
     /// </summary>
     public static InstallResult Begin(StagedUpdate staged, IEnumerable<string> relaunchArguments)
     {
+        // Gone (deleted, or quarantined by antivirus) counts as "not what was verified": the caller drops the
+        // download and fetches it again, where a plain I/O error would be retried with the same missing file.
+        if (!File.Exists(staged.Path))
+        {
+            throw new InvalidDataException("The downloaded update is no longer on disk.");
+        }
+
         if (!string.Equals(HashFile(staged.Path), staged.Sha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("The downloaded update changed on disk after it was verified.");
@@ -286,10 +301,11 @@ internal static class UpdateInstaller
             return 2;
         }
 
-        var target = Path.GetFullPath(args[1]);
-        var relaunch = args.Skip(3).Append(AfterUpdateArgument).ToArray();
         try
         {
+            var target = Path.GetFullPath(args[1]);
+            var relaunch = args.Skip(3).Append(AfterUpdateArgument).ToList();
+
             // Only ever install over a DockSense, and never over this file itself.
             var self = InstalledPath;
             if (!Path.GetFileName(target).Equals(ExecutableName, StringComparison.OrdinalIgnoreCase)
@@ -307,22 +323,37 @@ internal static class UpdateInstaller
                 return 3;
             }
 
+            var installed = false;
             try
             {
                 using var source = new FileStream(self, FileMode.Open, FileAccess.Read, FileShare.Read);
                 Replace(target, source);
+                installed = true;
                 Log.Info($"Installed DockSense {AppInfo.VersionText}.");
             }
             catch (UnauthorizedAccessException)
             {
                 // A protected folder: the elevated process swaps the file. Wait until it is done.
-                Log.Info(WaitForVersion(target, AppInfo.Version, elevatedProcessId)
+                installed = WaitForVersion(target, AppInfo.Version, elevatedProcessId);
+                Log.Info(installed
                     ? $"DockSense {AppInfo.VersionText} was installed with administrator approval."
                     : "The update was not installed; starting the installed version again.");
             }
             catch (IOException ex)
             {
                 Log.Error("Could not install the update", ex);
+            }
+
+            if (!installed)
+            {
+                // A swap that stopped between its two renames left the old file under its .old name: put it back.
+                if (!File.Exists(target) && File.Exists(target + ".old"))
+                {
+                    File.Move(target + ".old", target);
+                }
+
+                // The version that comes back says so, instead of quietly offering the same update again.
+                relaunch.Add(FailedArgument);
             }
 
             return Start(target, relaunch) ? 0 : 1;
@@ -397,21 +428,20 @@ internal static class UpdateInstaller
 
     /// <summary>
     /// Asks GitHub whether a zip with this SHA-256 is the download of a release newer than this build, for this
-    /// build's architecture.
+    /// build's architecture. It need not be the latest release: a newer one may have come out since the download.
     /// </summary>
     private static bool IsNewerRelease(string zipSha256, out string version)
     {
         version = string.Empty;
         using var http = CreateHttpClient();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        var json = http.GetStringAsync(UpdatePlanner.FeedUrl, timeout.Token).GetAwaiter().GetResult();
-        if (UpdatePlanner.Offer(ReleaseFeed.Parse(json), AppInfo.Version, AppInfo.Architecture) is not { Asset: { } asset } offer
-            || !string.Equals(asset.Sha256, zipSha256, StringComparison.OrdinalIgnoreCase))
+        var json = http.GetStringAsync(UpdatePlanner.ReleaseListUrl, timeout.Token).GetAwaiter().GetResult();
+        if (UpdatePlanner.FindRelease(ReleaseFeed.ParseAll(json), AppInfo.Version, AppInfo.Architecture, zipSha256) is not { } release)
         {
             return false;
         }
 
-        version = ReleaseVersion.Format(offer.Version);
+        version = ReleaseVersion.Format(release.Version);
         return true;
     }
 
