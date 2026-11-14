@@ -86,6 +86,12 @@ public sealed class DockSenseService : IDisposable
 
     public DockMode Mode => _stabilizer.Current;
 
+    /// <summary>
+    /// The mode whose profile was applied last, or null if none was yet. While paused this can lag behind
+    /// <see cref="Mode"/>: the mode keeps being detected, but its profile waits until switching is resumed.
+    /// </summary>
+    public DockMode? LastAppliedMode => _lastApplied;
+
     public DeviceSnapshot? Snapshot { get; private set; }
 
     public bool Paused { get; private set; }
@@ -112,9 +118,9 @@ public sealed class DockSenseService : IDisposable
 
     /// <param name="resumeFrom">
     /// Set when this instance takes over from one that was just running (after an update): the mode whose profile
-    /// that instance had applied. If the mode is still the same, nothing is applied again, so whatever the user or
-    /// other software changed since (the power plan, for instance) stays. If it changed in between, that is an
-    /// ordinary mode change.
+    /// that instance had applied last (<see cref="LastAppliedMode"/>). If the mode is still the same, nothing is
+    /// applied again, so whatever the user or other software changed since (the power plan, for instance) stays.
+    /// If it differs, that is an ordinary mode change, which waits while paused.
     /// </param>
     /// <param name="paused">Start with automatic switching paused: no profile is applied until it is resumed.</param>
     public void Start(DockMode? resumeFrom = null, bool paused = false)
@@ -144,6 +150,12 @@ public sealed class DockSenseService : IDisposable
             // The plan state saved by the previous instance (owned or handed over) carries on as it was.
             _lastApplied = mode;
             Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
+        }
+        else if (Paused)
+        {
+            // The transition from the last applied profile is still pending; resuming applies it.
+            _lastApplied = previous;
+            Log.Info($"Paused: the {previous} profile is still the one applied; {mode} waits until switching is resumed.");
         }
         else
         {

@@ -87,7 +87,13 @@ public partial class App : Application
     /// </summary>
     private IReadOnlyList<string> RelaunchArguments()
     {
-        List<string> args = [$"{UpdateInstaller.RestartedArgument}={Service.Mode}"];
+        // The last applied mode, not the detected one: while paused the two can differ, and the transition between
+        // them (leave and enter programs, the full screen switch) must still happen when switching is resumed.
+        List<string> args = [];
+        if (Service.LastAppliedMode is { } applied)
+        {
+            args.Add($"{UpdateInstaller.RestartedArgument}={applied}");
+        }
         if (_window?.IsVisible == true)
         {
             args.Add(ShowArgument);
