@@ -28,6 +28,9 @@ public sealed record DockSenseConfig
     /// <summary>GUID of the plan DockSense created for <see cref="PowerPlanKind.DockSensePerformance"/>, once it exists.</summary>
     public Guid? DockSensePerformancePlanId { get; init; }
 
+    /// <summary>Whether DockSense looks for new releases, and what it does when it finds one.</summary>
+    public UpdateMode Updates { get; init; } = UpdateMode.Notify;
+
     public UiSettings Ui { get; init; } = new();
 
     public ModeProfile ProfileFor(DockMode mode) => mode switch

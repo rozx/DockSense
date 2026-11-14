@@ -73,6 +73,9 @@ internal static class ProbeReport
             text.AppendLine("iGPU memory:         not adjustable on this device");
         }
 
+        text.AppendLine();
+        text.AppendLine($"Updates:             {config.Updates}; install folder writable without admin: {UpdateInstaller.CanWriteInstallFolder()}; self-updating build: {UpdateInstaller.CanSelfUpdate}");
+
         var gameMode = GameModeDiagnostics.Read();
         text.AppendLine();
         text.AppendLine($"Game Mode enabled:   {gameMode.GameModeEnabled}");

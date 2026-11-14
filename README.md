@@ -74,8 +74,9 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed.
 - 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied), when a profile starts a program, and when you start DockSense yourself, so you know it is running in the background.
 - 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
+- ⬆️ **Updates itself.** DockSense tells you when a new release is out and installs it with one click, or by itself the next time it starts. The download comes from the GitHub release and is checked against the release's SHA-256 checksum. You can turn the daily check off.
 - 🌐 **English and 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **No admin rights, no driver, no service.** It uses documented Windows APIs, plus the ASUS ACPI interface (the one Armoury Crate uses) for the optional iGPU memory setting.
+- 🪶 **No admin rights, no driver, no service.** It uses documented Windows APIs, plus the ASUS ACPI interface (the one Armoury Crate uses) for the optional iGPU memory setting. The one exception: updating a copy that sits in a protected folder such as Program Files asks for administrator approval once per update.
 
 ## How it works
 
@@ -173,6 +174,7 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `detection.dockedRequiresAcPower` | `false` | Count external displays only while plugged in |
 | `detection.forceEgpuInstanceIds` / `ignoreGpuInstanceIds` | `[]` | Per-adapter overrides (PnP instance IDs) |
 | `reassertPowerPlan` | `true` | Switch back when other software changes the plan in a managed mode |
+| `updates` | `Notify` | `Off` (never check), `Notify` (check once a day and tell you) or `Automatic` (also download, and install the next time DockSense starts) |
 | `ui.language` | `system` | `system`, `en` or `zh-Hans` |
 | `ui.theme` | `System` | `System`, `Light` or `Dark` |
 | `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows notifications when you start DockSense yourself (not at sign-in), on mode changes, for programs started by a profile, and for problems |
@@ -217,6 +219,18 @@ Only in modes where you chose a specific plan, and only within limits. If someth
 <summary><b>Do I need to turn off Game Mode?</b></summary>
 
 No. That was the old workaround. With an eGPU connected, DockSense uses a plan that the Game Mode profile doesn't touch, so Game Mode can stay on, and it keeps helping handheld play.
+</details>
+
+<details>
+<summary><b>How do updates work, and what does DockSense send?</b></summary>
+
+Once a day DockSense asks GitHub for the latest release of this repository. The request carries nothing but the DockSense version in the user agent. Choose under **Settings → Updates**:
+
+- **Tell me** (default): a notification and a card on the Status page. **Install update** downloads the release, checks it and restarts DockSense. Your mode and power plan stay as they are, and no profile programs run again.
+- **Install automatically**: the release is downloaded in the background and goes in the next time DockSense starts, so it never restarts in the middle of a game.
+- **Don't check**: no requests at all. **Check now** still works.
+
+The zip is only taken from this repository's releases, and its size and SHA-256 must match what GitHub publishes for the release. DockSense is a single file, so the update renames the running `DockSense.exe` to `DockSense.exe.old`, puts the new one in its place, and removes the old file afterwards. If DockSense sits in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for that one step, and automatic updates wait for your click. The builds are not code-signed yet, so the checksum shows that the download is the file on GitHub, not who built it.
 </details>
 
 <details>
@@ -270,6 +284,7 @@ GitHub Actions then reads the version from the branch name, runs the tests, buil
 - [x] Power plan editor (v0.2)
 - [x] Run programs on mode changes (v0.2)
 - [x] iGPU memory per mode on ASUS handhelds (v0.2)
+- [x] In-app updates (v0.3)
 - [ ] Per-mode TDP via vendor interfaces (ASUS, Lenovo, ...)
 - [ ] iGPU memory on other vendors' handhelds
 - [ ] Per-game profiles

@@ -289,4 +289,13 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool UnregisterDeviceNotification(IntPtr handle);
+
+    // ---------------------------------------------------------------- Updates
+
+    /// <summary>With a null new name: delete the file at the next restart. Needs administrator rights.</summary>
+    public const uint MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool MoveFileExW(string existingFileName, string? newFileName, uint flags);
 }

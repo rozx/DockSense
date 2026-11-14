@@ -68,6 +68,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
+  - `Updates.cs`: `UpdateMode` (Off / Notify / Automatic, config key `updates`), `ReleaseVersion` (0.2 equals 0.2.0),
+    `ReleaseFeed` (parses GitHub's latest-release JSON) and `UpdatePlanner` (is it newer, which asset, which URLs are
+    trusted, when the daily check is due).
 - `src/DockSense.App` (net10.0-windows10.0.19041.0, WPF + WPF-UI 4.3):
   - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
     and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
@@ -85,10 +88,22 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `Localization/`: `Strings.resx` and `Strings.zh-Hans.resx`, `Loc` with live switching, and XAML `{loc:T Key}`.
   - Custom `Program.Main` (App.xaml is a Page): single instance via mutex, plus a named event that makes a second
     launch show the window. `--probe <file>` writes a read-only report.
+  - **Updates** (`Services/UpdateService`, `Platform/UpdateInstaller`, state in `%LOCALAPPDATA%\DockSense\update.json`
+    and `updates\`): daily query of the GitHub latest release, download of the `-win-<arch>.zip` asset, size and
+    SHA-256 check against the digest GitHub publishes, then the running single-file exe is renamed to
+    `DockSense.exe.old` and the new one is **copied** in (a move would keep the per-user ACL).
+    - Automatic mode installs in `Program.Main` at the next start, before any UI. The Status card installs on click.
+      DockSense never restarts itself unasked.
+    - `--after-update`: the new process waits for the old one's mutex. `--restarted`: start quietly
+      (`ApplyReason.Restarted`: no live FSE switch, no programs, no toast). `--apply-update <exe> <sha256>`: the
+      elevated half for protected folders; it only replaces its own exe with a newer DockSense.
+    - Development builds (a `DockSense.dll` next to the exe) cannot self-update; they link to the release page.
+      Test with two single-file publishes of different `-p:Version` (see the release workflow's publish command).
+- No admin rights are needed, with one exception: updating a copy in a protected folder (the user's own install is
+  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update.
 - `tests/DockSense.Core.Tests` (xUnit).
 - `tools/DockSense.IconGen`: the pixel-art icons are text grids in `Sprites.cs`. Running the tool regenerates
   `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.
-- No admin rights are needed anywhere.
 
 ## Design decisions (from the user)
 - **Icons**: pixel art. The app icon is a one-piece widescreen handheld. Tray: Handheld = handheld with a green

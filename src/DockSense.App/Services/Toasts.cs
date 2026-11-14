@@ -75,6 +75,15 @@ public static class Toasts
         Show(builder, IconAssets.App, tag: "igpu");
     }
 
+    /// <param name="installsAtNextStart">True when the update goes in by itself the next time DockSense starts.</param>
+    public static void ShowUpdateAvailable(string version, bool installsAtNextStart)
+    {
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.F("Upd_AvailableTitle", version))
+            .AddText(Loc.T(installsAtNextStart ? "Toast_UpdateNextStart" : "Toast_UpdateOpen"));
+        Show(builder, IconAssets.App, tag: "update");
+    }
+
     public static void ShowWarning(string message)
     {
         var builder = new ToastContentBuilder()

@@ -10,6 +10,8 @@ namespace DockSense.App;
 
 public partial class App : Application
 {
+    private const string ShowArgument = "--show";
+
     private readonly EventWaitHandle? _showSignal;
     private TrayIconService? _tray;
     private MainWindow? _window;
@@ -25,6 +27,8 @@ public partial class App : Application
     }
 
     public static DockSenseService Service { get; private set; } = null!;
+
+    public static UpdateService Updates { get; private set; } = null!;
 
     public static MainViewModel ViewModel { get; private set; } = null!;
 
@@ -60,8 +64,25 @@ public partial class App : Application
         _exiting = true;
         _window?.Close();
         _tray?.Dispose();
+        Updates.Dispose();
         Service.Dispose();
         Shutdown();
+    }
+
+    /// <summary>After an update was installed: start the new version and leave. It comes back the way this one looks.</summary>
+    private void RestartForUpdate()
+    {
+        List<string> args = [UpdateInstaller.AfterUpdateArgument, UpdateInstaller.RestartedArgument];
+        if (_window?.IsVisible == true)
+        {
+            args.Add(ShowArgument);
+        }
+
+        // If the new version cannot be started, this one keeps running; the update takes effect at the next start.
+        if (UpdateInstaller.Relaunch(args))
+        {
+            Quit();
+        }
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -82,8 +103,9 @@ public partial class App : Application
 
         // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
         Toasts.Initialize(() => Dispatcher.BeginInvoke(ShowMainWindow));
-        var showWindowAtStart = e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase);
+        var showWindowAtStart = e.Args.Contains(ShowArgument, StringComparer.OrdinalIgnoreCase);
         var startedWithWindows = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
+        var restarted = e.Args.Contains(UpdateInstaller.RestartedArgument, StringComparer.OrdinalIgnoreCase);
         Service.ModeApplied += applied =>
         {
             // Started by hand, DockSense goes straight to the tray: say that it is running in the background.
@@ -118,10 +140,15 @@ public partial class App : Application
             }
         };
 
-        Service.Start();
+        Service.Start(restarted);
         AutoStart.UpgradeLegacyEntry();
         AutoStart.EnsureStartsInXboxMode();
-        ViewModel = new MainViewModel(Service);
+
+        Updates = new UpdateService(Service, RestartForUpdate);
+        Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsAtNextStart);
+        Updates.Start();
+
+        ViewModel = new MainViewModel(Service, Updates);
         _tray = new TrayIconService(Service, ShowMainWindow, Quit);
 
         // A second launch of DockSense.exe signals this instance to show its window.
