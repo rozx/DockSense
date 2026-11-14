@@ -23,14 +23,17 @@ public sealed partial class MainViewModel : ObservableObject
     public const string RepositoryUrl = "https://github.com/rozx/DockSense";
 
     private readonly DockSenseService _service;
+    private readonly UpdateService _updates;
     private bool _syncing;
 
-    public MainViewModel(DockSenseService service)
+    public MainViewModel(DockSenseService service, UpdateService updates)
     {
         _service = service;
+        _updates = updates;
         Profiles = [new ModeProfileViewModel(DockMode.Handheld, this), new ModeProfileViewModel(DockMode.Docked, this), new ModeProfileViewModel(DockMode.Egpu, this)];
         Plans = new PlanListViewModel(service);
         _service.StatusChanged += (_, _) => Refresh();
+        _updates.Changed += (_, _) => RefreshUpdates();
         Loc.Instance.PropertyChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -54,6 +57,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial InfoBarSeverity ThrottleSeverity { get; set; }
     [ObservableProperty] public partial string ThrottleTitle { get; set; } = string.Empty;
     [ObservableProperty] public partial string ThrottleMessage { get; set; } = string.Empty;
+
+    [ObservableProperty] public partial bool UpdateVisible { get; set; }
+    [ObservableProperty] public partial string UpdateTitle { get; set; } = string.Empty;
+    [ObservableProperty] public partial string UpdateMessage { get; set; } = string.Empty;
+    [ObservableProperty] public partial string UpdateActionText { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool UpdateActionVisible { get; set; }
 
     public ObservableCollection<HardwareItem> Adapters { get; } = [];
 
@@ -84,11 +93,16 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial IReadOnlyList<Option<AppTheme>> ThemeOptions { get; set; } = [];
     [ObservableProperty] public partial AppTheme SelectedTheme { get; set; }
     [ObservableProperty] public partial bool StartWithWindows { get; set; }
+    [ObservableProperty] public partial bool StartupNoteVisible { get; set; }
+    [ObservableProperty] public partial string StartupNote { get; set; } = string.Empty;
     [ObservableProperty] public partial bool NotifyOnModeChange { get; set; }
     [ObservableProperty] public partial bool NotifyOnStartup { get; set; }
     [ObservableProperty] public partial bool NotifyOnProgramStart { get; set; }
     [ObservableProperty] public partial bool NotifyOnWarnings { get; set; }
     [ObservableProperty] public partial bool ReassertPowerPlan { get; set; }
+    [ObservableProperty] public partial IReadOnlyList<Option<UpdateMode>> UpdateModeOptions { get; set; } = [];
+    [ObservableProperty] public partial UpdateMode SelectedUpdateMode { get; set; }
+    [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
 
     // ------------------------------------------------------------------ About page
 
@@ -134,6 +148,26 @@ public sealed partial class MainViewModel : ObservableObject
     private static void OpenLog() => Open(Log.FilePath);
 
     [RelayCommand]
+    private Task CheckForUpdates() => _updates.CheckAsync(manual: true);
+
+    /// <summary>Installs the update, or opens the release page when DockSense cannot install it itself.</summary>
+    [RelayCommand]
+    private async Task InstallUpdate()
+    {
+        if (_updates.CanInstall)
+        {
+            await _updates.InstallAsync();
+        }
+        else
+        {
+            OpenReleasePage();
+        }
+    }
+
+    [RelayCommand]
+    private void OpenReleasePage() => Open(_updates.Offer?.PageUrl ?? UpdatePlanner.ReleasesUrl);
+
+    [RelayCommand]
     private async Task CopyReport()
     {
         try
@@ -163,6 +197,7 @@ public sealed partial class MainViewModel : ObservableObject
             Plans.Refresh(plans, SafeActivePlan());
             RefreshDetection();
             RefreshSettings();
+            RefreshUpdates();
             OnPropertyChanged(nameof(VersionText));
             CopyReportText = Loc.T("About_CopyReport");
         }
@@ -420,12 +455,83 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedTheme = ui.Theme;
-        StartWithWindows = AutoStart.IsEnabled;
+        RefreshStartup();
         NotifyOnModeChange = ui.NotifyOnModeChange;
         NotifyOnStartup = ui.NotifyOnStartup;
         NotifyOnProgramStart = ui.NotifyOnProgramStart;
         NotifyOnWarnings = ui.NotifyOnWarnings;
         ReassertPowerPlan = _service.Config.ReassertPowerPlan;
+
+        List<Option<UpdateMode>> updateModes =
+        [
+            new(UpdateMode.Off, Loc.T("UpdateMode_Off")),
+            new(UpdateMode.Notify, Loc.T("UpdateMode_Notify")),
+            new(UpdateMode.Automatic, Loc.T("UpdateMode_Automatic")),
+        ];
+        if (!UpdateModeOptions.SequenceEqual(updateModes))
+        {
+            UpdateModeOptions = updateModes;
+        }
+
+        SelectedUpdateMode = _service.Config.Updates;
+    }
+
+    /// <summary>
+    /// The switch shows what really happens at sign-in, not just whether DockSense once wrote its entry. When the
+    /// two differ, a note under the switch says why.
+    /// </summary>
+    private void RefreshStartup()
+    {
+        var status = AutoStart.Status;
+        var wasSyncing = _syncing;
+        _syncing = true;
+        try
+        {
+            StartWithWindows = status.State == StartupState.On;
+        }
+        finally
+        {
+            _syncing = wasSyncing;
+        }
+
+        StartupNote = status switch
+        {
+            { State: StartupState.DisabledByWindows } => Loc.T("Set_StartupDisabledByWindows"),
+            { State: StartupState.OtherCopy } => Loc.F("Set_StartupOtherCopy", status.OtherCommand),
+            { WaitsForDesktop: true } => Loc.T("Set_StartupWaitsForDesktop"),
+            _ => string.Empty,
+        };
+        StartupNoteVisible = StartupNote.Length > 0;
+    }
+
+    /// <summary>The update card on the Status page and the status line under Settings.</summary>
+    private void RefreshUpdates()
+    {
+        var stage = _updates.Stage;
+        var offer = _updates.Offer;
+        var version = offer is null ? string.Empty : ReleaseVersion.Format(offer.Version);
+
+        UpdateVisible = offer is not null;
+        UpdateTitle = Loc.F(stage is UpdateStage.Ready or UpdateStage.Installing ? "Upd_ReadyTitle" : "Upd_AvailableTitle", version);
+        UpdateActionVisible = stage is UpdateStage.Available or UpdateStage.Ready;
+        UpdateActionText = Loc.T(_updates.CanInstall ? "Upd_Install" : "Upd_OpenPage");
+        UpdateMessage = _updates.Error ?? stage switch
+        {
+            UpdateStage.Downloading => Loc.F("Upd_Downloading", _updates.DownloadPercent),
+            UpdateStage.Installing => Loc.T("Upd_Installing"),
+            _ when !_updates.CanInstall => Loc.F("Upd_ManualMessage", AppInfo.VersionText),
+            UpdateStage.Ready => Loc.T(_updates.NeedsElevation ? "Upd_ReadyElevated" : "Upd_ReadyMessage"),
+            _ when _updates.InstallsAtNextStart => Loc.F("Upd_AutomaticMessage", AppInfo.VersionText),
+            _ => Loc.F(_updates.NeedsElevation ? "Upd_AvailableElevated" : "Upd_AvailableMessage", AppInfo.VersionText),
+        };
+
+        UpdateStatusText = _updates.Error ?? stage switch
+        {
+            UpdateStage.Checking => Loc.T("Upd_StatusChecking"),
+            _ when offer is not null => Loc.F("Upd_StatusAvailable", version),
+            _ when _updates.LastCheck is { } checkedAt => Loc.F("Upd_StatusLatest", AppInfo.VersionText, checkedAt.LocalDateTime),
+            _ => Loc.F("Upd_StatusNever", AppInfo.VersionText),
+        };
     }
 
     // ------------------------------------------------------------------ Save back to the config
@@ -521,6 +627,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!_syncing)
         {
             AutoStart.SetEnabled(value);
+            RefreshStartup();
         }
     }
 
@@ -561,6 +668,19 @@ public sealed partial class MainViewModel : ObservableObject
         if (!_syncing)
         {
             _service.UpdateConfig(c => c with { ReassertPowerPlan = value }, reapply: false);
+        }
+    }
+
+    partial void OnSelectedUpdateModeChanged(UpdateMode value)
+    {
+        if (!_syncing)
+        {
+            _service.UpdateConfig(c => c with { Updates = value }, reapply: false);
+            if (value != UpdateMode.Off)
+            {
+                // Turning updates on (or to automatic) takes effect now, not at tomorrow's check.
+                _ = _updates.CheckAsync(manual: false);
+            }
         }
     }
 

@@ -271,4 +271,40 @@
   <data name="Toast_Started" xml:space="preserve"><value>DockSense 正在后台运行</value></data>
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
   <data name="Toast_TrayHint" xml:space="preserve"><value>可以从通知区域的托盘图标打开</value></data>
+  <!-- v0.3: startup check -->
+  <data name="Set_StartupDisabledByWindows" xml:space="preserve"><value>Windows 已将此项关闭（任务管理器，或 Windows 设置 → 应用 → 启动）。在这里打开即可重新启用。</value></data>
+  <data name="Set_StartupOtherCopy" xml:space="preserve"><value>Windows 启动的是另一份 DockSense：{0}。在这里打开，即可改为启动当前这一份。</value></data>
+  <data name="Set_StartupWaitsForDesktop" xml:space="preserve"><value>开机直接进入全屏体验时，DockSense 要等你切换到桌面后才会启动。把此项关闭再打开，即可改为登录时启动。</value></data>
+  <!-- v0.3: updates -->
+  <data name="Set_Updates" xml:space="preserve"><value>更新</value></data>
+  <data name="Set_UpdateMode" xml:space="preserve"><value>新版本</value></data>
+  <data name="Set_UpdateModeDesc" xml:space="preserve"><value>DockSense 每天向 GitHub 查询一次是否有新版本。自动安装只在 DockSense 启动时进行，不会在使用过程中打断你。</value></data>
+  <data name="UpdateMode_Off" xml:space="preserve"><value>不检查</value></data>
+  <data name="UpdateMode_Notify" xml:space="preserve"><value>提醒我</value></data>
+  <data name="UpdateMode_Automatic" xml:space="preserve"><value>自动安装</value></data>
+  <data name="Set_UpdateCheck" xml:space="preserve"><value>立即检查</value></data>
+  <data name="Upd_StatusChecking" xml:space="preserve"><value>正在检查更新…</value></data>
+  <data name="Upd_StatusAvailable" xml:space="preserve"><value>DockSense {0} 已发布，可以在状态页安装。</value></data>
+  <data name="Upd_StatusLatest" xml:space="preserve"><value>已是最新版本（{0}）。上次检查：{1:g}。</value></data>
+  <data name="Upd_StatusNever" xml:space="preserve"><value>当前版本 {0}。DockSense 还没有检查过更新。</value></data>
+  <data name="Upd_AvailableTitle" xml:space="preserve"><value>DockSense {0} 已发布</value></data>
+  <data name="Upd_ReadyTitle" xml:space="preserve"><value>DockSense {0} 已准备好安装</value></data>
+  <data name="Upd_AvailableMessage" xml:space="preserve"><value>当前版本 {0}。DockSense 会下载并校验更新，然后自行重新启动。</value></data>
+  <data name="Upd_AvailableElevated" xml:space="preserve"><value>当前版本 {0}。DockSense 位于受保护的文件夹中，安装时需要管理员确认。</value></data>
+  <data name="Upd_AutomaticMessage" xml:space="preserve"><value>当前版本 {0}。更新会在 DockSense 下次启动时安装，也可以现在就安装。</value></data>
+  <data name="Upd_ReadyMessage" xml:space="preserve"><value>已下载并校验。DockSense 会自行重新启动以完成安装，当前模式和电源计划保持不变。</value></data>
+  <data name="Upd_ReadyElevated" xml:space="preserve"><value>已下载并校验。DockSense 位于受保护的文件夹中，Windows 会请求管理员确认，随后 DockSense 自行重新启动。</value></data>
+  <data name="Upd_ManualMessage" xml:space="preserve"><value>当前版本 {0}。此版本无法自行安装更新，请从发布页下载。</value></data>
+  <data name="Upd_Downloading" xml:space="preserve"><value>正在下载… {0}%</value></data>
+  <data name="Upd_Installing" xml:space="preserve"><value>正在安装…</value></data>
+  <data name="Upd_Install" xml:space="preserve"><value>安装更新</value></data>
+  <data name="Upd_OpenPage" xml:space="preserve"><value>打开下载页</value></data>
+  <data name="Upd_WhatsNew" xml:space="preserve"><value>更新内容</value></data>
+  <data name="Upd_CheckFailed" xml:space="preserve"><value>无法检查更新：{0}</value></data>
+  <data name="Upd_DownloadFailed" xml:space="preserve"><value>下载失败：{0}</value></data>
+  <data name="Upd_InstallFailed" xml:space="preserve"><value>无法安装更新：{0}</value></data>
+  <data name="Upd_SeeLog" xml:space="preserve"><value>详情请查看日志</value></data>
+  <data name="Upd_Declined" xml:space="preserve"><value>未安装：管理员确认被取消。</value></data>
+  <data name="Toast_UpdateOpen" xml:space="preserve"><value>打开 DockSense 即可安装。</value></data>
+  <data name="Toast_UpdateNextStart" xml:space="preserve"><value>将在 DockSense 下次启动时安装。</value></data>
 </root>

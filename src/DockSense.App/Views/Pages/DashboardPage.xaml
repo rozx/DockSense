@@ -111,6 +111,32 @@
             </DockPanel>
         </ui:Card>
 
+        <!-- A newer release -->
+        <ui:Card Margin="0,12,0,0" Padding="16,12" Visibility="{Binding UpdateVisible, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                    <ui:Button
+                        AutomationProperties.Name="{loc:T Upd_WhatsNew}"
+                        Command="{Binding OpenReleasePageCommand}"
+                        Content="{loc:T Upd_WhatsNew}"
+                        Icon="{ui:SymbolIcon Open24}" />
+                    <ui:Button
+                        Margin="8,0,0,0"
+                        Appearance="Primary"
+                        AutomationProperties.Name="{Binding UpdateActionText}"
+                        Command="{Binding InstallUpdateCommand}"
+                        Content="{Binding UpdateActionText}"
+                        Icon="{ui:SymbolIcon ArrowDownload24}"
+                        Visibility="{Binding UpdateActionVisible, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <Ellipse Style="{StaticResource Dot}" Fill="#60A5FA" Margin="2,0,12,0" />
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{Binding UpdateTitle}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding UpdateMessage}" TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </ui:Card>
+
         <!-- Game Mode throttle check -->
         <ui:InfoBar
             Margin="0,12,0,0"

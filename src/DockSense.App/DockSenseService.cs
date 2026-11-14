@@ -86,6 +86,12 @@ public sealed class DockSenseService : IDisposable
 
     public DockMode Mode => _stabilizer.Current;
 
+    /// <summary>
+    /// The mode whose profile was applied last, or null if none was yet. While paused this can lag behind
+    /// <see cref="Mode"/>: the mode keeps being detected, but its profile waits until switching is resumed.
+    /// </summary>
+    public DockMode? LastAppliedMode => _lastApplied;
+
     public DeviceSnapshot? Snapshot { get; private set; }
 
     public bool Paused { get; private set; }
@@ -110,8 +116,16 @@ public sealed class DockSenseService : IDisposable
 
     public string ConfigPath => _configStore.FilePath;
 
-    public void Start()
+    /// <param name="resumeFrom">
+    /// Set when this instance takes over from one that was just running (after an update): the mode whose profile
+    /// that instance had applied last (<see cref="LastAppliedMode"/>). If the mode is still the same, nothing is
+    /// applied again, so whatever the user or other software changed since (the power plan, for instance) stays.
+    /// If it differs, that is an ordinary mode change, which waits while paused.
+    /// </param>
+    /// <param name="paused">Start with automatic switching paused: no profile is applied until it is resumed.</param>
+    public void Start(DockMode? resumeFrom = null, bool paused = false)
     {
+        Paused = paused;
         IsFirstRun = !File.Exists(_configStore.FilePath);
         Config = _configStore.Load(Log.Warn);
         if (IsFirstRun)
@@ -125,9 +139,31 @@ public sealed class DockSenseService : IDisposable
         _stabilizer = new ModeStabilizer(mode, SettleTime);
         _planController = CreatePlanController(StateStore.Load());
 
-        Log.Info($"Started. {Describe(Snapshot)} -> {mode}");
+        Log.Info($"Started{(resumeFrom is null ? string.Empty : " after an update")}. {Describe(Snapshot)} -> {mode}");
         AddActivity(Loc.F("Act_Started", ModeName(mode)));
-        ApplyProfile(mode, ApplyReason.Startup);
+        if (resumeFrom is not { } previous)
+        {
+            ApplyProfile(mode, ApplyReason.Startup);
+        }
+        else if (previous == mode)
+        {
+            // The plan state saved by the previous instance (owned or handed over) carries on as it was.
+            _lastApplied = mode;
+            Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
+        }
+        else if (Paused)
+        {
+            // The transition from the last applied profile is still pending; resuming applies it.
+            _lastApplied = previous;
+            Log.Info($"Paused: the {previous} profile is still the one applied; {mode} waits until switching is resumed.");
+        }
+        else
+        {
+            _lastApplied = previous;
+            Log.Info($"The mode changed from {previous} to {mode} while DockSense was restarting.");
+            AddActivity(Loc.F("Act_ModeChanged", ModeName(mode)));
+            ApplyProfile(mode, ApplyReason.ModeChange);
+        }
 
         // Register only after the initial apply: Windows immediately reports the current plan, which is then ours.
         _notifications = new SystemNotifications();

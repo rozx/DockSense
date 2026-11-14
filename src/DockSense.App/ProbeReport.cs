@@ -73,6 +73,17 @@ internal static class ProbeReport
             text.AppendLine("iGPU memory:         not adjustable on this device");
         }
 
+        var startup = AutoStart.Status;
+        text.AppendLine();
+        text.AppendLine($"Start with Windows:  {startup.State switch
+        {
+            StartupState.On => startup.WaitsForDesktop ? "on, but in Xbox mode only after the first switch to the desktop" : "on",
+            StartupState.DisabledByWindows => "entry exists, switched off in Windows (Task Manager / Settings > Apps > Startup)",
+            StartupState.OtherCopy => $"another copy: {startup.OtherCommand}",
+            _ => "off",
+        }}");
+        text.AppendLine($"Updates:             {config.Updates}; install folder writable without admin: {UpdateInstaller.CanWriteInstallFolder()}; self-updating build: {UpdateInstaller.CanSelfUpdate}");
+
         var gameMode = GameModeDiagnostics.Read();
         text.AppendLine();
         text.AppendLine($"Game Mode enabled:   {gameMode.GameModeEnabled}");

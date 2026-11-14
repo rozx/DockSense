@@ -74,8 +74,9 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 - 🧠 **每个模式单独设置核显显存**（ROG Xbox Ally X 等 ASUS 掌机）：比如掌机时给核显 8 GB，接外接显卡时设为最小，把内存还给游戏。固件会在下次重启时应用，需要重启时 DockSense 会提醒你。
 - 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划；模式配置启动程序时，以及手动启动 DockSense 时（提示它正在后台运行）也会通知。
 - 🩺 **诊断功能**：状态页会显示游戏模式降频是否影响当前计划；一键生成报告，列出显卡、显示器、电源计划和隐藏的覆盖参数。
+- ⬆️ **自动更新**：有新版本时 DockSense 会提醒你，一键安装，也可以在下次启动时自动安装。更新包来自 GitHub 发布页，并按发布页公布的 SHA-256 校验。每日检查可以关闭。
 - 🌐 **中英双语**，支持浅色和深色主题，每种状态都有像素风托盘图标。
-- 🪶 **不需要管理员权限，不装驱动，不装服务**：使用公开文档化的 Windows API；可选的核显显存设置使用 ASUS ACPI 接口（与 Armoury Crate 相同）。
+- 🪶 **不需要管理员权限，不装驱动，不装服务**：使用公开文档化的 Windows API；可选的核显显存设置使用 ASUS ACPI 接口（与 Armoury Crate 相同）。唯一的例外：如果 DockSense 放在 Program Files 这类受保护的文件夹里，每次更新需要一次管理员确认。
 
 ## 工作原理
 
@@ -173,6 +174,7 @@ flowchart LR
 | `detection.dockedRequiresAcPower` | `false` | 仅在接通电源时才把外接显示器计入底座模式 |
 | `detection.forceEgpuInstanceIds` / `ignoreGpuInstanceIds` | `[]` | 逐块显卡的手动指定（PnP 实例 ID） |
 | `reassertPowerPlan` | `true` | 在受管理的模式下，其他软件修改计划时自动切回 |
+| `updates` | `Notify` | `Off`（从不检查）、`Notify`（每天检查一次并提醒你）或 `Automatic`（同时下载，并在 DockSense 下次启动时安装） |
 | `ui.language` | `system` | `system`、`en` 或 `zh-Hans` |
 | `ui.theme` | `System` | `System`、`Light` 或 `Dark` |
 | `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows 通知：手动启动 DockSense（登录时自动启动不通知）、模式切换、模式配置启动程序、出现问题 |
@@ -217,6 +219,32 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 <summary><b>需要关闭游戏模式吗？</b></summary>
 
 不需要，那是以前的临时解决办法。接外接显卡时，DockSense 使用的计划不会被游戏模式的电源配置影响，所以游戏模式可以一直开着，纯掌机游玩时它还能继续发挥作用。
+</details>
+
+<details>
+<summary><b>"开机自启"已经打开，但 DockSense 没有启动。</b></summary>
+
+打开 **设置**：开关显示的是登录时实际会发生的情况，下面的提示会说明是什么原因。
+
+- **被 Windows 关闭了**：任务管理器和 Windows 设置 → 应用 → 启动 都可以禁用自启动程序，而 DockSense 并不知情。这时开关会显示为关闭，在 DockSense 里重新打开即可启用。
+- **启动的是另一份**：如果你移动过 DockSense，自启动项仍然指向原来的位置。在想用的那一份里打开开关即可。
+- **Windows 在等你进入桌面**：开机直接进入 Xbox 全屏体验时，Windows 会把自启动程序推迟到第一次切换到桌面之后，除非该程序被设为 *登录时启动*。DockSense 会为自己设置这一项；如果被改掉了，把开关关闭再打开即可。
+</details>
+
+<details>
+<summary><b>更新是怎么工作的？DockSense 会发送什么？</b></summary>
+
+DockSense 每天向 GitHub 查询一次本仓库的最新版本（如果检查失败，比如没有联网，会在几小时后重试）。请求里除了用户代理中的 DockSense 版本号，不包含任何其他信息。可以在 **设置 → 更新** 里选择：
+
+- **提醒我**（默认）：发送通知，并在状态页显示一张卡片。点击 **安装更新** 后，DockSense 会下载、校验并自行重新启动。当前模式和电源计划保持不变，模式配置里的程序也不会再次运行。
+- **自动安装**：在后台下载，等 DockSense 下次启动时安装，所以不会在游戏中途重启。
+- **不检查**：不发送任何请求。**立即检查** 仍然可用。
+
+更新包只会从本仓库的发布页下载，大小和 SHA-256 必须与 GitHub 为该版本公布的一致。DockSense 只有一个文件：它先退出，下载好的新版本把旧的 `DockSense.exe` 改名为 `DockSense.exe.old`，自己放到原位置并启动。旧文件会在下次启动时删除。
+
+如果 DockSense 放在你没有写入权限的文件夹里（比如 Program Files），Windows 会为替换文件这一步请求管理员确认，自动更新也会等你点击后再安装。获得确认的这一步在动任何文件之前，会自己再向 GitHub 核对一次更新包；这种情况下旧文件由 Windows 在下次重启电脑时删除。
+
+目前的版本还没有代码签名，所以校验只能说明下载的文件与 GitHub 上的一致，不能说明是谁构建的。
 </details>
 
 <details>
@@ -270,6 +298,7 @@ dotnet run --project src/DockSense.App
 - [x] 电源计划编辑器（v0.2）
 - [x] 模式切换时运行程序（v0.2）
 - [x] ASUS 掌机上每个模式单独设置核显显存（v0.2）
+- [x] 应用内更新（v0.3）
 - [ ] 通过厂商接口为每个模式设置 TDP（ASUS、Lenovo 等）
 - [ ] 其他厂商掌机的核显显存设置
 - [ ] 按游戏单独配置

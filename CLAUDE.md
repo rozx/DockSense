@@ -49,7 +49,13 @@ Details and raw data: `docs/game-mode-throttle.md`.
     is stored as DWORD 1 named after the Run value in `GamingConfiguration\Startup\Run` (HKCU). Verified on 2026-11-13:
     with it, DockSense started 34 s after sign-in in FSE; without it, never. "Off" disables the entry through
     `Explorer\StartupApproved\Run`. The Settings dropdown does not read the value back on build 26300 (it always shows
-    "Start when exiting to desktop"), so don't trust the UI. `AutoStart` writes the value for DockSense.
+    "Start when exiting to desktop"), so don't trust the UI. `AutoStart` writes the value for DockSense, but never
+    creates the `GamingConfiguration` key itself: `FseSettings.IsAvailable` is "that key exists", and 0.2.1 made FSE
+    look available on PCs without it by creating the key (`AutoStart.RemoveMistakenXboxModeKey` undoes that).
+  - **Windows' own switch for a Run entry** is `Explorer\StartupApproved\Run\<name>` (12 bytes). An odd first byte
+    means disabled: this build writes `01` + a FILETIME for off and all zeros for on, older builds `03` / `02`. No
+    value means enabled. `StartupEntry` (Core) combines the Run value, this switch and the FSE value; the Settings
+    switch shows the result and a note explains a mismatch.
 - **iGPU memory (UMA frame buffer)**: `\\.\ATKACPI` opens without admin. `DeviceIoControl(0x0022240C)`, DSTS `0x53545344` /
   DEVS `0x53564544`, device `0x000600C4` (VRAM_MEM). On RC74XA BIOS 303 the reply status is `0x00030012`: 512 MB units,
   Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
@@ -68,11 +74,16 @@ Details and raw data: `docs/game-mode-throttle.md`.
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
+  - `StartupEntry`: whether the Run entry really starts this copy (on / off / disabled by Windows / another copy,
+    and "waits for the desktop" in Xbox mode).
+  - `Updates.cs`: `UpdateMode` (Off / Notify / Automatic, config key `updates`), `ReleaseVersion` (0.2 equals 0.2.0),
+    `ReleaseFeed` (parses GitHub's latest-release JSON) and `UpdatePlanner` (is it newer, which asset, which URLs are
+    trusted, when the daily check is due).
 - `src/DockSense.App` (net10.0-windows10.0.19041.0, WPF + WPF-UI 4.3):
   - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
     and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
     AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
-    `ProgramLauncher`, AutoStart (HKCU Run, plus the FSE "Start at log in" value), GameModeDiagnostics.
+    `ProgramLauncher`, AutoStart (HKCU Run, the FSE "Start at log in" value, and the startup status), GameModeDiagnostics.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.
@@ -85,10 +96,36 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `Localization/`: `Strings.resx` and `Strings.zh-Hans.resx`, `Loc` with live switching, and XAML `{loc:T Key}`.
   - Custom `Program.Main` (App.xaml is a Page): single instance via mutex, plus a named event that makes a second
     launch show the window. `--probe <file>` writes a read-only report.
+  - **Updates** (`Services/UpdateService`, `Platform/UpdateInstaller`, state in `%LOCALAPPDATA%\DockSense\update.json`
+    and `updates\`): daily query of the GitHub latest release, download of the `-win-<arch>.zip` asset, size and
+    SHA-256 check against the digest GitHub publishes, extraction of `DockSense.exe` into `updates\`.
+    - **Never replace the file of a running single-file DockSense that still has work to do.** The runtime reads
+      assemblies from the exe on demand, so after a swap the next assembly load reads the wrong file and fails
+      (seen as `FileNotFoundException: System.Diagnostics.Process`). It only shows when the two builds differ, so
+      test updates with builds of different code, not two publishes of the same commit.
+    - So the running DockSense only starts the installer and exits. The installer is the **downloaded exe itself**:
+      `<download> --install-update <installed exe> <pid>[,<elevated pid>] [args...]` waits for the pid to exit,
+      writes itself to `DockSense.exe.new`, renames installed to `.old` and `.new` to the real name, then starts it
+      with the args plus `--after-update`. Older versions call this on newer ones, so its arguments are a contract:
+      never change their meaning.
+    - Protected folder: the installed exe runs elevated as `--apply-update <release zip> <pid>`. It trusts nothing it
+      is handed: it hashes the zip (one handle, held to the last extracted byte), asks GitHub whether that digest is
+      a newer release, waits for the pid, then replaces its own file from the zip. Everything it does after the
+      swap already ran once before it. The unelevated installer waits for the version to change and relaunches.
+    - Automatic mode starts the installer from `Program.Main` at the next start, before any UI (writable folders
+      only). The Status card installs on click. DockSense never restarts itself unasked.
+    - `--restarted=<mode>`: the mode whose profile the previous instance had applied. If it is still the mode, the
+      new instance applies nothing (the saved plan state, owned or handed over, carries on); if it changed during
+      the restart, that is a normal mode change. `--paused`: start paused (passed on when DockSense restarts itself
+      while paused).
+    - Development builds (a `DockSense.dll` next to the exe) cannot self-update; they link to the release page.
+      Test with two single-file publishes of different `-p:Version` (see the release workflow's publish command).
+      The real UAC path can only be exercised from 0.3 on, because the download must know `--install-update`.
+- No admin rights are needed, with one exception: updating a copy in a protected folder (the user's own install is
+  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update.
 - `tests/DockSense.Core.Tests` (xUnit).
 - `tools/DockSense.IconGen`: the pixel-art icons are text grids in `Sprites.cs`. Running the tool regenerates
   `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.
-- No admin rights are needed anywhere.
 
 ## Design decisions (from the user)
 - **Icons**: pixel art. The app icon is a one-piece widescreen handheld. Tray: Handheld = handheld with a green
