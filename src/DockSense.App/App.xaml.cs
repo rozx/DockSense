@@ -170,7 +170,7 @@ public partial class App : Application
 
         Updates = new UpdateService(Service, RelaunchArguments, Quit);
         Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsAtNextStart);
-        Updates.Start();
+        Updates.Start(installFailed: e.Args.Contains(UpdateInstaller.FailedArgument, StringComparer.OrdinalIgnoreCase));
 
         ViewModel = new MainViewModel(Service, Updates);
         _tray = new TrayIconService(Service, ShowMainWindow, Quit);

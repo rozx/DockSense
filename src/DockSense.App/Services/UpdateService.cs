@@ -49,6 +49,7 @@ public sealed class UpdateService : IDisposable
     private UpdateState _state = new();
     private StagedUpdate? _staged;
     private DateTimeOffset? _lastFailure;
+    private bool _checkSoon;
     private bool _busy;
 
     /// <param name="relaunchArguments">The arguments that bring DockSense back the way it is now.</param>
@@ -62,10 +63,11 @@ public sealed class UpdateService : IDisposable
         {
             _timer.Interval = PollInterval;
             var now = DateTimeOffset.Now;
-            if (_service.Config.Updates != UpdateMode.Off
-                && UpdatePlanner.IsCheckDue(_state.LastCheck, now)
-                && (_lastFailure is not { } failed || failed > now || now - failed >= RetryAfterFailure))
+            var due = UpdatePlanner.IsCheckDue(_state.LastCheck, now)
+                && (_lastFailure is not { } failed || failed > now || now - failed >= RetryAfterFailure);
+            if (_service.Config.Updates != UpdateMode.Off && (due || _checkSoon))
             {
+                _checkSoon = false;
                 _ = CheckAsync(manual: false);
             }
         };
@@ -98,7 +100,10 @@ public sealed class UpdateService : IDisposable
     /// <summary>True when the update goes in at the next start without any click.</summary>
     public bool InstallsAtNextStart => _service.Config.Updates == UpdateMode.Automatic && !NeedsElevation && CanInstall;
 
-    public void Start()
+    /// <param name="installFailed">
+    /// True when DockSense was started again by the installer after an update that did not go in.
+    /// </param>
+    public void Start(bool installFailed = false)
     {
         NeedsElevation = !UpdateInstaller.CanWriteInstallFolder();
         var loaded = StateStore.LoadUpdate();
@@ -116,6 +121,15 @@ public sealed class UpdateService : IDisposable
             Stage = UpdateStage.Ready;
         }
 
+        if (installFailed)
+        {
+            // Say so on the card, and ask GitHub again at the first tick whatever the last check says: the release
+            // may have been replaced by a newer one.
+            Log.Warn("The update was not installed.");
+            Error = Loc.F("Upd_InstallFailed", Loc.T("Upd_SeeLog"));
+            _checkSoon = true;
+        }
+
         _timer.Start();
     }
 
@@ -130,7 +144,11 @@ public sealed class UpdateService : IDisposable
         }
 
         _busy = true;
-        Error = null;
+        if (manual)
+        {
+            Error = null; // A background check leaves the last failure on screen; only an action of the user clears it.
+        }
+
         var before = Stage;
         Stage = UpdateStage.Checking;
         RaiseChanged();
