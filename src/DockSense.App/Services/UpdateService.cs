@@ -70,6 +70,11 @@ public sealed class UpdateService : IDisposable
                 _checkSoon = false;
                 _ = CheckAsync(manual: false);
             }
+            else if (Stage == UpdateStage.Available && InstallsWithoutAsking)
+            {
+                // The automatic download failed earlier (it follows every successful check); try again.
+                _ = DownloadAsync();
+            }
         };
     }
 
@@ -97,8 +102,14 @@ public sealed class UpdateService : IDisposable
     /// <summary>False when DockSense can only point at the release page (no verifiable download, or a development build).</summary>
     public bool CanInstall => UpdateInstaller.CanSelfUpdate && (_staged is not null || Offer?.Asset is not null);
 
-    /// <summary>True when the update goes in at the next start without any click.</summary>
-    public bool InstallsAtNextStart => _service.Config.Updates == UpdateMode.Automatic && !NeedsElevation && CanInstall;
+    /// <summary>True when updates are automatic and can go in without a click (the folder is writable).</summary>
+    public bool InstallsWithoutAsking => _service.Config.Updates == UpdateMode.Automatic && !NeedsElevation && CanInstall;
+
+    /// <summary>
+    /// True when the next start of DockSense installs the update: it is automatic and already downloaded. A release
+    /// that is only known, or whose download failed, does not count: the next start would install nothing.
+    /// </summary>
+    public bool InstallsAtNextStart => InstallsWithoutAsking && _staged is not null;
 
     /// <param name="installFailed">
     /// True when DockSense was started again by the installer after an update that did not go in.
@@ -313,6 +324,8 @@ public sealed class UpdateService : IDisposable
                 DownloadPercent = percent;
                 RaiseChanged();
             });
+            // Asked again now, not taken from startup: Begin decides the same way when the update is installed.
+            NeedsElevation = !UpdateInstaller.CanWriteInstallFolder();
             _staged = await UpdateInstaller.DownloadAsync(Http, offer, keepZip: NeedsElevation, progress, timeout.Token);
             _state = _state with { Staged = _staged };
             StateStore.SaveUpdate(_state);

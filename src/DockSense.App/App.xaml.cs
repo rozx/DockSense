@@ -169,7 +169,7 @@ public partial class App : Application
         AutoStart.EnsureStartsInXboxMode();
 
         Updates = new UpdateService(Service, RelaunchArguments, Quit);
-        Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsAtNextStart);
+        Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsWithoutAsking);
         Updates.Start(installFailed: e.Args.Contains(UpdateInstaller.FailedArgument, StringComparer.OrdinalIgnoreCase));
 
         ViewModel = new MainViewModel(Service, Updates);

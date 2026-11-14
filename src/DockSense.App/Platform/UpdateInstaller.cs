@@ -65,7 +65,12 @@ internal static class UpdateInstaller
     private const string ProductName = "DockSense";
     private const int ErrorCancelled = 1223;
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan ElevatedSwapTimeout = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// Longer than the elevated process can take (30 s for GitHub, <see cref="ExitTimeout"/>, then the copy). The
+    /// wait normally ends earlier, when that process is gone.
+    /// </summary>
+    private static readonly TimeSpan ElevatedSwapTimeout = TimeSpan.FromMinutes(5);
 
     public static string UpdatesDirectory { get; } = Path.Combine(Log.DataDirectory, "updates");
 
@@ -296,10 +301,11 @@ internal static class UpdateInstaller
             return 2;
         }
 
-        var target = Path.GetFullPath(args[1]);
-        var relaunch = args.Skip(3).Append(AfterUpdateArgument).ToList();
         try
         {
+            var target = Path.GetFullPath(args[1]);
+            var relaunch = args.Skip(3).Append(AfterUpdateArgument).ToList();
+
             // Only ever install over a DockSense, and never over this file itself.
             var self = InstalledPath;
             if (!Path.GetFileName(target).Equals(ExecutableName, StringComparison.OrdinalIgnoreCase)
@@ -340,6 +346,12 @@ internal static class UpdateInstaller
 
             if (!installed)
             {
+                // A swap that stopped between its two renames left the old file under its .old name: put it back.
+                if (!File.Exists(target) && File.Exists(target + ".old"))
+                {
+                    File.Move(target + ".old", target);
+                }
+
                 // The version that comes back says so, instead of quietly offering the same update again.
                 relaunch.Add(FailedArgument);
             }

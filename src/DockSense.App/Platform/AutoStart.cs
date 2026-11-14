@@ -45,7 +45,8 @@ internal static class AutoStart
                     [Command, LegacyCommand],
                     approved?.GetValue(ValueName) as byte[],
                     xboxMode?.GetValue(ValueName) as int?,
-                    xboxModeAvailable: gaming is not null);
+                    // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
+                    xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
             }
             catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
             {
