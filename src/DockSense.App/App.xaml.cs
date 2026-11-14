@@ -72,13 +72,22 @@ public partial class App : Application
         Shutdown();
     }
 
+    /// <summary>The mode from <c>--restarted=&lt;mode&gt;</c>: the profile the previous instance had applied, if any.</summary>
+    private static DockMode? ResumedMode(string[] args)
+    {
+        var prefix = UpdateInstaller.RestartedArgument + "=";
+        var value = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))?[prefix.Length..];
+        return Enum.TryParse<DockMode>(value, ignoreCase: true, out var mode) && Enum.IsDefined(mode) ? mode : null;
+    }
+
     /// <summary>
-    /// The arguments that bring DockSense back the way it is now, for the restart after an update: quietly, with
-    /// the window open if it is open now, and paused if switching is paused.
+    /// The arguments that bring DockSense back the way it is now, for the restart after an update: with the mode
+    /// whose profile is applied (so nothing is applied again), with the window open if it is open now, and paused
+    /// if switching is paused.
     /// </summary>
     private IReadOnlyList<string> RelaunchArguments()
     {
-        List<string> args = [UpdateInstaller.RestartedArgument];
+        List<string> args = [$"{UpdateInstaller.RestartedArgument}={Service.Mode}"];
         if (_window?.IsVisible == true)
         {
             args.Add(ShowArgument);
@@ -106,13 +115,15 @@ public partial class App : Application
         Loc.Instance.SetLanguage(ui.Language);
         ApplyTheme(ui.Theme);
 
+        // Before the service reads the full screen experience settings.
+        AutoStart.RemoveMistakenXboxModeKey();
         Service = new DockSenseService(store);
 
         // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
         Toasts.Initialize(() => Dispatcher.BeginInvoke(ShowMainWindow));
         var showWindowAtStart = e.Args.Contains(ShowArgument, StringComparer.OrdinalIgnoreCase);
         var startedWithWindows = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
-        var restarted = e.Args.Contains(UpdateInstaller.RestartedArgument, StringComparer.OrdinalIgnoreCase);
+        var resumeFrom = ResumedMode(e.Args);
         Service.ModeApplied += applied =>
         {
             // Started by hand, DockSense goes straight to the tray: say that it is running in the background.
@@ -147,7 +158,7 @@ public partial class App : Application
             }
         };
 
-        Service.Start(restarted, paused: e.Args.Contains(PausedArgument, StringComparer.OrdinalIgnoreCase));
+        Service.Start(resumeFrom, paused: e.Args.Contains(PausedArgument, StringComparer.OrdinalIgnoreCase));
         AutoStart.UpgradeLegacyEntry();
         AutoStart.EnsureStartsInXboxMode();
 

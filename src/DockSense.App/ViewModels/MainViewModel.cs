@@ -93,6 +93,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial IReadOnlyList<Option<AppTheme>> ThemeOptions { get; set; } = [];
     [ObservableProperty] public partial AppTheme SelectedTheme { get; set; }
     [ObservableProperty] public partial bool StartWithWindows { get; set; }
+    [ObservableProperty] public partial bool StartupNoteVisible { get; set; }
+    [ObservableProperty] public partial string StartupNote { get; set; } = string.Empty;
     [ObservableProperty] public partial bool NotifyOnModeChange { get; set; }
     [ObservableProperty] public partial bool NotifyOnStartup { get; set; }
     [ObservableProperty] public partial bool NotifyOnProgramStart { get; set; }
@@ -453,7 +455,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedTheme = ui.Theme;
-        StartWithWindows = AutoStart.IsEnabled;
+        RefreshStartup();
         NotifyOnModeChange = ui.NotifyOnModeChange;
         NotifyOnStartup = ui.NotifyOnStartup;
         NotifyOnProgramStart = ui.NotifyOnProgramStart;
@@ -472,6 +474,34 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedUpdateMode = _service.Config.Updates;
+    }
+
+    /// <summary>
+    /// The switch shows what really happens at sign-in, not just whether DockSense once wrote its entry. When the
+    /// two differ, a note under the switch says why.
+    /// </summary>
+    private void RefreshStartup()
+    {
+        var status = AutoStart.Status;
+        var wasSyncing = _syncing;
+        _syncing = true;
+        try
+        {
+            StartWithWindows = status.State == StartupState.On;
+        }
+        finally
+        {
+            _syncing = wasSyncing;
+        }
+
+        StartupNote = status switch
+        {
+            { State: StartupState.DisabledByWindows } => Loc.T("Set_StartupDisabledByWindows"),
+            { State: StartupState.OtherCopy } => Loc.F("Set_StartupOtherCopy", status.OtherCommand),
+            { WaitsForDesktop: true } => Loc.T("Set_StartupWaitsForDesktop"),
+            _ => string.Empty,
+        };
+        StartupNoteVisible = StartupNote.Length > 0;
     }
 
     /// <summary>The update card on the Status page and the status line under Settings.</summary>
@@ -597,6 +627,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!_syncing)
         {
             AutoStart.SetEnabled(value);
+            RefreshStartup();
         }
     }
 

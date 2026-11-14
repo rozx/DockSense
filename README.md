@@ -222,6 +222,16 @@ No. That was the old workaround. With an eGPU connected, DockSense uses a plan t
 </details>
 
 <details>
+<summary><b>"Start with Windows" is on, but DockSense doesn't start.</b></summary>
+
+Open **Settings**: the switch shows what really happens at sign-in, and a note under it says what is in the way.
+
+- **Windows switched it off.** Task Manager and Windows Settings → Apps → Startup can disable a startup app without DockSense being asked. The switch then shows off; turn it on in DockSense to enable it again.
+- **Another copy starts.** If you moved DockSense, the startup entry still points at the old place. Turn the switch on in the copy you want.
+- **Windows waits for the desktop.** When Windows boots into the Xbox full screen experience, it holds startup apps back until you first switch to the desktop, unless the app is set to *Start at log in*. DockSense sets that for itself. If it was changed, turn the switch off and on again.
+</details>
+
+<details>
 <summary><b>How do updates work, and what does DockSense send?</b></summary>
 
 Once a day DockSense asks GitHub for the latest release of this repository (a check that fails, for example offline, is tried again a few hours later). The request carries nothing but the DockSense version in the user agent. Choose under **Settings → Updates**:

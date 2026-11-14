@@ -12,7 +12,12 @@ All notable changes to DockSense are documented here. The format follows [Keep a
   - If DockSense is in a folder you cannot write to, such as Program Files, Windows asks for administrator approval for the file swap, and automatic updates wait for your click. The approved step checks the download against GitHub once more by itself.
   - Updating while automatic switching is paused keeps it paused.
 - New `updates` setting in `config.json`: `Off`, `Notify` (default) or `Automatic`.
-- The diagnostic report shows the update setting and whether the install folder is writable.
+- **Start with Windows tells you when it won't work.** The switch now shows what really happens at sign-in, and a note under it says why when DockSense will not start: Windows switched the entry off (Task Manager, or Windows Settings → Apps → Startup), the entry starts another copy of DockSense, or Windows holds DockSense back until you switch to the desktop when it boots into the full screen experience. Turning the switch on fixes the first two.
+- The diagnostic report shows the startup state, the update setting and whether the install folder is writable.
+
+### Fixed
+
+- On PCs without the Xbox full screen experience, 0.2.1 created its settings key when *Start with Windows* was on, and DockSense then treated the full screen experience as available. DockSense no longer creates the key, and removes it again when it holds nothing but what DockSense wrote.
 
 ## [0.2.1] - 2026-11-13
 

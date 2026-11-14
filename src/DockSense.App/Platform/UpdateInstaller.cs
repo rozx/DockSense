@@ -52,7 +52,10 @@ internal static class UpdateInstaller
     /// <summary>Passed to the new version by the installer. Marks the first start after an update.</summary>
     public const string AfterUpdateArgument = "--after-update";
 
-    /// <summary>Passed when DockSense replaces a running instance: nothing about the mode changed, so start quietly.</summary>
+    /// <summary>
+    /// <c>--restarted=&lt;mode&gt;</c>, passed when DockSense replaces a running instance: the mode whose profile that
+    /// instance had applied. The new instance carries on from there and applies nothing again.
+    /// </summary>
     public const string RestartedArgument = "--restarted";
 
     private const string ExecutableName = "DockSense.exe";

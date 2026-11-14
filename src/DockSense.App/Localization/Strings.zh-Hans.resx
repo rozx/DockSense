@@ -271,6 +271,10 @@
   <data name="Toast_Started" xml:space="preserve"><value>DockSense 正在后台运行</value></data>
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
   <data name="Toast_TrayHint" xml:space="preserve"><value>可以从通知区域的托盘图标打开</value></data>
+  <!-- v0.3: startup check -->
+  <data name="Set_StartupDisabledByWindows" xml:space="preserve"><value>Windows 已将此项关闭（任务管理器，或 Windows 设置 → 应用 → 启动）。在这里打开即可重新启用。</value></data>
+  <data name="Set_StartupOtherCopy" xml:space="preserve"><value>Windows 启动的是另一份 DockSense：{0}。在这里打开，即可改为启动当前这一份。</value></data>
+  <data name="Set_StartupWaitsForDesktop" xml:space="preserve"><value>开机直接进入全屏体验时，DockSense 要等你切换到桌面后才会启动。把此项关闭再打开，即可改为登录时启动。</value></data>
   <!-- v0.3: updates -->
   <data name="Set_Updates" xml:space="preserve"><value>更新</value></data>
   <data name="Set_UpdateMode" xml:space="preserve"><value>新版本</value></data>

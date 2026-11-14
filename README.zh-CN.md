@@ -222,6 +222,16 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 </details>
 
 <details>
+<summary><b>"开机自启"已经打开，但 DockSense 没有启动。</b></summary>
+
+打开 **设置**：开关显示的是登录时实际会发生的情况，下面的提示会说明是什么原因。
+
+- **被 Windows 关闭了**：任务管理器和 Windows 设置 → 应用 → 启动 都可以禁用自启动程序，而 DockSense 并不知情。这时开关会显示为关闭，在 DockSense 里重新打开即可启用。
+- **启动的是另一份**：如果你移动过 DockSense，自启动项仍然指向原来的位置。在想用的那一份里打开开关即可。
+- **Windows 在等你进入桌面**：开机直接进入 Xbox 全屏体验时，Windows 会把自启动程序推迟到第一次切换到桌面之后，除非该程序被设为 *登录时启动*。DockSense 会为自己设置这一项；如果被改掉了，把开关关闭再打开即可。
+</details>
+
+<details>
 <summary><b>更新是怎么工作的？DockSense 会发送什么？</b></summary>
 
 DockSense 每天向 GitHub 查询一次本仓库的最新版本（如果检查失败，比如没有联网，会在几小时后重试）。请求里除了用户代理中的 DockSense 版本号，不包含任何其他信息。可以在 **设置 → 更新** 里选择：

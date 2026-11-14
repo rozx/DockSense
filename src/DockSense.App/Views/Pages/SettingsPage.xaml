@@ -34,9 +34,14 @@
                 <StackPanel Margin="0,0,24,0">
                     <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_Startup}" />
                     <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_StartupDesc}" FontSize="12" />
+                    <!-- Why the switch is off, or what still keeps DockSense from starting at sign-in. -->
+                    <DockPanel Margin="0,6,0,0" Visibility="{Binding StartupNoteVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Ellipse Style="{StaticResource Dot}" Fill="#FBBF24" Margin="1,5,8,0" VerticalAlignment="Top" />
+                        <TextBlock Text="{Binding StartupNote}" FontSize="12" TextWrapping="Wrap" />
+                    </DockPanel>
                 </StackPanel>
             </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" />
+            <ui:ToggleSwitch AutomationProperties.Name="{loc:T Set_Startup}" IsChecked="{Binding StartWithWindows}" />
         </ui:CardControl>
         <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon ShieldCheckmark24}">
             <ui:CardControl.Header>

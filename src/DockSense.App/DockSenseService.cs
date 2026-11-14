@@ -31,9 +31,6 @@ internal enum ApplyReason
     ModeChange,
     Resumed,
     SettingsChanged,
-
-    /// <summary>DockSense replaced its own running instance (after an update): nothing about the mode changed.</summary>
-    Restarted,
 }
 
 /// <summary>
@@ -113,12 +110,14 @@ public sealed class DockSenseService : IDisposable
 
     public string ConfigPath => _configStore.FilePath;
 
-    /// <param name="restarted">
-    /// True when this instance takes over from one that was just running (after an update). The profile is applied
-    /// like a settings change: no live full screen switch, no programs and no notification.
+    /// <param name="resumeFrom">
+    /// Set when this instance takes over from one that was just running (after an update): the mode whose profile
+    /// that instance had applied. If the mode is still the same, nothing is applied again, so whatever the user or
+    /// other software changed since (the power plan, for instance) stays. If it changed in between, that is an
+    /// ordinary mode change.
     /// </param>
     /// <param name="paused">Start with automatic switching paused: no profile is applied until it is resumed.</param>
-    public void Start(bool restarted = false, bool paused = false)
+    public void Start(DockMode? resumeFrom = null, bool paused = false)
     {
         Paused = paused;
         IsFirstRun = !File.Exists(_configStore.FilePath);
@@ -134,9 +133,25 @@ public sealed class DockSenseService : IDisposable
         _stabilizer = new ModeStabilizer(mode, SettleTime);
         _planController = CreatePlanController(StateStore.Load());
 
-        Log.Info($"Started{(restarted ? " after an update" : string.Empty)}. {Describe(Snapshot)} -> {mode}");
+        Log.Info($"Started{(resumeFrom is null ? string.Empty : " after an update")}. {Describe(Snapshot)} -> {mode}");
         AddActivity(Loc.F("Act_Started", ModeName(mode)));
-        ApplyProfile(mode, restarted ? ApplyReason.Restarted : ApplyReason.Startup);
+        if (resumeFrom is not { } previous)
+        {
+            ApplyProfile(mode, ApplyReason.Startup);
+        }
+        else if (previous == mode)
+        {
+            // The plan state saved by the previous instance (owned or handed over) carries on as it was.
+            _lastApplied = mode;
+            Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
+        }
+        else
+        {
+            _lastApplied = previous;
+            Log.Info($"The mode changed from {previous} to {mode} while DockSense was restarting.");
+            AddActivity(Loc.F("Act_ModeChanged", ModeName(mode)));
+            ApplyProfile(mode, ApplyReason.ModeChange);
+        }
 
         // Register only after the initial apply: Windows immediately reports the current plan, which is then ours.
         _notifications = new SystemNotifications();
@@ -299,9 +314,6 @@ public sealed class DockSenseService : IDisposable
 
     private TimeSpan SettleTime => TimeSpan.FromSeconds(Math.Clamp(Config.Detection.SettleSeconds, 0, 120));
 
-    /// <summary>Reasons that are not a transition: no live full screen switch, no programs, no notification.</summary>
-    private static bool IsQuiet(ApplyReason reason) => reason is ApplyReason.SettingsChanged or ApplyReason.Restarted;
-
     private PowerPlanController CreatePlanController(PowerPlanState? savedState)
     {
         // No saved state but our own plan is active (e.g. state file deleted): treat it as owned so that leaving
@@ -360,7 +372,7 @@ public sealed class DockSenseService : IDisposable
         StartPrograms(mode, reason);
         _lastApplied = mode;
 
-        if (!IsQuiet(reason) && Snapshot is not null)
+        if (reason != ApplyReason.SettingsChanged && Snapshot is not null)
         {
             ModeApplied?.Invoke(new ModeApplied(mode, Snapshot, SafeGetActivePlanName(), reason == ApplyReason.Startup));
         }
@@ -450,7 +462,7 @@ public sealed class DockSenseService : IDisposable
 
         // Switching live while the user edits settings would yank the screen away; only real transitions do it.
         // The new mode's live setting decides first, then "exit when leaving" of the mode being left.
-        if (!IsQuiet(reason) && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
+        if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
         {
             _fseTransition = (_lastApplied, mode);
             _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
@@ -644,7 +656,7 @@ public sealed class DockSenseService : IDisposable
 
     private void StartPrograms(DockMode mode, ApplyReason reason)
     {
-        if (IsQuiet(reason))
+        if (reason == ApplyReason.SettingsChanged)
         {
             return;
         }
