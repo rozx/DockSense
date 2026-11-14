@@ -2,7 +2,9 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3] - 2026-11-13
+
+This is the first version that can update itself. If you are on 0.2.1 or older, install 0.3 by hand once: download the zip and replace `DockSense.exe`. Later versions arrive through DockSense.
 
 ### Added
 
@@ -59,6 +61,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.3]: https://github.com/rozx/DockSense/releases/tag/v0.3
 [0.2.1]: https://github.com/rozx/DockSense/releases/tag/v0.2.1
 [0.2]: https://github.com/rozx/DockSense/releases/tag/v0.2
 [0.1]: https://github.com/rozx/DockSense/releases/tag/v0.1
