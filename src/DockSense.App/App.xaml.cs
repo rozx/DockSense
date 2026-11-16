@@ -72,6 +72,36 @@ public partial class App : Application
         Shutdown();
     }
 
+    /// <summary>The tray's "Restart for &lt;mode&gt;": the confirmation is a dialog in the main window.</summary>
+    private void RestartFor(DockMode mode)
+    {
+        ShowMainWindow();
+        ViewModel.RestartForCommand.Execute(mode);
+    }
+
+    /// <summary>The "Restart now" button of the iGPU memory notification.</summary>
+    private void RestartFromToast()
+    {
+        if (Service.IgpuMemoryPendingMb is null)
+        {
+            // An old notification: the PC has restarted since, or the device went back to the mode it started in.
+            // Restarting now would change nothing, so only show where things stand.
+            ShowMainWindow();
+            return;
+        }
+
+        SystemPower.Restart();
+    }
+
+    /// <summary>The restart notification promises a change that a restart no longer brings: take it away.</summary>
+    private static void ClearStaleRestartToast()
+    {
+        if (Service.IgpuMemoryPendingMb is null)
+        {
+            Toasts.ClearRestartNeeded();
+        }
+    }
+
     /// <summary>The mode from <c>--restarted=&lt;mode&gt;</c>: the profile the previous instance had applied, if any.</summary>
     private static DockMode? ResumedMode(string[] args)
     {
@@ -126,7 +156,7 @@ public partial class App : Application
         Service = new DockSenseService(store);
 
         // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
-        Toasts.Initialize(() => Dispatcher.BeginInvoke(ShowMainWindow));
+        Toasts.Initialize(onOpen: () => Dispatcher.BeginInvoke(ShowMainWindow), onRestart: () => Dispatcher.BeginInvoke(RestartFromToast));
         var showWindowAtStart = e.Args.Contains(ShowArgument, StringComparer.OrdinalIgnoreCase);
         var startedWithWindows = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
         var resumeFrom = ResumedMode(e.Args);
@@ -163,8 +193,10 @@ public partial class App : Application
                 Toasts.ShowWarning(message);
             }
         };
+        Service.StatusChanged += (_, _) => ClearStaleRestartToast();
 
         Service.Start(resumeFrom, paused: e.Args.Contains(PausedArgument, StringComparer.OrdinalIgnoreCase));
+        ClearStaleRestartToast();
         AutoStart.UpgradeLegacyEntry();
         AutoStart.EnsureStartsInXboxMode();
 
@@ -173,7 +205,7 @@ public partial class App : Application
         Updates.Start(installFailed: e.Args.Contains(UpdateInstaller.FailedArgument, StringComparer.OrdinalIgnoreCase));
 
         ViewModel = new MainViewModel(Service, Updates);
-        _tray = new TrayIconService(Service, ShowMainWindow, Quit);
+        _tray = new TrayIconService(Service, ShowMainWindow, RestartFor, Quit);
 
         // A second launch of DockSense.exe signals this instance to show its window.
         if (_showSignal is not null)

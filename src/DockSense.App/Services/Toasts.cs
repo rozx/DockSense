@@ -7,10 +7,33 @@ namespace DockSense.App.Services;
 /// <summary>Native Windows toast notifications for mode changes and problems.</summary>
 public static class Toasts
 {
-    /// <summary>Clicking a toast calls <paramref name="onActivated"/> (on a background thread).</summary>
-    public static void Initialize(Action onActivated)
+    private const string Group = "docksense";
+    private const string RestartTag = "igpu";
+    private const string ActionKey = "action";
+    private const string RestartAction = "restart";
+
+    // True at first: a toast from before DockSense (or Windows) restarted may still sit in the notification center.
+    private static bool _restartToastMayExist = true;
+    private static bool _removeFailureLogged;
+
+    /// <summary>
+    /// Clicking a toast calls <paramref name="onOpen"/>; its "Restart now" button calls <paramref name="onRestart"/>
+    /// (both on a background thread). Windows also starts DockSense for a click on a toast left in the notification
+    /// center, so <paramref name="onRestart"/> must check that a restart is still called for.
+    /// </summary>
+    public static void Initialize(Action onOpen, Action onRestart)
     {
-        ToastNotificationManagerCompat.OnActivated += _ => onActivated();
+        ToastNotificationManagerCompat.OnActivated += e =>
+        {
+            if (IsRestartAction(e.Argument))
+            {
+                onRestart();
+            }
+            else
+            {
+                onOpen();
+            }
+        };
     }
 
     /// <summary>
@@ -71,8 +94,46 @@ public static class Toasts
     {
         var builder = new ToastContentBuilder()
             .AddText(Loc.T("Toast_IgpuTitle"))
-            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)));
-        Show(builder, IconAssets.App, tag: "igpu");
+            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)))
+            .AddButton(new ToastButton().SetContent(Loc.T("Dash_RestartNow")).AddArgument(ActionKey, RestartAction));
+        _restartToastMayExist = true;
+        Show(builder, IconAssets.App, tag: RestartTag);
+    }
+
+    /// <summary>Takes the restart toast away once no restart is pending any more, so its button cannot mislead.</summary>
+    public static void ClearRestartNeeded()
+    {
+        if (!_restartToastMayExist)
+        {
+            return;
+        }
+
+        try
+        {
+            ToastNotificationManagerCompat.History.Remove(RestartTag, Group);
+            _restartToastMayExist = false;
+        }
+        catch (Exception ex)
+        {
+            // Tried again at the next status change; logged once, as the cause (notifications unavailable) tends to last.
+            if (!_removeFailureLogged)
+            {
+                _removeFailureLogged = true;
+                Log.Warn($"Could not remove a notification: {ex.Message}");
+            }
+        }
+    }
+
+    private static bool IsRestartAction(string argument)
+    {
+        try
+        {
+            return ToastArguments.Parse(argument).TryGetValue(ActionKey, out var action) && action == RestartAction;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     /// <param name="installsAtNextStart">True when the update goes in by itself the next time DockSense starts.</param>
@@ -101,7 +162,7 @@ public static class Toasts
             builder.Show(toast =>
             {
                 toast.Tag = tag;
-                toast.Group = "docksense";
+                toast.Group = Group;
             });
         }
         catch (Exception ex)

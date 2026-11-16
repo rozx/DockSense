@@ -1,5 +1,7 @@
+using System.Windows;
 using System.Windows.Controls;
 using DockSense.App.Localization;
+using DockSense.Core;
 using H.NotifyIcon;
 
 namespace DockSense.App.Services;
@@ -14,18 +16,28 @@ public sealed class TrayIconService : IDisposable
     private readonly MenuItem _pauseItem = new() { IsCheckable = true };
     private readonly MenuItem _recheckItem = new();
     private readonly MenuItem _exitItem = new();
+
+    // "Restart for <mode>": one item per mode, shown only while restarting for that mode is worth it.
+    private readonly Dictionary<DockMode, MenuItem> _restartItems = Enum.GetValues<DockMode>().ToDictionary(mode => mode, _ => new MenuItem());
+    private readonly Separator _restartSeparator = new();
     private string? _currentIconName;
 
-    public TrayIconService(DockSenseService service, Action openWindow, Action exit)
+    /// <param name="restartFor">Called when the user picks "Restart for &lt;mode&gt;".</param>
+    public TrayIconService(DockSenseService service, Action openWindow, Action<DockMode> restartFor, Action exit)
     {
         _service = service;
         _openItem.Click += (_, _) => openWindow();
         _pauseItem.Click += (_, _) => _service.SetPaused(_pauseItem.IsChecked);
         _recheckItem.Click += (_, _) => _service.ScheduleRescan("requested from the tray");
         _exitItem.Click += (_, _) => exit();
+        foreach (var (mode, item) in _restartItems)
+        {
+            item.Click += (_, _) => restartFor(mode);
+        }
 
         var menu = new ContextMenu();
-        foreach (var item in new Control[] { _modeItem, new Separator(), _openItem, _pauseItem, _recheckItem, new Separator(), _exitItem })
+        Control[] items = [_modeItem, new Separator(), _openItem, _pauseItem, _recheckItem, _restartSeparator, .. _restartItems.Values, new Separator(), _exitItem];
+        foreach (var item in items)
         {
             menu.Items.Add(item);
         }
@@ -65,5 +77,18 @@ public sealed class TrayIconService : IDisposable
         _pauseItem.IsChecked = _service.Paused;
         _recheckItem.Header = Loc.T("Tray_Recheck");
         _exitItem.Header = Loc.T("Tray_Exit");
+
+        var restartOptions = _service.IgpuRestartOptions;
+        foreach (var (itemMode, item) in _restartItems)
+        {
+            var option = restartOptions.FirstOrDefault(o => o.Mode == itemMode);
+            item.Visibility = option is null ? Visibility.Collapsed : Visibility.Visible;
+            if (option is not null)
+            {
+                item.Header = Loc.F("Tray_RestartFor", DockSenseService.ModeName(itemMode), DockSenseService.FormatMemory(option.MemoryMb));
+            }
+        }
+
+        _restartSeparator.Visibility = restartOptions.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 }

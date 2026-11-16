@@ -2,6 +2,22 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-11-15
+
+Switching modes with a different iGPU memory size now takes one restart instead of "unplug, wait, then restart".
+
+### Added
+
+- **Restart for a mode, from the tray menu.** When another mode's profile uses a different iGPU memory size than the one in effect, the tray menu offers **Restart for Handheld (8 GB)** (or Docked, or eGPU). After you confirm, DockSense stores that mode's size in the firmware and restarts Windows. Plug in or unplug the dock or eGPU while the PC restarts, and it comes up in the new mode with the right memory already in effect.
+  - The entry only appears when a restart is really needed. A mode whose size is already in effect is not listed.
+  - If the PC comes back up in the old mode after all, DockSense puts that mode's size back and tells you, as before.
+  - If Windows does not restart after all, because an app with unsaved work held it up or you cancelled there, a notification says that the new size is waiting for a restart.
+- **Restart now button on the iGPU memory notification.** When you have already switched modes and a new size is waiting for a restart, you can restart straight from the notification instead of opening DockSense first.
+
+### Changed
+
+- The iGPU memory notification disappears once no restart is pending any more, for example after the restart or when you go back to the mode the PC started in. A leftover notification's button never restarts the PC when there is nothing to apply.
+
 ## [0.3.1] - 2026-11-15
 
 ### Fixed
@@ -67,6 +83,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.3.2]: https://github.com/rozx/DockSense/releases/tag/v0.3.2
 [0.3.1]: https://github.com/rozx/DockSense/releases/tag/v0.3.1
 [0.3]: https://github.com/rozx/DockSense/releases/tag/v0.3
 [0.2.1]: https://github.com/rozx/DockSense/releases/tag/v0.2.1

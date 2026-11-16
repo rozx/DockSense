@@ -111,6 +111,14 @@ public sealed class DockSenseService : IDisposable
         ? options.ToMb(options.CurrentRaw)
         : null;
 
+    /// <summary>
+    /// The other modes it is worth restarting for: their iGPU memory size differs from the one in effect, so storing
+    /// it before the restart saves the restart that would follow the mode change (<see cref="PrepareIgpuRestart"/>).
+    /// </summary>
+    public IReadOnlyList<IgpuRestartOption> IgpuRestartOptions => IgpuMemory is { } options && _igpuBoot is { } boot
+        ? IgpuRestartPlanner.Options(Config, Mode, options, boot.EffectiveRaw)
+        : [];
+
     /// <summary>True when config.json did not exist at startup (first run).</summary>
     public bool IsFirstRun { get; private set; }
 
@@ -610,27 +618,81 @@ public sealed class DockSenseService : IDisposable
             return;
         }
 
+        if (StoreIgpuMemory(mode.ToString(), target, raw) && IgpuMemoryPendingMb is not null)
+        {
+            IgpuMemoryChanged?.Invoke(target);
+        }
+    }
+
+    /// <summary>
+    /// Stores <paramref name="mode"/>'s iGPU memory size in the firmware now, while the device is still in another
+    /// mode, so that it is in effect after the restart the caller starts next. Returns false when the size could
+    /// not be stored. If the device comes back up in the old mode after all, the startup apply puts that mode's
+    /// size back, as after any other change.
+    /// </summary>
+    public bool PrepareIgpuRestart(DockMode mode)
+    {
+        if (Config.ProfileFor(mode).IgpuMemoryMb is not { } target || IgpuMemory is null)
+        {
+            return false;
+        }
+
+        var fresh = SafeReadIgpuMemory();
+        IgpuMemory = fresh ?? IgpuMemory;
+        var stored = false;
+        if (IgpuMemory.RawFor(target) is not { } raw)
+        {
+            Log.Warn($"Restart for {mode}: the firmware does not offer {target} MB of iGPU memory.");
+        }
+        else
+        {
+            // "Already stored" only counts when the firmware was just read: after a failed read the value known
+            // here may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
+            stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
+        }
+
+        if (!stored)
+        {
+            NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
+        }
+
+        RaiseStatusChanged();
+        return stored;
+    }
+
+    /// <summary>
+    /// Says again that a stored iGPU memory size waits for a restart (<see cref="IgpuMemoryChanged"/>), if one does.
+    /// For a restart the user asked for that did not happen: the size prepared for it stays in the firmware.
+    /// </summary>
+    public void RemindIgpuRestartPending()
+    {
+        if (IgpuMemoryPendingMb is { } pending)
+        {
+            IgpuMemoryChanged?.Invoke(pending);
+        }
+    }
+
+    /// <summary>Writes a raw value the firmware lists. <paramref name="context"/> says in the log who asked.</summary>
+    private bool StoreIgpuMemory(string context, int megabytes, uint raw)
+    {
         try
         {
             if (!AsusAcpi.WriteIgpuMemory(raw))
             {
-                Log.Warn($"{mode}: the firmware rejected iGPU memory {target} MB.");
-                return;
+                Log.Warn($"{context}: the firmware rejected iGPU memory {megabytes} MB.");
+                return false;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Log.Error($"{mode}: could not set iGPU memory", ex);
-            return;
+            Log.Error($"{context}: could not set iGPU memory", ex);
+            return false;
         }
 
-        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory with { CurrentRaw = raw };
-        Log.Info($"{mode}: iGPU memory set to {target} MB; it applies after a restart.");
-        AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(target)));
-        if (IgpuMemoryPendingMb is not null)
-        {
-            IgpuMemoryChanged?.Invoke(target);
-        }
+        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory! with { CurrentRaw = raw };
+        Log.Info($"{context}: iGPU memory set to {megabytes} MB; it applies after a restart.");
+        AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(megabytes)));
+        return true;
     }
 
     /// <summary>This boot: Windows' boot counter (readable without admin) plus the start time as a fallback.</summary>
