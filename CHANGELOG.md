@@ -2,6 +2,12 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-15
+
+### Fixed
+
+- **USB drives and memory cards no longer trigger a mode re-check.** Windows reports every drive that is plugged in, removed or formatted to all app windows, and DockSense took those reports for a monitor or graphics card change. The mode never changed because of it, but each one caused a needless re-check and a misleading "display adapter or monitor" line in the log. DockSense now reacts only to display adapters and monitors, and the log says which of the two arrived or left.
+
 ## [0.3] - 2026-11-13
 
 This is the first version that can update itself. If you are on 0.2.1 or older, install 0.3 by hand once: download the zip and replace `DockSense.exe`. Later versions arrive through DockSense.
@@ -61,6 +67,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.3.1]: https://github.com/rozx/DockSense/releases/tag/v0.3.1
 [0.3]: https://github.com/rozx/DockSense/releases/tag/v0.3
 [0.2.1]: https://github.com/rozx/DockSense/releases/tag/v0.2.1
 [0.2]: https://github.com/rozx/DockSense/releases/tag/v0.2
