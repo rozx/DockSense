@@ -307,4 +307,9 @@
   <data name="Upd_Declined" xml:space="preserve"><value>未安装：管理员确认被取消。</value></data>
   <data name="Toast_UpdateOpen" xml:space="preserve"><value>打开 DockSense 即可安装。</value></data>
   <data name="Toast_UpdateNextStart" xml:space="preserve"><value>将在 DockSense 下次启动时安装。</value></data>
+  <!-- Restart for a mode: store that mode's iGPU memory first, so one restart is enough -->
+  <data name="Tray_RestartFor" xml:space="preserve"><value>重启到{0}模式（{1}）</value></data>
+  <data name="RestartFor_Title" xml:space="preserve"><value>重启到{0}模式？</value></data>
+  <data name="RestartFor_Message" xml:space="preserve"><value>DockSense 会先按{0}模式把核显显存设为 {1}，然后 Windows 立即重启。请在重启过程中插上或拔下底座 / 外接显卡。请先保存工作，有未保存内容的应用仍可以阻止重启。</value></data>
+  <data name="Act_IgpuRestartFailed" xml:space="preserve"><value>无法为{0}模式设置核显显存，电脑没有重启。</value></data>
 </root>

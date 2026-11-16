@@ -128,19 +128,30 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private static async Task Restart()
     {
-        if (!await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), Loc.T("Restart_Message"), Loc.T("Restart_Confirm")))
+        if (await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), Loc.T("Restart_Message"), Loc.T("Restart_Confirm")))
         {
-            return;
+            SystemPower.Restart();
+        }
+    }
+
+    /// <summary>
+    /// "Restart for &lt;mode&gt;": stores that mode's iGPU memory size now and restarts, so the user can switch
+    /// modes while the PC is restarting instead of restarting once more afterwards. Needs the window (it asks first).
+    /// </summary>
+    [RelayCommand]
+    private async Task RestartFor(DockMode mode)
+    {
+        if (_service.IgpuRestartOptions.FirstOrDefault(o => o.Mode == mode) is not { } option)
+        {
+            return; // No longer on offer, e.g. the mode changed while the menu was open.
         }
 
-        try
+        var name = DockSenseService.ModeName(mode);
+        var message = Loc.F("RestartFor_Message", name, DockSenseService.FormatMemory(option.MemoryMb));
+        if (await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
+            && _service.PrepareIgpuRestart(mode))
         {
-            // No /f: Windows still asks apps with unsaved work before restarting.
-            Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warn($"Could not restart: {ex.Message}");
+            SystemPower.Restart();
         }
     }
 

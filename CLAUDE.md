@@ -71,7 +71,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
   - `FsePlanner` (live FSE target for a transition: the entered mode's `FseApplyImmediately` wins, then the left
     mode's `FseExitOnLeave`), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
-    well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply)
+    well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply), `IgpuRestartPlanner` (the other modes
+    whose iGPU memory size differs from the one in effect: the tray offers "Restart for `<mode>`" for them, which
+    stores that size first so one restart is enough)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
   - `StartupEntry`: whether the Run entry really starts this copy (on / off / disabled by Windows / another copy,
@@ -89,6 +91,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.
+    Restarting Windows is always the user's click (`Platform/SystemPower`): the Status card, the tray's "Restart for
+    `<mode>`" (both confirm in a dialog) and the "Restart now" button on the iGPU memory toast. Windows starts
+    DockSense for a click on an old toast, so that button restarts only while a size is still pending.
   - `Services/`: `Appearance` (minimal zinc palette with a monochrome accent; it overrides WPF-UI brush keys in
     Application.Resources and follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications),
     `TrayIconService` (H.NotifyIcon), `IconAssets`.
