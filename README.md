@@ -71,7 +71,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - 🛠️ **Power plan editor.** Create plans from any existing plan, edit the settings that matter on a handheld (processor state, EPP, boost mode, max frequency, core preference, display and sleep timeouts) for plugged-in and on-battery use, and rename or delete plans. Hidden High Performance-type plans are listed too.
 - 🎮 **Xbox full screen experience per mode.** For example, use the full screen experience as a handheld and the desktop when docked. DockSense can switch it **right away** when the mode changes, not only at the next sign-in.
 - 🚀 **Run programs on mode changes.** Start a program, script or URL when a mode begins or ends (or when DockSense starts in it), with arguments, a hidden window or administrator rights.
-- 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed.
+- 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed. **Restart for Handheld** in the tray menu stores the next mode's size first, so one restart is enough.
 - 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied), when a profile starts a program, and when you start DockSense yourself, so you know it is running in the background.
 - 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
 - ⬆️ **Updates itself.** DockSense tells you when a new release is out and installs it with one click, or by itself the next time it starts. The download comes from the GitHub release and is checked against the release's SHA-256 checksum. You can turn the daily check off.
@@ -201,7 +201,9 @@ On Modern Standby devices, Windows hides High Performance-type plans from Contro
 <details>
 <summary><b>Why does the iGPU memory need a restart?</b></summary>
 
-The memory reserved for the built-in GPU (the UMA frame buffer) is set by the firmware while the PC starts, the same as in Armoury Crate. DockSense stores the size for the current mode right away. Status then shows the new size as pending, with a **Restart now** button. DockSense never restarts on its own, and it only writes sizes that the firmware itself offers. If you unplug an eGPU and keep playing without restarting, the old size stays in effect until the next restart. Most games run fine either way, because Windows also lends the iGPU shared memory.
+The memory reserved for the built-in GPU (the UMA frame buffer) is set by the firmware while the PC starts, the same as in Armoury Crate. DockSense stores the size for the current mode right away. Status then shows the new size as pending, with a **Restart now** button, and the notification has the same button. DockSense never restarts on its own, and it only writes sizes that the firmware itself offers. If you unplug an eGPU and keep playing without restarting, the old size stays in effect until the next restart. Most games run fine either way, because Windows also lends the iGPU shared memory.
+
+To skip the "unplug, wait, then restart" order, use the tray menu before you switch: **Restart for Handheld (8 GB)** (the entry names the mode and its size) stores that mode's size and restarts Windows after you confirm. Plug in or unplug the dock or eGPU while the PC restarts, and it comes up with the right memory already in effect. The entry only appears when another mode's size differs from the one in effect.
 </details>
 
 <details>
