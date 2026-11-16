@@ -78,12 +78,12 @@ internal sealed class SystemNotifications : IDisposable
                 handled = true;
                 return new IntPtr(1);
 
-            case WM_DEVICECHANGE when (int)wParam == DBT_DEVICEARRIVAL:
-                HardwareChanged?.Invoke("device arrived (display adapter or monitor)");
-                break;
+            case WM_DEVICECHANGE when (int)wParam is DBT_DEVICEARRIVAL or DBT_DEVICEREMOVECOMPLETE:
+                if (DisplayDeviceKind(lParam) is { } device)
+                {
+                    HardwareChanged?.Invoke((int)wParam == DBT_DEVICEARRIVAL ? $"{device} arrived" : $"{device} removed");
+                }
 
-            case WM_DEVICECHANGE when (int)wParam == DBT_DEVICEREMOVECOMPLETE:
-                HardwareChanged?.Invoke("device removed (display adapter or monitor)");
                 break;
 
             case WM_DISPLAYCHANGE:
@@ -92,6 +92,28 @@ internal sealed class SystemNotifications : IDisposable
         }
 
         return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// What a WM_DEVICECHANGE arrival or removal is about: "display adapter", "monitor", or null for anything else.
+    /// Windows broadcasts volume changes (USB drives, memory cards) to every top-level window, registered or not,
+    /// so the message alone does not say that a display device changed.
+    /// </summary>
+    private static string? DisplayDeviceKind(IntPtr data)
+    {
+        // Every DEV_BROADCAST_* structure starts with its size and its device type.
+        var classGuidOffset = (int)Marshal.OffsetOf<DEV_BROADCAST_DEVICEINTERFACE>(nameof(DEV_BROADCAST_DEVICEINTERFACE.dbcc_classguid));
+        if (data == IntPtr.Zero
+            || Marshal.ReadInt32(data, sizeof(int)) != DBT_DEVTYP_DEVICEINTERFACE
+            || Marshal.ReadInt32(data) < classGuidOffset + Marshal.SizeOf<Guid>())
+        {
+            return null;
+        }
+
+        var classGuid = Marshal.PtrToStructure<Guid>(data + classGuidOffset);
+        return classGuid == GUID_DEVINTERFACE_DISPLAY_ADAPTER ? "display adapter"
+            : classGuid == GUID_DEVINTERFACE_MONITOR ? "monitor"
+            : null;
     }
 
     private void HandlePowerBroadcast(int eventType, IntPtr data)

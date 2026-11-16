@@ -82,7 +82,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - `src/DockSense.App` (net10.0-windows10.0.19041.0, WPF + WPF-UI 4.3):
   - `Platform/`: P/Invoke for SetupAPI (GPU removal policy / container), QueryDisplayConfig, powrprof,
     and the notifications window (`HwndSource`: device arrival/removal for adapters and monitors, WM_DISPLAYCHANGE,
-    AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
+    AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Windows also broadcasts volume arrivals and removals (USB drives,
+    memory cards) to every top-level window, so `WM_DEVICECHANGE` is filtered by device type and interface class.
+    Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
     `ProgramLauncher`, AutoStart (HKCU Run, the FSE "Start at log in" value, and the startup status), GameModeDiagnostics.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
