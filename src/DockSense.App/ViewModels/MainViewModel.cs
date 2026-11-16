@@ -22,6 +22,9 @@ public sealed partial class MainViewModel : ObservableObject
 {
     public const string RepositoryUrl = "https://github.com/rozx/DockSense";
 
+    /// <summary>How long a requested restart may take before DockSense concludes it was held up or cancelled.</summary>
+    private static readonly TimeSpan RestartGrace = TimeSpan.FromSeconds(30);
+
     private readonly DockSenseService _service;
     private readonly UpdateService _updates;
     private bool _syncing;
@@ -148,11 +151,21 @@ public sealed partial class MainViewModel : ObservableObject
 
         var name = DockSenseService.ModeName(mode);
         var message = Loc.F("RestartFor_Message", name, DockSenseService.FormatMemory(option.MemoryMb));
-        if (await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
-            && _service.PrepareIgpuRestart(mode))
+        if (!await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
+            || !_service.PrepareIgpuRestart(mode))
         {
-            SystemPower.Restart();
+            return;
         }
+
+        if (SystemPower.Restart())
+        {
+            // Windows may still not restart: an app with unsaved work holds it up, and the user can cancel there.
+            await Task.Delay(RestartGrace);
+        }
+
+        // Still running, so the restart did not happen (yet), but the size for the other mode is stored and takes
+        // effect at whatever restart comes next. The notification says so and offers the restart again.
+        _service.RemindIgpuRestartPending();
     }
 
     [RelayCommand]

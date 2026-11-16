@@ -11,6 +11,7 @@ Switching modes with a different iGPU memory size now takes one restart instead 
 - **Restart for a mode, from the tray menu.** When another mode's profile uses a different iGPU memory size than the one in effect, the tray menu offers **Restart for Handheld (8 GB)** (or Docked, or eGPU). After you confirm, DockSense stores that mode's size in the firmware and restarts Windows. Plug in or unplug the dock or eGPU while the PC restarts, and it comes up in the new mode with the right memory already in effect.
   - The entry only appears when a restart is really needed. A mode whose size is already in effect is not listed.
   - If the PC comes back up in the old mode after all, DockSense puts that mode's size back and tells you, as before.
+  - If Windows does not restart after all, because an app with unsaved work held it up or you cancelled there, a notification says that the new size is waiting for a restart.
 - **Restart now button on the iGPU memory notification.** When you have already switched modes and a new size is waiting for a restart, you can restart straight from the notification instead of opening DockSense first.
 
 ### Changed

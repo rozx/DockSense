@@ -310,6 +310,6 @@
   <!-- Restart for a mode: store that mode's iGPU memory first, so one restart is enough -->
   <data name="Tray_RestartFor" xml:space="preserve"><value>Restart for {0} ({1})</value></data>
   <data name="RestartFor_Title" xml:space="preserve"><value>Restart for {0}?</value></data>
-  <data name="RestartFor_Message" xml:space="preserve"><value>DockSense stores {1} of iGPU memory for {0} mode, then Windows restarts right away. Plug in or unplug your dock or eGPU while the PC restarts. Save your work first. Apps with unsaved changes can still stop the restart.</value></data>
+  <data name="RestartFor_Message" xml:space="preserve"><value>DockSense sets the iGPU memory to {1} for {0} mode, then Windows restarts right away. Plug in or unplug your dock or eGPU while the PC restarts. Save your work first. Apps with unsaved changes can still stop the restart.</value></data>
   <data name="Act_IgpuRestartFailed" xml:space="preserve"><value>Could not store the iGPU memory for {0} mode, so the PC was not restarted.</value></data>
 </root>

@@ -637,7 +637,8 @@ public sealed class DockSenseService : IDisposable
             return false;
         }
 
-        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
+        var fresh = SafeReadIgpuMemory();
+        IgpuMemory = fresh ?? IgpuMemory;
         var stored = false;
         if (IgpuMemory.RawFor(target) is not { } raw)
         {
@@ -645,7 +646,9 @@ public sealed class DockSenseService : IDisposable
         }
         else
         {
-            stored = raw == IgpuMemory.CurrentRaw || StoreIgpuMemory($"Restart for {mode}", target, raw);
+            // "Already stored" only counts when the firmware was just read: after a failed read the value known
+            // here may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
+            stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
         }
 
         if (!stored)
@@ -655,6 +658,18 @@ public sealed class DockSenseService : IDisposable
 
         RaiseStatusChanged();
         return stored;
+    }
+
+    /// <summary>
+    /// Says again that a stored iGPU memory size waits for a restart (<see cref="IgpuMemoryChanged"/>), if one does.
+    /// For a restart the user asked for that did not happen: the size prepared for it stays in the firmware.
+    /// </summary>
+    public void RemindIgpuRestartPending()
+    {
+        if (IgpuMemoryPendingMb is { } pending)
+        {
+            IgpuMemoryChanged?.Invoke(pending);
+        }
     }
 
     /// <summary>Writes a raw value the firmware lists. <paramref name="context"/> says in the log who asked.</summary>
