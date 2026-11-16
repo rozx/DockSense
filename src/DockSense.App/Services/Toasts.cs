@@ -14,6 +14,7 @@ public static class Toasts
 
     // True at first: a toast from before DockSense (or Windows) restarted may still sit in the notification center.
     private static bool _restartToastMayExist = true;
+    private static bool _removeFailureLogged;
 
     /// <summary>
     /// Clicking a toast calls <paramref name="onOpen"/>; its "Restart now" button calls <paramref name="onRestart"/>
@@ -107,14 +108,19 @@ public static class Toasts
             return;
         }
 
-        _restartToastMayExist = false;
         try
         {
             ToastNotificationManagerCompat.History.Remove(RestartTag, Group);
+            _restartToastMayExist = false;
         }
         catch (Exception ex)
         {
-            Log.Warn($"Could not remove a notification: {ex.Message}");
+            // Tried again at the next status change; logged once, as the cause (notifications unavailable) tends to last.
+            if (!_removeFailureLogged)
+            {
+                _removeFailureLogged = true;
+                Log.Warn($"Could not remove a notification: {ex.Message}");
+            }
         }
     }
 
