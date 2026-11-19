@@ -13,10 +13,11 @@ Each mode gets its own power plan, Xbox full screen experience, iGPU memory and 
 [![Downloads](https://img.shields.io/github/downloads/rozx/DockSense/total?label=downloads)](https://github.com/rozx/DockSense/releases)
 [![License](https://img.shields.io/github/license/rozx/DockSense)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#requirements)
-[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Stars](https://img.shields.io/github/stars/rozx/DockSense?style=flat&logo=github)](https://github.com/rozx/DockSense/stargazers)
 
 **English** · [简体中文](README.zh-CN.md)
+
+[⬇️ Download Latest Release](https://github.com/rozx/DockSense/releases/latest) · [Features](#features) · [How it works](#how-it-works) · [eGPU Throttle Fix](#the-egpu-fix-game-mode-cpu-throttle) · [FAQ](#faq)
 
 <img src="docs/images/status.png" width="800" alt="DockSense status page" />
 
@@ -24,41 +25,25 @@ Each mode gets its own power plan, Xbox full screen experience, iGPU memory and 
 
 ---
 
-DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, and works out how your handheld is being used. Then it applies the matching **power plan** and **Xbox full screen experience**, sets the **iGPU memory** and starts **your own programs**. You don't have to switch anything by hand when you dock or undock.
-
-It also [fixes low FPS with an eGPU](#the-egpu-fix-game-mode-cpu-throttle), the bug hunt this project started with.
-
-## Contents
-
-- [Features](#features)
-- [How it works](#how-it-works)
-- [The eGPU fix: Game Mode CPU throttle](#the-egpu-fix-game-mode-cpu-throttle)
-- [Screenshots](#screenshots)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Supported hardware](#supported-hardware)
-- [FAQ](#faq)
-- [Building from source](#building-from-source)
-- [Contributing](#contributing)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
+DockSense runs quietly in your system tray, watching for external GPUs, external displays and power changes so you never have to switch settings by hand when you dock or undock. It also [fixes low FPS with an eGPU](#the-egpu-fix-game-mode-cpu-throttle), the bug hunt this project started with.
 
 ## Features
 
-- 🔌 **Automatic mode detection.** Handheld, Docked (external display) or eGPU (Thunderbolt / USB4 / OCuLink), with debouncing so a dock being plugged in or out never causes flapping.
-- ⚡ **Per-mode power plans.** DockSense restores your previous plan when a mode ends, and creates an "eGPU-safe" plan that is immune to the Game Mode throttle.
-- 🛡️ **Keeps the plan you chose.** If vendor software (e.g. Armoury Crate) switches the plan back, DockSense re-applies it, and it backs off if something keeps fighting.
-- 🛠️ **Power plan editor.** Create plans from any existing plan, edit the settings that matter on a handheld (processor state, EPP, boost mode, max frequency, core preference, display and sleep timeouts) for plugged-in and on-battery use, and rename or delete plans. Hidden High Performance-type plans are listed too.
-- 🎮 **Xbox full screen experience per mode.** For example, use the full screen experience as a handheld and the desktop when docked. DockSense can switch it **right away** when the mode changes, not only at the next sign-in.
-- ⏱️ **Starts right at sign-in.** A sign-in task starts DockSense about two seconds after you sign in, well before Windows gets to its startup apps. If you docked or undocked while the PC was off, the new mode's power plan and full screen experience setting are in place as Windows starts.
-- 🚀 **Run programs on mode changes.** Start a program, script or URL when a mode begins or ends (or when DockSense starts in it), with arguments, a hidden window or administrator rights.
-- 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed. **Restart for Handheld** in the tray menu stores the next mode's size first, so one restart is enough.
-- 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied), when a profile starts a program, and when you start DockSense yourself, so you know it is running in the background.
-- 🩺 **Diagnostics.** The status page shows whether the Game Mode throttle affects your current plan. A one-click report lists adapters, displays, plans and hidden overrides.
-- ⬆️ **Updates itself.** DockSense tells you when a new release is out and installs it with one click, or by itself the next time it starts. The download comes from the GitHub release and is checked against the release's SHA-256 checksum. You can turn the daily check off.
-- 🌐 **English and 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **No admin rights, no driver, no service.** It uses documented Windows APIs, plus the ASUS ACPI interface (the one Armoury Crate uses) for the optional iGPU memory setting. The one exception: updating a copy that sits in a protected folder such as Program Files asks for administrator approval once per update.
+### Per-mode automation
+
+- 🔌 **Automatic mode detection.** Detects Handheld, Docked (external display) or eGPU (Thunderbolt / USB4 / OCuLink) with debouncing so plugging or unplugging a dock never causes flapping.
+- ⚡ **Power plans & built-in editor.** Applies a plan per mode, restores your previous plan on leave, and re-asserts your choice (with backoff) if vendor software such as Armoury Crate changes it back. Includes an eGPU-safe **DockSense Performance** plan and an editor for plugged-in/on-battery settings (including hidden High Performance-type plans).
+- 🎮 **Xbox full screen experience.** Sets the sign-in behavior per mode and can switch **immediately** when the mode changes, not only at the next sign-in.
+- 🧠 **iGPU memory** *(ASUS handhelds such as the ROG Xbox Ally X)*. Sets the firmware UMA frame buffer size per mode—for example 8 GB handheld and minimum with an eGPU—and offers **Restart for `<mode>`** in the tray menu so one restart is enough.
+- 🚀 **Run programs on mode changes.** Launches apps, scripts or URLs when a mode begins, ends, or starts up, with arguments, a hidden window or administrator rights.
+
+### Built for daily use
+
+- ⏱️ **Starts right at sign-in.** A per-user sign-in task starts DockSense about two seconds after sign-in, ahead of Windows' startup apps—even when booting straight into Xbox full screen experience—so dock changes made while powered off take effect immediately.
+- 🔔 **Native notifications & 🩺 Diagnostics.** Toast alerts on mode changes and program launches, a live Game Mode throttle check on the Status page, and a one-click diagnostic report.
+- ⬆️ **Self-updating.** Daily GitHub release checks verified with SHA-256 checksums, with one-click or automatic next-start updates (can be turned off).
+- 🌐 **English & 简体中文**, light and dark theme, and pixel-art tray icons for every state.
+- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus the ASUS ACPI interface for optional iGPU memory. *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
 
 ## How it works
 
@@ -82,6 +67,12 @@ flowchart LR
 | <img src="assets/icons/docked@3x.png" width="48" alt="Docked" /><br/>**Docked** | An active external display, and no eGPU | Plan unchanged · boot to desktop |
 | <img src="assets/icons/handheld@3x.png" width="48" alt="Handheld" /><br/>**Handheld** | Neither of the above | Plan unchanged (vendor decides) · boot into full screen experience |
 
+**Example setup:**
+
+- **Handheld:** vendor TDP/power plan · Xbox full screen experience · 8 GB iGPU memory
+- **Docked:** keep power plan · switch to desktop · launch your favorite browser or desktop tools
+- **eGPU:** **DockSense Performance** (fixes Game Mode CPU throttle) · desktop · minimum iGPU memory (reclaims RAM for games)
+
 Some details:
 
 - **Vendor IDs are never used.** AMD iGPUs and AMD eGPUs share a vendor. USB display adapters (DisplayLink) and virtual displays (streaming apps) are ignored.
@@ -103,7 +94,7 @@ Windows **Game Mode** has a hidden processor power profile called `GameMode`. It
 | Energy performance preference (EPP) | 20 (favor performance) | **100 (maximum power saving)** |
 | Thread scheduling | prefer performance cores | **prefer efficient cores** |
 
-That is a sensible choice when the CPU and iGPU share one small power budget. With an **eGPU**, though, the CPU becomes the bottleneck and the expensive graphics card waits half the time. Measured on a ROG Xbox Ally X with an RTX 5090, Game Mode on and the game in the foreground:
+That is a sensible choice when the CPU and iGPU share one small power budget. With an **eGPU**, though, the CPU becomes the bottleneck and the expensive graphics card waits half the time. Measured on an ROG Xbox Ally X with an RTX 5090, Game Mode on and the game in the foreground:
 
 | Active power plan | CPU package | CPU clock | Result |
 |---|---|---|---|
@@ -123,11 +114,10 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
   </tr>
   <tr>
     <td><img src="docs/images/settings.png" alt="Settings" /><p align="center"><b>Settings</b>: language, theme, startup, notifications</p></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/toast.png" alt="Notification" /><p align="center"><b>Notification</b> when the mode changes</p></td>
     <td align="center">
+      <img src="docs/images/toast.png" alt="Notification" />
+      <p><b>Notification</b> when the mode changes</p>
+      <br />
       <img src="assets/icons/handheld@3x.png" width="48" alt="Handheld" />&nbsp;
       <img src="assets/icons/docked@3x.png" width="48" alt="Docked" />&nbsp;
       <img src="assets/icons/egpu@3x.png" width="48" alt="eGPU" />&nbsp;
@@ -146,7 +136,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 
 ### Download
 
-1. Download `DockSense-<version>-win-x64.zip` from the **[latest release](https://github.com/rozx/DockSense/releases/latest)**.
+1. Download `DockSense-<version>-win-x64.zip` (or `win-arm64.zip` for ARM64) from the **[latest release](https://github.com/rozx/DockSense/releases/latest)**.
 2. Extract it anywhere, for example `%LOCALAPPDATA%\Programs\DockSense`, and run **DockSense.exe**.
 3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in. DockSense then starts right at sign-in, through a sign-in task it registers for your account, instead of waiting for Windows to get to its startup apps. This also covers booting straight into the Xbox full screen experience, where Windows normally holds startup apps back until you switch to the desktop.
 4. From version 0.3 on, DockSense tells you when a new version is out and can install it for you (**Settings → Updates**). Coming from 0.2.1 or older, replace `DockSense.exe` by hand this one time.
@@ -172,6 +162,9 @@ Closing the window keeps DockSense running in the tray. Launching DockSense.exe 
 
 Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this file for you. Logs and runtime state live in `%LOCALAPPDATA%\DockSense`.
 
+<details>
+<summary><b>All config.json keys and defaults</b></summary>
+
 | Key | Default | Description |
 |---|---|---|
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`, `DockSensePerformance` or `Specific` (with `planId`) |
@@ -189,9 +182,13 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `ui.theme` | `System` | `System`, `Light` or `Dark` |
 | `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows notifications when you start DockSense yourself (not at sign-in), on mode changes, for programs started by a profile, and for problems |
 
+</details>
+
 ## Supported hardware
 
-DockSense uses standard Windows APIs, so it should work on any Windows handheld or laptop. Tested so far:
+All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Only the optional **iGPU memory** setting is ASUS-specific (via the `ATKACPI` firmware interface).
+
+Tested so far:
 
 | Device | eGPU / dock | Status |
 |---|---|---|
@@ -303,7 +300,8 @@ dotnet run --project src/DockSense.App
 
 The icons are text. To change one, edit `tools/DockSense.IconGen/Sprites.cs` and run `dotnet run --project tools/DockSense.IconGen -- assets`.
 
-### Release process
+<details>
+<summary><b>Release process (maintainers)</b></summary>
 
 Releases are automated, but they only happen when **all three** of these are true:
 
@@ -312,6 +310,8 @@ Releases are automated, but they only happen when **all three** of these are tru
 3. The pull request has the **`release`** label.
 
 GitHub Actions then reads the version from the branch name, runs the tests, builds self-contained single-file executables for x64 and ARM64, tags the merge commit `v<version>`, and publishes the release. Its description is the version's section of [CHANGELOG.md](CHANGELOG.md), followed by GitHub's list of merged pull requests. CI fails on a release PR whose version has no CHANGELOG section. Every other push or pull request only runs CI (build + tests).
+
+</details>
 
 ## Contributing
 

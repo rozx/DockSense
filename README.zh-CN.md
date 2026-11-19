@@ -13,10 +13,11 @@
 [![Downloads](https://img.shields.io/github/downloads/rozx/DockSense/total?label=downloads)](https://github.com/rozx/DockSense/releases)
 [![License](https://img.shields.io/github/license/rozx/DockSense)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](#系统要求)
-[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Stars](https://img.shields.io/github/stars/rozx/DockSense?style=flat&logo=github)](https://github.com/rozx/DockSense/stargazers)
 
 [English](README.md) · **简体中文**
+
+[⬇️ 下载最新版本](https://github.com/rozx/DockSense/releases/latest) · [功能](#功能) · [工作原理](#工作原理) · [显卡坞降频修复](#外接显卡的游戏模式降频修复) · [常见问题](#常见问题)
 
 <img src="docs/images/status.zh-CN.png" width="800" alt="DockSense 状态页" />
 
@@ -24,41 +25,25 @@
 
 ---
 
-DockSense 运行在系统托盘里。它会监测外接显卡、外接显示器和电源的变化，判断掌机当前的使用方式，然后自动切换到对应的**电源计划**和 **Xbox 全屏体验**，设置**核显显存**，并启动**你指定的程序**。插拔底座时，你不需要手动切换任何东西。
-
-它还能[修复接外接显卡后帧数低的问题](#外接显卡的游戏模式降频修复)，这个项目最初就源于对这个问题的排查。
-
-## 目录
-
-- [功能](#功能)
-- [工作原理](#工作原理)
-- [外接显卡的游戏模式降频修复](#外接显卡的游戏模式降频修复)
-- [截图](#截图)
-- [安装](#安装)
-- [使用](#使用)
-- [配置](#配置)
-- [支持的硬件](#支持的硬件)
-- [常见问题](#常见问题)
-- [从源码编译](#从源码编译)
-- [参与贡献](#参与贡献)
-- [致谢](#致谢)
-- [许可证](#许可证)
+DockSense 安静地运行在系统托盘里，实时监测外接显卡、外接显示器和电源变化，让你插拔底座或显卡坞时无需手动切换任何设置。它还能[修复接外接显卡后帧数低的问题](#外接显卡的游戏模式降频修复)——这个项目最初正是源于对这个问题的排查。
 
 ## 功能
 
-- 🔌 **自动识别模式**：掌机、底座（外接显示器）或外接显卡（雷电 / USB4 / OCuLink），并带防抖，插拔底座时不会来回跳。
-- ⚡ **每个模式使用不同的电源计划**：离开该模式时恢复之前的计划，还会自动创建一个不受游戏模式降频影响的"外接显卡专用"计划。
-- 🛡️ **保持你选的计划**：厂商软件（如 Armoury Crate）把计划切回去时会自动改回；如果有程序一直在抢，DockSense 会主动退让。
-- 🛠️ **电源计划编辑器**：以任意已有计划为基础新建计划；分别为接通电源和使用电池时修改掌机上最常用的设置（处理器状态、EPP、加速模式、最大频率、核心偏好、关闭显示器和睡眠时间）；还可以重命名或删除计划。被隐藏的"高性能"类型计划也会列出来。
-- 🎮 **每个模式单独设置 Xbox 全屏体验**：比如掌机时使用全屏体验，接底座时使用桌面。模式切换时 DockSense 可以**立即切换**，而不只是在下次登录时生效。
-- ⏱️ **登录后立即启动**：通过计划任务，DockSense 在登录后约两秒就启动，远早于 Windows 启动其他自启动程序的时间。即使在关机期间接上或拔掉了底座，新模式的电源计划和全屏体验设置也会在 Windows 启动时就位。
-- 🚀 **模式切换时运行程序**：在进入或离开某个模式时（或 DockSense 在该模式下启动时）启动程序、脚本或网址，可以带参数、隐藏窗口或以管理员身份运行。
-- 🧠 **每个模式单独设置核显显存**（ROG Xbox Ally X 等 ASUS 掌机）：比如掌机时给核显 8 GB，接外接显卡时设为最小，把内存还给游戏。固件会在下次重启时应用，需要重启时 DockSense 会提醒你。托盘菜单里的**重启到掌机模式**会先写入下一个模式的大小，这样只需要重启一次。
-- 🔔 **Windows 原生通知**：模式切换时提醒你，显示识别到的显卡和应用的电源计划；模式配置启动程序时，以及手动启动 DockSense 时（提示它正在后台运行）也会通知。
-- 🩺 **诊断功能**：状态页会显示游戏模式降频是否影响当前计划；一键生成报告，列出显卡、显示器、电源计划和隐藏的覆盖参数。
-- ⬆️ **自动更新**：有新版本时 DockSense 会提醒你，一键安装，也可以在下次启动时自动安装。更新包来自 GitHub 发布页，并按发布页公布的 SHA-256 校验。每日检查可以关闭。
-- 🌐 **中英双语**，支持浅色和深色主题，每种状态都有像素风托盘图标。
-- 🪶 **不需要管理员权限，不装驱动，不装服务**：使用公开文档化的 Windows API；可选的核显显存设置使用 ASUS ACPI 接口（与 Armoury Crate 相同）。唯一的例外：如果 DockSense 放在 Program Files 这类受保护的文件夹里，每次更新需要一次管理员确认。
+### 每个模式可自动切换
+
+- 🔌 **自动识别模式**：识别掌机、底座（外接显示器）或外接显卡（雷电 / USB4 / OCuLink），带防抖机制，插拔底座时不会来回跳。
+- ⚡ **电源计划与内置编辑器**：为每个模式切换电源计划、离开时恢复原计划，并在厂商软件（如 Armoury Crate）改回时自动重设（带退让保护）；自带不受游戏模式降频影响的 **DockSense Performance** 计划，并可编辑接通电源/电池设置（包括隐藏的高性能计划）。
+- 🎮 **Xbox 全屏体验**：按模式设置登录行为，还支持在模式切换时**立即切换**，无需等到下次登录。
+- 🧠 **核显显存** *（ROG Xbox Ally X 等 ASUS 掌机）*：按模式写入固件 UMA 帧缓冲大小——例如掌机给 8 GB、接外接显卡设最小以归还内存；托盘菜单提供**重启到`<模式>`**，一次重启即可生效。
+- 🚀 **模式切换时运行程序**：在进入、离开某模式或在该模式启动时运行程序、脚本或网址，支持参数、隐藏窗口和管理员权限。
+
+### 省心与可靠
+
+- ⏱️ **登录后立即启动**：通过每用户登录计划任务在登录后约两秒启动（早于 Windows 常规自启动项，开机直入 Xbox 全屏体验时同样有效），即使在关机期间插拔了底座，开机也能立即就位。
+- 🔔 **原生通知与 🩺 诊断**：模式切换与程序启动原生通知、状态页实时检测游戏模式降频，以及一键导出诊断报告。
+- ⬆️ **自动更新**：每日检查 GitHub 发布页并校验 SHA-256，支持一键安装或下次启动自动安装（可关闭）。
+- 🌐 **中英双语**、浅色/深色主题，以及覆盖每种状态的像素风托盘图标。
+- 🪶 **轻量免安装**：无需管理员权限、不装驱动、不装后台服务，只用公开 Windows API 与可选的 ASUS ACPI 接口。*（仅在 Program Files 等受保护目录更新时需要一次 UAC 确认。）*
 
 ## 工作原理
 
@@ -82,6 +67,12 @@ flowchart LR
 | <img src="assets/icons/docked@3x.png" width="48" alt="底座" /><br/>**底座** | 有正在使用的外接显示器，且没有外接显卡 | 不改电源计划 · 开机进入桌面 |
 | <img src="assets/icons/handheld@3x.png" width="48" alt="掌机" /><br/>**掌机** | 以上都不满足 | 不改电源计划（由厂商决定） · 开机进入全屏体验 |
 
+**典型配置示例：**
+
+- **掌机**：保持厂商 TDP/电源计划 · Xbox 全屏体验 · 8 GB 核显显存
+- **底座**：保持电源计划 · 切换到桌面 · 自动启动常用桌面工具或浏览器
+- **外接显卡**：**DockSense Performance**（解除游戏模式 CPU 降频）· 桌面模式 · 最小核显显存（把内存还给游戏）
+
 几个细节：
 
 - **不靠厂商 ID 判断**：AMD 核显和 AMD 外接显卡的厂商 ID 是一样的。USB 显示适配器（DisplayLink）和虚拟显示器（串流软件创建的）会被忽略。
@@ -89,7 +80,7 @@ flowchart LR
 
 ## 外接显卡的游戏模式降频修复
 
-DockSense 源于一次问题排查：ASUS ROG Xbox Ally X 接上 RTX 5090 显卡坞后，游戏只有 50 帧左右，CPU 被压到了 **2 GHz / 12W**，而且只在游戏处于前台时才会这样。如果你的掌机接上外接显卡后也是这样，那就是同一个问题：
+DockSense 源于一次问题排查：ASUS ROG Xbox Ally X 接上 RTX 5090 显卡坞后，游戏只有 50 帧左右，CPU 被压到了 **2 GHz / 12 W**，而且只在游戏处于前台时才会这样。如果你的掌机接上外接显卡后也是这样，那就是同一个问题：
 
 - 游戏帧数低或卡顿，显卡占用率却远没有跑满。
 - 任务管理器显示 CPU 占用 100%，但功耗只有 10–15 W，频率在 2 GHz 左右。
@@ -107,8 +98,8 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 | 当前电源计划 | CPU 功耗 | CPU 频率 | 结果 |
 |---|---|---|---|
-| 厂商的 "Turbo" 计划（平衡类型） | 10–15W | 2.2–2.6 GHz | 被降频 |
-| **DockSense Performance**（高性能类型） | **29–45W** | **4.0–4.4 GHz** | 满速 |
+| 厂商的 "Turbo" 计划（平衡类型） | 10–15 W | 2.2–2.6 GHz | 被降频 |
+| **DockSense Performance**（高性能类型） | **29–45 W** | **4.0–4.4 GHz** | 满速 |
 
 这些覆盖参数只写给了"平衡"类型的电源计划，而且 `powercfg` 看不到它们。DockSense 会在接上外接显卡时，切换到一个基于"高性能"的计划；拔掉显卡坞后，再把控制权交还给厂商软件。游戏模式可以一直开着。
 
@@ -123,11 +114,10 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
   </tr>
   <tr>
     <td><img src="docs/images/settings.zh-CN.png" alt="设置" /><p align="center"><b>设置</b>：语言、主题、开机自启、通知</p></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/toast.png" alt="通知" /><p align="center">模式切换时的<b>系统通知</b></p></td>
     <td align="center">
+      <img src="docs/images/toast.png" alt="通知" />
+      <p>模式切换时的<b>系统通知</b></p>
+      <br />
       <img src="assets/icons/handheld@3x.png" width="48" alt="掌机" />&nbsp;
       <img src="assets/icons/docked@3x.png" width="48" alt="底座" />&nbsp;
       <img src="assets/icons/egpu@3x.png" width="48" alt="外接显卡" />&nbsp;
@@ -146,7 +136,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 ### 下载
 
-1. 从 **[最新版本](https://github.com/rozx/DockSense/releases/latest)** 下载 `DockSense-<版本>-win-x64.zip`。
+1. 从 **[最新版本](https://github.com/rozx/DockSense/releases/latest)** 下载 `DockSense-<版本>-win-x64.zip`（ARM64 请下载 `win-arm64.zip`）。
 2. 解压到任意位置（例如 `%LOCALAPPDATA%\Programs\DockSense`），运行 **DockSense.exe**。
 3. 第一次运行会打开主窗口，之后会安静地在托盘里启动。在 **设置 → 开机自启** 里打开，登录 Windows 时就会自动运行。DockSense 会为你的账户注册一个登录时运行的计划任务，在登录后立即启动，而不用等 Windows 启动其他自启动程序。开机直接进入 Xbox 全屏体验时也会运行（Windows 默认会把自启动程序推迟到第一次切换到桌面之后）。
 4. 从 0.3 版本开始，有新版本时 DockSense 会提醒你，并可以替你安装（**设置 → 更新**）。如果是从 0.2.1 或更早的版本升级，这一次需要手动替换 `DockSense.exe`。
@@ -172,6 +162,9 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 设置保存在 `%APPDATA%\DockSense\config.json`，界面会帮你修改它。日志和运行状态保存在 `%LOCALAPPDATA%\DockSense`。
 
+<details>
+<summary><b>查看全部 config.json 配置项与默认值</b></summary>
+
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | `handheld` / `docked` / `egpu` → `powerPlan.kind` | `Unmanaged` / `Unmanaged` / `DockSensePerformance` | `Unmanaged`、`DockSensePerformance` 或 `Specific`（配合 `planId`） |
@@ -189,9 +182,13 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 | `ui.theme` | `System` | `System`、`Light` 或 `Dark` |
 | `ui.notifyOnStartup` / `ui.notifyOnModeChange` / `ui.notifyOnProgramStart` / `ui.notifyOnWarnings` | `true` | Windows 通知：手动启动 DockSense（登录时自动启动不通知）、模式切换、模式配置启动程序、出现问题 |
 
+</details>
+
 ## 支持的硬件
 
-DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔记本都能用。目前已经实测过的：
+所有核心功能——模式识别、电源计划、游戏模式外接显卡降频修复、Xbox 全屏体验以及启动程序——均基于标准 Windows API，适用于所有 Windows 掌机（如 ROG Ally / Ally X、Legion Go、MSI Claw、Ayaneo、GPD、OneXPlayer）和笔记本。仅可选的**核显显存**设置为 ASUS 掌机专属（通过 `ATKACPI` 固件接口）。
+
+目前已经实测过的设备：
 
 | 设备 | 外接显卡 / 底座 | 状态 |
 |---|---|---|
@@ -224,7 +221,7 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 <details>
 <summary><b>DockSense 会和 Armoury Crate / Legion Space 等厂商软件冲突吗？</b></summary>
 
-只在你选择了具体计划的模式下才会接管，而且有限度：如果有程序在 2 分钟内切换计划超过 5 次，DockSense 会停止自动切回，直到下次模式切换，并提醒你。厂商的 TDP 设置（例如 Armoury Crate 的 35W Turbo）和 Windows 电源计划是两回事，会照常生效。
+只在你选择了具体计划的模式下才会接管，而且有限度：如果有程序在 2 分钟内切换计划超过 5 次，DockSense 会停止自动切回，直到下次模式切换，并提醒你。厂商的 TDP 设置（例如 Armoury Crate 的 35 W Turbo）和 Windows 电源计划是两回事，会照常生效。
 </details>
 
 <details>
@@ -249,7 +246,7 @@ DockSense 只使用标准的 Windows API，理论上任何 Windows 掌机或笔�
 
 Windows 只在外壳启动时决定一次是否进入全屏体验，依据的是 DockSense 为上一次所在模式保存的设置。DockSense 会抢在外壳之前启动，并按电脑现在所在的模式改正这项设置。如果 Windows 还是先读到了旧设置，只要该模式的配置开启了**立即切换**，DockSense 会在登录后约 20 秒切换过来。这需要打开 **开机自启**。
 
-如果你已经知道接下来要用哪个模式，托盘菜单里的 **重启到掌机模式**（或底座、eGPU）会在重启前先保存该模式的设置。
+如果你已经知道接下来要用哪个模式，托盘菜单里的 **重启到掌机模式**（或底座、外接显卡）会在重启前先保存该模式的设置。
 </details>
 
 <details>
@@ -303,7 +300,8 @@ dotnet run --project src/DockSense.App
 
 图标是用文本画出来的。要修改图标，编辑 `tools/DockSense.IconGen/Sprites.cs`，然后运行 `dotnet run --project tools/DockSense.IconGen -- assets`。
 
-### 发布流程
+<details>
+<summary><b>发布流程（维护者）</b></summary>
 
 发布是自动的，但必须**同时满足三个条件**：
 
@@ -312,6 +310,8 @@ dotnet run --project src/DockSense.App
 3. 这个 PR 带有 **`release`** 标签。
 
 满足条件后，GitHub Actions 会从分支名读取版本号，运行测试，编译 x64 和 ARM64 的单文件程序（自带运行时），给合并提交打上 `v<版本号>` 标签，并发布 Release。Release 说明取自 [CHANGELOG.md](CHANGELOG.md) 中该版本的章节，后面附上 GitHub 自动生成的已合并 PR 列表。如果发布 PR 的版本在 CHANGELOG 中没有对应章节，CI 会失败。其他推送和 PR 只会运行 CI（编译 + 测试）。
+
+</details>
 
 ## 参与贡献
 
