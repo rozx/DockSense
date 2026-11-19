@@ -62,6 +62,18 @@ public static class StartupEntry
     }
 
     /// <summary>
+    /// Whether the sign-in task (<see cref="LogonTaskDefinition"/>) may start DockSense. The task only makes a start
+    /// that Windows would make anyway happen sooner: the Run entry and Windows' own switches for it stay in charge.
+    /// So not when the entry is off, switched off in Windows or for another copy, and not when Windows was told to
+    /// hold DockSense back until the desktop in Xbox mode.
+    /// </summary>
+    public static bool AllowsLogonTask(StartupStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        return status is { State: StartupState.On, WaitsForDesktop: false };
+    }
+
+    /// <summary>
     /// Windows marks a disabled entry with an odd first byte (3 in older builds, 1 in current ones; 2 and 0 mean
     /// enabled). No value at all means the entry was never switched, which is enabled.
     /// </summary>

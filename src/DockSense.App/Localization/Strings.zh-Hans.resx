@@ -275,6 +275,7 @@
   <data name="Set_StartupDisabledByWindows" xml:space="preserve"><value>Windows 已将此项关闭（任务管理器，或 Windows 设置 → 应用 → 启动）。在这里打开即可重新启用。</value></data>
   <data name="Set_StartupOtherCopy" xml:space="preserve"><value>Windows 启动的是另一份 DockSense：{0}。在这里打开，即可改为启动当前这一份。</value></data>
   <data name="Set_StartupWaitsForDesktop" xml:space="preserve"><value>开机直接进入全屏体验时，DockSense 要等你切换到桌面后才会启动。把此项关闭再打开，即可改为登录时启动。</value></data>
+  <data name="Set_StartupLate" xml:space="preserve"><value>用于在登录时立即启动 DockSense 的计划任务不存在或已被禁用，因此 Windows 会把它和其他自启动程序一起启动，可能要等到登录后一分钟甚至更久。把此项关闭再打开，即可重新注册该任务。</value></data>
   <!-- v0.3: updates -->
   <data name="Set_Updates" xml:space="preserve"><value>更新</value></data>
   <data name="Set_UpdateMode" xml:space="preserve"><value>新版本</value></data>

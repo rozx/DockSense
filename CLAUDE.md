@@ -56,6 +56,22 @@ Details and raw data: `docs/game-mode-throttle.md`.
     means disabled: this build writes `01` + a FILETIME for off and all zeros for on, older builds `03` / `02`. No
     value means enabled. `StartupEntry` (Core) combines the Run value, this switch and the FSE value; the Settings
     switch shows the result and a note explains a mismatch.
+- **Sign-in timing** (event logs, 2026-11-18): Windows runs the HKCU Run key late. FSE boot: sign-in 19:47:54.7,
+  shell logon tasks 19:47:58, Run key 19:48:31 (33 s after the shell). Desktop boot: sign-in 19:51:30, logon-triggered
+  tasks of other apps 19:51:31.9, `explorer.exe` 19:51:36.3, Run key entry for DockSense 19:52:53 (83 s). So a task
+  with a logon trigger runs ~4 s before the shell. Windows reads `StartupToGamingHome` once at shell start: with the
+  old late start, a PC shut down as a handheld and switched on at the eGPU booted into FSE and DockSense left it 50 s
+  after sign-in. From 0.3.3 a per-user logon task (`DockSense-<SID>` in the task root, the same shape as OneDrive's
+  per-user task, no admin) starts DockSense, and `SignInFastPath` writes the value before any UI loads (114–227 ms
+  after process start in a Debug build). **Not yet measured**: whether that write beats the shell's read at a real
+  sign-in; the log line `Sign-in start in <mode> mode: ...` carries both times. Sign-in time comes from
+  `WTSQuerySessionInformation(WTSSessionInfo)`, `LogonTime` at offset 200 of `WTSINFOW`.
+  - Before the shell is up, `Shell_NotifyIcon` fails and H.NotifyIcon's `Create` throws `InvalidOperationException`
+    ("TryCreate failed."); it can be called again. `TrayIconService` retries every 2 s. Test without a reboot by
+    starting DockSense on a new desktop (`CreateDesktop` + `STARTUPINFO.lpDesktop`), which has no taskbar.
+  - Task defaults that would hurt: no start on battery, a 72 h execution limit, priority 7 (below normal, inherited by
+    the programs a profile starts). `LogonTaskDefinition` sets all three. `ITaskService.NewTask(0).XmlText = xml`
+    validates task XML without registering anything.
 - **iGPU memory (UMA frame buffer)**: `\\.\ATKACPI` opens without admin. `DeviceIoControl(0x0022240C)`, DSTS `0x53545344` /
   DEVS `0x53564544`, device `0x000600C4` (VRAM_MEM). On RC74XA BIOS 303 the reply status is `0x00030012`: 512 MB units,
   Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
@@ -70,14 +86,17 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld) and `ModeStabilizer` (debounce)
   - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
   - `FsePlanner` (live FSE target for a transition: the entered mode's `FseApplyImmediately` wins, then the left
-    mode's `FseExitOnLeave`), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
+    mode's `FseExitOnLeave`; `StartupDelay`: at its own start DockSense switches FSE live no sooner than 20 s after
+    sign-in), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply), `IgpuRestartPlanner` (the other modes
     whose iGPU memory size differs from the one in effect: the tray offers "Restart for `<mode>`" for them, which
-    stores that size first so one restart is enough)
+    stores that size and the mode's FSE sign-in setting first so one restart is enough)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
   - `StartupEntry`: whether the Run entry really starts this copy (on / off / disabled by Windows / another copy,
-    and "waits for the desktop" in Xbox mode).
+    and "waits for the desktop" in Xbox mode). `AllowsLogonTask`: the sign-in task may only start DockSense when
+    the entry is on and not held back, so Windows' switches stay in charge.
+  - `LogonTaskDefinition`: the sign-in task's name, XML, and reading back what a registered task starts.
   - `Updates.cs`: `UpdateMode` (Off / Notify / Automatic, config key `updates`), `ReleaseVersion` (0.2 equals 0.2.0),
     `ReleaseFeed` (parses GitHub's latest-release JSON) and `UpdatePlanner` (is it newer, which asset, which URLs are
     trusted, when the daily check is due).
@@ -87,7 +106,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
     AC/DC, resume, `GUID_ACTIVE_POWERSCHEME`). Windows also broadcasts volume arrivals and removals (USB drives,
     memory cards) to every top-level window, so `WM_DEVICECHANGE` is filtered by device type and interface class.
     Also FSE registry, `FullScreenExperience` (live API), `AsusAcpi`,
-    `ProgramLauncher`, AutoStart (HKCU Run, the FSE "Start at log in" value, and the startup status), GameModeDiagnostics.
+    `ProgramLauncher`, AutoStart (HKCU Run, the FSE "Start at log in" value, the sign-in task and the startup status),
+    `LogonTaskRegistration` (Task Scheduler through late-bound COM), `DeviceProbe` (the hardware snapshot, no WPF),
+    `SignInSession` (sign-in time), GameModeDiagnostics.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.
@@ -103,6 +124,15 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `Localization/`: `Strings.resx` and `Strings.zh-Hans.resx`, `Loc` with live switching, and XAML `{loc:T Key}`.
   - Custom `Program.Main` (App.xaml is a Page): single instance via mutex, plus a named event that makes a second
     launch show the window. `--probe <file>` writes a read-only report.
+  - **Sign-in start**: the Run entry passes `--autostart`, the sign-in task `--autostart --logon-task`. Both fire at
+    sign-in; the second one finds the mutex and exits without showing the window. A task start first asks
+    `AutoStart.AllowsLogonTaskStart` (exit when Windows would not start the Run entry; a task without a Run entry
+    for this copy is removed). Then `SignInFastPath.Run` writes the mode's `StartupToGamingHome` before anything
+    else is loaded. Keep that path free of WPF and of anything slow. Whatever needs the shell waits until
+    20 s after sign-in: startup programs and toasts through `SignInSession.ShellWait` (no wait when the sign-in time
+    is unknown), the live FSE switch through `FsePlanner.StartupDelay` (10 s when it is unknown, as before 0.3.3). The Run entry stays as the setting and the
+    fallback: Settings > Apps > Startup and Task Manager keep working, and DockSense still starts if the task fails.
+    Development builds never register the task unless "Start with Windows" is turned on in them.
   - **Updates** (`Services/UpdateService`, `Platform/UpdateInstaller`, state in `%LOCALAPPDATA%\DockSense\update.json`
     and `updates\`): daily query of the GitHub latest release, download of the `-win-<arch>.zip` asset, size and
     SHA-256 check against the digest GitHub publishes, extraction of `DockSense.exe` into `updates\`.

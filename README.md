@@ -70,6 +70,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - 🛡️ **Keeps the plan you chose.** If vendor software (e.g. Armoury Crate) switches the plan back, DockSense re-applies it, and it backs off if something keeps fighting.
 - 🛠️ **Power plan editor.** Create plans from any existing plan, edit the settings that matter on a handheld (processor state, EPP, boost mode, max frequency, core preference, display and sleep timeouts) for plugged-in and on-battery use, and rename or delete plans. Hidden High Performance-type plans are listed too.
 - 🎮 **Xbox full screen experience per mode.** For example, use the full screen experience as a handheld and the desktop when docked. DockSense can switch it **right away** when the mode changes, not only at the next sign-in.
+- ⏱️ **Starts right at sign-in.** A sign-in task starts DockSense about two seconds after you sign in, well before Windows gets to its startup apps. If you docked or undocked while the PC was off, the new mode's power plan and full screen experience setting are in place as Windows starts.
 - 🚀 **Run programs on mode changes.** Start a program, script or URL when a mode begins or ends (or when DockSense starts in it), with arguments, a hidden window or administrator rights.
 - 🧠 **iGPU memory per mode** (ASUS handhelds such as the ROG Xbox Ally X). For example, give the built-in GPU 8 GB as a handheld and the minimum with an eGPU, so games get that RAM back. The firmware applies it at the next restart, and DockSense tells you when one is needed. **Restart for Handheld** in the tray menu stores the next mode's size first, so one restart is enough.
 - 🔔 **Native Windows notifications** when the mode changes (showing the detected GPU and the plan that was applied), when a profile starts a program, and when you start DockSense yourself, so you know it is running in the background.
@@ -139,7 +140,7 @@ Some details:
 
 1. Download `DockSense-<version>-win-x64.zip` from the **[latest release](https://github.com/rozx/DockSense/releases/latest)**.
 2. Extract it anywhere, for example `%LOCALAPPDATA%\Programs\DockSense`, and run **DockSense.exe**.
-3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in. This also covers booting straight into the Xbox full screen experience, where Windows normally holds startup apps back until you switch to the desktop.
+3. On first launch the window opens. Afterwards DockSense starts quietly in the tray. Turn on **Settings → Start with Windows** to launch it when you sign in. DockSense then starts right at sign-in, through a sign-in task it registers for your account, instead of waiting for Windows to get to its startup apps. This also covers booting straight into the Xbox full screen experience, where Windows normally holds startup apps back until you switch to the desktop.
 4. From version 0.3 on, DockSense tells you when a new version is out and can install it for you (**Settings → Updates**). Coming from 0.2.1 or older, replace `DockSense.exe` by hand this one time.
 
 > [!NOTE]
@@ -232,6 +233,15 @@ Open **Settings**: the switch shows what really happens at sign-in, and a note u
 - **Windows switched it off.** Task Manager and Windows Settings → Apps → Startup can disable a startup app without DockSense being asked. The switch then shows off; turn it on in DockSense to enable it again.
 - **Another copy starts.** If you moved DockSense, the startup entry still points at the old place. Turn the switch on in the copy you want.
 - **Windows waits for the desktop.** When Windows boots into the Xbox full screen experience, it holds startup apps back until you first switch to the desktop, unless the app is set to *Start at log in*. DockSense sets that for itself. If it was changed, turn the switch off and on again.
+- **It starts, but late.** DockSense normally starts about two seconds after sign-in, from a task named `DockSense-<your user ID>` in Task Scheduler. Windows' own startup entry is the fallback, and Windows only runs it half a minute to more than a minute after sign-in. If the task is missing or disabled, Settings says so; turn the switch off and on again to register it.
+</details>
+
+<details>
+<summary><b>I switched the PC on docked, and it still came up in the full screen experience (or the other way round).</b></summary>
+
+Windows decides whether to boot into the full screen experience once, when its shell starts, from the setting DockSense stored for the mode you were in last. DockSense starts ahead of the shell and corrects the setting for the mode the PC is in now. If Windows read it first anyway, DockSense switches about 20 seconds after sign-in, provided the mode's profile has **switch immediately** on. This needs **Start with Windows** to be on.
+
+If you know which mode comes next, **Restart for Handheld** (or Docked, or eGPU) in the tray menu stores that mode's setting before the restart.
 </details>
 
 <details>
@@ -254,7 +264,7 @@ The builds are not code-signed yet, so the checksum shows that the download is t
 <summary><b>How do I uninstall DockSense completely?</b></summary>
 
 1. Optionally delete the DockSense Performance plan on the **Power plans** page while it isn't active (Windows can't delete the active plan). `powercfg /delete <guid>` works too; the GUID is `dockSensePerformancePlanId` in `config.json`.
-2. Turn off **Start with Windows**, then exit from the tray.
+2. Turn off **Start with Windows** (this also removes the sign-in task), then exit from the tray.
 3. Delete the DockSense folder, plus `%APPDATA%\DockSense` and `%LOCALAPPDATA%\DockSense`.
 </details>
 

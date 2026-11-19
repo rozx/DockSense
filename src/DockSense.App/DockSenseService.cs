@@ -22,7 +22,8 @@ public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string?
 public sealed record ProgramStarted(string Name, DockMode Mode, ProgramTrigger Trigger, bool AtStartup);
 
 /// <summary>Programs to start for one profile application, with the transition that caused it.</summary>
-internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs);
+/// <param name="Wait">How long to hold the batch back before its first program (see <see cref="SignInSession.ShellWait"/>).</param>
+internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs, TimeSpan Wait);
 
 /// <summary>Why a mode's profile is being applied.</summary>
 internal enum ApplyReason
@@ -41,9 +42,6 @@ public sealed class DockSenseService : IDisposable
 {
     private const int MaxActivity = 50;
     private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(1500);
-
-    /// <summary>At sign-in the shell may still be starting FSE; wait before checking and switching it.</summary>
-    private static readonly TimeSpan StartupFseDelay = TimeSpan.FromSeconds(10);
 
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -113,7 +111,7 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>
     /// The other modes it is worth restarting for: their iGPU memory size differs from the one in effect, so storing
-    /// it before the restart saves the restart that would follow the mode change (<see cref="PrepareIgpuRestart"/>).
+    /// it before the restart saves the restart that would follow the mode change (<see cref="PrepareRestart"/>).
     /// </summary>
     public IReadOnlyList<IgpuRestartOption> IgpuRestartOptions => IgpuMemory is { } options && _igpuBoot is { } boot
         ? IgpuRestartPlanner.Options(Config, Mode, options, boot.EffectiveRaw)
@@ -473,7 +471,10 @@ public sealed class DockSenseService : IDisposable
         if (profile.Fse != FseStartup.Unchanged)
         {
             var wantFse = profile.Fse == FseStartup.FullScreenExperience;
-            if (FseSettings.IsAvailable && FseSettings.SetStartupToFse(wantFse))
+
+            // At sign-in the value may already have been written before the UI loaded; that still counts as a change.
+            var changedEarly = reason == ApplyReason.Startup && SignInFastPath.TakeFseChange(wantFse);
+            if (FseSettings.IsAvailable && (FseSettings.SetStartupToFse(wantFse) || changedEarly))
             {
                 Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
                 AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
@@ -485,7 +486,10 @@ public sealed class DockSenseService : IDisposable
         if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
         {
             _fseTransition = (_lastApplied, mode);
-            _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
+
+            // Right after sign-in the shell is still starting (and entering the full screen experience when Windows
+            // boots into it): look at the live state only once it has settled.
+            _ = SwitchFseAsync(reason == ApplyReason.Startup ? FsePlanner.StartupDelay(SignInSession.SinceSignIn) : TimeSpan.Zero);
         }
     }
 
@@ -627,10 +631,11 @@ public sealed class DockSenseService : IDisposable
     /// <summary>
     /// Stores <paramref name="mode"/>'s iGPU memory size in the firmware now, while the device is still in another
     /// mode, so that it is in effect after the restart the caller starts next. Returns false when the size could
-    /// not be stored. If the device comes back up in the old mode after all, the startup apply puts that mode's
-    /// size back, as after any other change.
+    /// not be stored. That mode's "full screen experience at sign-in" setting goes in as well, so Windows comes
+    /// back up the way the mode wants it. If the device comes back up in the old mode after all, the startup apply
+    /// puts that mode's settings back, as after any other change.
     /// </summary>
-    public bool PrepareIgpuRestart(DockMode mode)
+    public bool PrepareRestart(DockMode mode)
     {
         if (Config.ProfileFor(mode).IgpuMemoryMb is not { } target || IgpuMemory is null)
         {
@@ -654,6 +659,16 @@ public sealed class DockSenseService : IDisposable
         if (!stored)
         {
             NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
+        }
+        else if (Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
+        {
+            // Windows reads this when the shell starts after the restart; DockSense itself may be up too late.
+            var wantFse = fse == FseStartup.FullScreenExperience;
+            if (FseSettings.SetStartupToFse(wantFse))
+            {
+                Log.Info($"Restart for {mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
+                AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            }
         }
 
         RaiseStatusChanged();
@@ -739,7 +754,10 @@ public sealed class DockSenseService : IDisposable
         var programs = ProgramPlanner.Select(Config, _lastApplied, mode, atStartup);
         if (programs.Count > 0)
         {
-            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs));
+            // Started by the sign-in task, DockSense is up before the Windows shell. Programs wait for the desktop,
+            // as Windows' own startup apps do; the wait sits in the queue so later batches keep their order.
+            var wait = atStartup ? SignInSession.ShellWait : TimeSpan.Zero;
+            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs, wait));
             if (!_programsRunning)
             {
                 _ = RunProgramBatchesAsync();
@@ -759,6 +777,12 @@ public sealed class DockSenseService : IDisposable
         {
             while (_programBatches.TryDequeue(out var batch))
             {
+                if (batch.Wait > TimeSpan.Zero)
+                {
+                    Log.Info($"Programs for {batch.Current} wait {batch.Wait.TotalSeconds:F0} s for the Windows shell.");
+                    await Task.Delay(batch.Wait);
+                }
+
                 foreach (var program in batch.Programs)
                 {
                     var name = ProgramLauncher.DisplayName(program);
@@ -875,10 +899,7 @@ public sealed class DockSenseService : IDisposable
     {
         try
         {
-            return new DeviceSnapshot(
-                GpuProbe.GetWorkingAdapters(),
-                DisplayProbe.GetActiveDisplays(),
-                SystemParameters.PowerLineStatus == PowerLineStatus.Online);
+            return DeviceProbe.TakeSnapshot();
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {

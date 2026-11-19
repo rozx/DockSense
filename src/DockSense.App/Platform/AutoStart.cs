@@ -12,11 +12,20 @@ namespace DockSense.App.Platform;
 /// at log in". DockSense sets that for its own entry, because the Handheld profile is the one that boots into the
 /// full screen experience.
 /// </para>
+/// <para>
+/// Windows runs the Run key late (half a minute to well over a minute after sign-in), so the setting also registers
+/// a sign-in task (<see cref="LogonTaskDefinition"/>) that starts DockSense about two seconds after sign-in. The Run
+/// entry stays the setting itself and the fallback: the task only starts DockSense while Windows would start it from
+/// the Run entry too (<see cref="AllowsLogonTaskStart"/>), and whichever of the two comes second exits silently.
+/// </para>
 /// </summary>
 internal static class AutoStart
 {
-    /// <summary>Passed by the Run key, so DockSense can tell sign-in starts from starts by the user.</summary>
+    /// <summary>Passed by the Run key and the sign-in task, so DockSense can tell sign-in starts from starts by the user.</summary>
     public const string Argument = "--autostart";
+
+    /// <summary>Passed by the sign-in task in addition to <see cref="Argument"/>.</summary>
+    public const string TaskArgument = "--logon-task";
 
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -30,34 +39,146 @@ internal static class AutoStart
     private static string LegacyCommand => $"\"{Environment.ProcessPath}\"";
 
     /// <summary>What really happens at sign-in. Never throws: an unreadable registry counts as off.</summary>
-    public static StartupStatus Status
+    public static StartupStatus Status => ReadStatus() ?? new StartupStatus(StartupState.Off);
+
+    /// <summary>
+    /// <see cref="Status"/>, or null when the registry could not be read. For callers that act on "off" (removing
+    /// the sign-in task): a failed read says nothing about the setting.
+    /// </summary>
+    private static StartupStatus? ReadStatus()
     {
-        get
+        try
         {
-            try
-            {
-                using var run = Registry.CurrentUser.OpenSubKey(RunKey);
-                using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
-                using var gaming = Registry.CurrentUser.OpenSubKey(GamingKey);
-                using var xboxMode = gaming?.OpenSubKey(XboxModeRunSubKey);
-                return StartupEntry.Evaluate(
-                    run?.GetValue(ValueName) as string,
-                    [Command, LegacyCommand],
-                    approved?.GetValue(ValueName) as byte[],
-                    xboxMode?.GetValue(ValueName) as int?,
-                    // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
-                    xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
-            }
-            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-            {
-                Log.Warn($"Could not read the Start with Windows entry: {ex.Message}");
-                return new StartupStatus(StartupState.Off);
-            }
+            using var run = Registry.CurrentUser.OpenSubKey(RunKey);
+            using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
+            using var gaming = Registry.CurrentUser.OpenSubKey(GamingKey);
+            using var xboxMode = gaming?.OpenSubKey(XboxModeRunSubKey);
+            return StartupEntry.Evaluate(
+                run?.GetValue(ValueName) as string,
+                [Command, LegacyCommand],
+                approved?.GetValue(ValueName) as byte[],
+                xboxMode?.GetValue(ValueName) as int?,
+                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
+                xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warn($"Could not read the Start with Windows entry: {ex.Message}");
+            return null;
         }
     }
 
     /// <summary>True when this copy of DockSense starts at sign-in.</summary>
     public static bool IsEnabled => Status.State == StartupState.On;
+
+    private static string ExecutablePath => Environment.ProcessPath ?? string.Empty;
+
+    private static string TaskArguments => $"{Argument} {TaskArgument}";
+
+    // Asking Task Scheduler takes a COM round trip and the settings page refreshes often, so the answer is kept.
+    // DockSense is the only one expected to change the task; a change made in Task Scheduler shows after a restart.
+    private static LogonTaskInfo? _logonTask;
+    private static bool _logonTaskRead;
+
+    private static LogonTaskInfo? LogonTask
+    {
+        get
+        {
+            if (!_logonTaskRead)
+            {
+                _logonTask = LogonTaskRegistration.Read();
+                _logonTaskRead = true;
+            }
+
+            return _logonTask;
+        }
+    }
+
+    /// <summary>
+    /// True when Start with Windows is on but DockSense only starts when Windows gets to its Run key, because the
+    /// sign-in task is missing, disabled or for another copy.
+    /// </summary>
+    public static bool StartsLate(StartupStatus status) =>
+        StartupEntry.AllowsLogonTask(status)
+        && !(LogonTask is { Enabled: true } task && LogonTaskDefinition.Starts(task, ExecutablePath, TaskArguments));
+
+    /// <summary>The sign-in task in words, for the diagnostic report.</summary>
+    public static string DescribeLogonTask() => LogonTask switch
+    {
+        null => "none",
+        { } task when !LogonTaskDefinition.Starts(task, ExecutablePath, TaskArguments) => $"starts something else: {task.Command} {task.Arguments}",
+        { Enabled: false } => "registered for this copy, but disabled in Task Scheduler",
+        _ => "registered for this copy",
+    };
+
+    /// <summary>
+    /// Called when the sign-in task started this process. False means: exit, Windows would not start DockSense now
+    /// (Start with Windows was switched off in Windows, or DockSense is to wait for the desktop in Xbox mode). A
+    /// task left behind without a Run entry for this copy is removed; nothing is removed when the setting could
+    /// not be read.
+    /// </summary>
+    public static bool AllowsLogonTaskStart()
+    {
+        if (ReadStatus() is not { } status)
+        {
+            // Unknown, so no early start and no cleanup: if the entry is on, Windows starts DockSense later.
+            Log.Info("The sign-in task started DockSense, but the Start with Windows setting could not be read; leaving the start to Windows.");
+            return false;
+        }
+
+        if (StartupEntry.AllowsLogonTask(status))
+        {
+            return true;
+        }
+
+        switch (status.State)
+        {
+            case StartupState.Off:
+            case StartupState.OtherCopy:
+                Log.Info($"The sign-in task started DockSense, but Start with Windows is {(status.State == StartupState.Off ? "off" : "set for another copy")}; removing the task.");
+                RemoveLogonTask();
+                break;
+
+            case StartupState.DisabledByWindows:
+                // The task stays: switching the entry back on in Windows brings the early start back with it.
+                Log.Info("The sign-in task started DockSense, but Start with Windows is switched off in Windows (Task Manager or Settings > Apps > Startup); not starting.");
+                break;
+
+            default:
+                Log.Info("The sign-in task started DockSense, but Windows holds its startup entry back until the desktop in Xbox mode; leaving the start to Windows.");
+                break;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Registers the sign-in task when Start with Windows is on and no task starts this copy yet: for entries made
+    /// by older versions, and after DockSense was moved. A task the user disabled in Task Scheduler is left alone.
+    /// </summary>
+    public static void EnsureLogonTask()
+    {
+        if (StartupEntry.AllowsLogonTask(Status) && !LogonTaskDefinition.Starts(LogonTask, ExecutablePath, TaskArguments))
+        {
+            RegisterLogonTask();
+        }
+    }
+
+    private static void RegisterLogonTask()
+    {
+        if (LogonTaskRegistration.Register(ExecutablePath, TaskArguments))
+        {
+            Log.Info("Start with Windows: registered the sign-in task, so DockSense starts right at sign-in.");
+        }
+
+        _logonTaskRead = false;
+    }
+
+    private static void RemoveLogonTask()
+    {
+        LogonTaskRegistration.Remove();
+        _logonTaskRead = false;
+    }
 
     public static void SetEnabled(bool enabled)
     {
@@ -88,6 +209,24 @@ internal static class AutoStart
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
             Log.Warn($"Could not update the Windows startup settings for DockSense: {ex.Message}");
+        }
+
+        // After the registry: the task is only wanted when Windows starts the Run entry at sign-in. When that
+        // cannot be read back, the task is left as it is.
+        if (!enabled)
+        {
+            RemoveLogonTask();
+        }
+        else if (ReadStatus() is { } status)
+        {
+            if (StartupEntry.AllowsLogonTask(status))
+            {
+                RegisterLogonTask();
+            }
+            else
+            {
+                RemoveLogonTask();
+            }
         }
     }
 

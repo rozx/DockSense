@@ -34,10 +34,7 @@ internal static class ProbeReport
             text.AppendLine($"    {display.Id}");
         }
 
-        var snapshot = new DeviceSnapshot(
-            GpuProbe.GetWorkingAdapters(),
-            DisplayProbe.GetActiveDisplays(),
-            System.Windows.SystemParameters.PowerLineStatus == System.Windows.PowerLineStatus.Online);
+        var snapshot = DeviceProbe.TakeSnapshot();
 
         text.AppendLine();
         text.AppendLine($"AC power:            {snapshot.OnAcPower}");
@@ -82,6 +79,8 @@ internal static class ProbeReport
             StartupState.OtherCopy => $"another copy: {startup.OtherCommand}",
             _ => "off",
         }}");
+        text.AppendLine($"Sign-in task:        {AutoStart.DescribeLogonTask()}{(AutoStart.StartsLate(startup) ? " (DockSense starts late, from the Run key)" : string.Empty)}");
+        text.AppendLine($"Signed in:           {(SignInSession.SignInTimeUtc is { } signIn ? signIn.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "unknown")}");
         text.AppendLine($"Updates:             {config.Updates}; install folder writable without admin: {UpdateInstaller.CanWriteInstallFolder()}; self-updating build: {UpdateInstaller.CanSelfUpdate}");
 
         var gameMode = GameModeDiagnostics.Read();
