@@ -20,6 +20,7 @@ public sealed class TrayIconService : IDisposable
     // "Restart for <mode>": one item per mode, shown only while restarting for that mode is worth it.
     private readonly Dictionary<DockMode, MenuItem> _restartItems = Enum.GetValues<DockMode>().ToDictionary(mode => mode, _ => new MenuItem());
     private readonly Separator _restartSeparator = new();
+    private readonly System.Windows.Threading.DispatcherTimer _createTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private string? _currentIconName;
 
     /// <param name="restartFor">Called when the user picks "Restart for &lt;mode&gt;".</param>
@@ -48,14 +49,48 @@ public sealed class TrayIconService : IDisposable
             NoLeftClickDelay = true,
         };
         _icon.TrayLeftMouseUp += (_, _) => openWindow();
-        _icon.ForceCreate(enablesEfficiencyMode: false);
+        _createTimer.Tick += (_, _) => CreateIcon();
+        CreateIcon();
 
         _service.StatusChanged += (_, _) => Update();
         Loc.Instance.PropertyChanged += (_, _) => Update();
         Update();
     }
 
-    public void Dispose() => _icon.Dispose();
+    public void Dispose()
+    {
+        _createTimer.Stop();
+        _icon.Dispose();
+    }
+
+    /// <summary>
+    /// Adds the icon to the notification area. Started by the sign-in task, DockSense is up before the shell, and
+    /// Windows refuses the icon until the taskbar exists: keep trying until it does. The icon and tooltip set
+    /// meanwhile are kept and used when it is created.
+    /// </summary>
+    private void CreateIcon()
+    {
+        try
+        {
+            _icon.ForceCreate(enablesEfficiencyMode: false);
+        }
+        catch (InvalidOperationException)
+        {
+            if (!_createTimer.IsEnabled)
+            {
+                Log.Info("The notification area is not there yet; the tray icon follows once the shell has started.");
+                _createTimer.Start();
+            }
+
+            return;
+        }
+
+        if (_createTimer.IsEnabled)
+        {
+            _createTimer.Stop();
+            Log.Info("Tray icon created.");
+        }
+    }
 
     private void Update()
     {

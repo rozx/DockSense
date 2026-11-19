@@ -13,7 +13,7 @@ public partial class App : Application
     private const string ShowArgument = "--show";
 
     /// <summary>Start with automatic switching paused (passed on when DockSense restarts itself while paused).</summary>
-    private const string PausedArgument = "--paused";
+    internal const string PausedArgument = "--paused";
 
     private readonly EventWaitHandle? _showSignal;
     private TrayIconService? _tray;
@@ -199,6 +199,7 @@ public partial class App : Application
         ClearStaleRestartToast();
         AutoStart.UpgradeLegacyEntry();
         AutoStart.EnsureStartsInXboxMode();
+        AutoStart.EnsureLogonTask();
 
         Updates = new UpdateService(Service, RelaunchArguments, Quit);
         Updates.UpdateFound += offer => Toasts.ShowUpdateAvailable(ReleaseVersion.Format(offer.Version), Updates.InstallsWithoutAsking);

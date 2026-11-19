@@ -152,7 +152,7 @@ public sealed partial class MainViewModel : ObservableObject
         var name = DockSenseService.ModeName(mode);
         var message = Loc.F("RestartFor_Message", name, DockSenseService.FormatMemory(option.MemoryMb));
         if (!await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
-            || !_service.PrepareIgpuRestart(mode))
+            || !_service.PrepareRestart(mode))
         {
             return;
         }
@@ -523,6 +523,7 @@ public sealed partial class MainViewModel : ObservableObject
             { State: StartupState.DisabledByWindows } => Loc.T("Set_StartupDisabledByWindows"),
             { State: StartupState.OtherCopy } => Loc.F("Set_StartupOtherCopy", status.OtherCommand),
             { WaitsForDesktop: true } => Loc.T("Set_StartupWaitsForDesktop"),
+            _ when AutoStart.StartsLate(status) => Loc.T("Set_StartupLate"),
             _ => string.Empty,
         };
         StartupNoteVisible = StartupNote.Length > 0;

@@ -67,6 +67,18 @@ public sealed class StartupEntryTests
     }
 
     [Fact]
+    public void The_sign_in_task_only_starts_what_windows_would_start_at_sign_in()
+    {
+        Assert.True(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate(Command, Expected, null, 1, xboxModeAvailable: true)));
+        Assert.True(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate(Command, Expected, EnabledNow, null, xboxModeAvailable: false)));
+
+        Assert.False(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate(null, Expected, null, 1, true))); // off
+        Assert.False(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate(Command, Expected, DisabledNow, 1, true))); // off in Windows
+        Assert.False(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate("\"D:\\Old\\DockSense.exe\"", Expected, null, 1, true))); // another copy
+        Assert.False(StartupEntry.AllowsLogonTask(StartupEntry.Evaluate(Command, Expected, null, 0, true))); // waits for the desktop
+    }
+
+    [Fact]
     public void Disabled_is_an_odd_first_byte()
     {
         Assert.False(StartupEntry.IsDisabledByWindows(null));

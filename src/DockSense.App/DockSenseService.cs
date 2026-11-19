@@ -42,9 +42,6 @@ public sealed class DockSenseService : IDisposable
     private const int MaxActivity = 50;
     private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(1500);
 
-    /// <summary>At sign-in the shell may still be starting FSE; wait before checking and switching it.</summary>
-    private static readonly TimeSpan StartupFseDelay = TimeSpan.FromSeconds(10);
-
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
@@ -113,7 +110,7 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>
     /// The other modes it is worth restarting for: their iGPU memory size differs from the one in effect, so storing
-    /// it before the restart saves the restart that would follow the mode change (<see cref="PrepareIgpuRestart"/>).
+    /// it before the restart saves the restart that would follow the mode change (<see cref="PrepareRestart"/>).
     /// </summary>
     public IReadOnlyList<IgpuRestartOption> IgpuRestartOptions => IgpuMemory is { } options && _igpuBoot is { } boot
         ? IgpuRestartPlanner.Options(Config, Mode, options, boot.EffectiveRaw)
@@ -473,7 +470,10 @@ public sealed class DockSenseService : IDisposable
         if (profile.Fse != FseStartup.Unchanged)
         {
             var wantFse = profile.Fse == FseStartup.FullScreenExperience;
-            if (FseSettings.IsAvailable && FseSettings.SetStartupToFse(wantFse))
+
+            // At sign-in the value may already have been written before the UI loaded; that still counts as a change.
+            var changedEarly = reason == ApplyReason.Startup && SignInFastPath.TakeFseChange(wantFse);
+            if (FseSettings.IsAvailable && (FseSettings.SetStartupToFse(wantFse) || changedEarly))
             {
                 Log.Info($"{mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
                 AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
@@ -485,7 +485,10 @@ public sealed class DockSenseService : IDisposable
         if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
         {
             _fseTransition = (_lastApplied, mode);
-            _ = SwitchFseAsync(reason == ApplyReason.Startup ? StartupFseDelay : TimeSpan.Zero);
+
+            // Right after sign-in the shell is still starting (and entering the full screen experience when Windows
+            // boots into it): look at the live state only once it has settled.
+            _ = SwitchFseAsync(reason == ApplyReason.Startup ? FsePlanner.StartupDelay(SignInSession.SinceSignIn) : TimeSpan.Zero);
         }
     }
 
@@ -627,10 +630,11 @@ public sealed class DockSenseService : IDisposable
     /// <summary>
     /// Stores <paramref name="mode"/>'s iGPU memory size in the firmware now, while the device is still in another
     /// mode, so that it is in effect after the restart the caller starts next. Returns false when the size could
-    /// not be stored. If the device comes back up in the old mode after all, the startup apply puts that mode's
-    /// size back, as after any other change.
+    /// not be stored. That mode's "full screen experience at sign-in" setting goes in as well, so Windows comes
+    /// back up the way the mode wants it. If the device comes back up in the old mode after all, the startup apply
+    /// puts that mode's settings back, as after any other change.
     /// </summary>
-    public bool PrepareIgpuRestart(DockMode mode)
+    public bool PrepareRestart(DockMode mode)
     {
         if (Config.ProfileFor(mode).IgpuMemoryMb is not { } target || IgpuMemory is null)
         {
@@ -654,6 +658,16 @@ public sealed class DockSenseService : IDisposable
         if (!stored)
         {
             NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
+        }
+        else if (Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
+        {
+            // Windows reads this when the shell starts after the restart; DockSense itself may be up too late.
+            var wantFse = fse == FseStartup.FullScreenExperience;
+            if (FseSettings.SetStartupToFse(wantFse))
+            {
+                Log.Info($"Restart for {mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
+                AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
+            }
         }
 
         RaiseStatusChanged();
@@ -875,10 +889,7 @@ public sealed class DockSenseService : IDisposable
     {
         try
         {
-            return new DeviceSnapshot(
-                GpuProbe.GetWorkingAdapters(),
-                DisplayProbe.GetActiveDisplays(),
-                SystemParameters.PowerLineStatus == PowerLineStatus.Online);
+            return DeviceProbe.TakeSnapshot();
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {

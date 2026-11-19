@@ -37,11 +37,29 @@ internal static class Program
             isFirstInstance = WaitForPreviousInstance(singleInstance);
         }
 
+        var startedAtSignIn = args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
         if (!isFirstInstance)
         {
-            // Already running: ask that instance to show its window.
-            showSignal.Set();
+            // Already running: ask that instance to show its window. Not at sign-in, though: the sign-in task and
+            // the Run entry both start DockSense then, and the later of the two must not open the window.
+            if (!startedAtSignIn)
+            {
+                showSignal.Set();
+            }
+
             return 0;
+        }
+
+        // Started by the sign-in task: only when Windows would start DockSense from its Run entry as well.
+        if (args.Contains(AutoStart.TaskArgument, StringComparer.OrdinalIgnoreCase) && !AutoStart.AllowsLogonTaskStart())
+        {
+            return 0;
+        }
+
+        if (startedAtSignIn && !args.Contains(App.PausedArgument, StringComparer.OrdinalIgnoreCase))
+        {
+            // Before anything else: this races the shell (see SignInFastPath).
+            SignInFastPath.Run();
         }
 
         // Automatic updates go in here, before anything is shown: the installer takes over once this process exits.
