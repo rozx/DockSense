@@ -40,7 +40,6 @@ It also [fixes low FPS with an eGPU](#the-egpu-fix-game-mode-cpu-throttle), the 
 - [Supported hardware](#supported-hardware)
 - [FAQ](#faq)
 - [Building from source](#building-from-source)
-- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
 - [License](#license)
@@ -313,21 +312,6 @@ Releases are automated, but they only happen when **all three** of these are tru
 3. The pull request has the **`release`** label.
 
 GitHub Actions then reads the version from the branch name, runs the tests, builds self-contained single-file executables for x64 and ARM64, tags the merge commit `v<version>`, and publishes the release. Its description is the version's section of [CHANGELOG.md](CHANGELOG.md), followed by GitHub's list of merged pull requests. CI fails on a release PR whose version has no CHANGELOG section. Every other push or pull request only runs CI (build + tests).
-
-## Roadmap
-
-- [x] Switch the full screen experience live when the mode changes, not only at sign-in (v0.2)
-- [x] Power plan editor (v0.2)
-- [x] Run programs on mode changes (v0.2)
-- [x] iGPU memory per mode on ASUS handhelds (v0.2)
-- [x] In-app updates (v0.3)
-- [ ] Per-mode TDP via vendor interfaces (ASUS, Lenovo, ...)
-- [ ] iGPU memory on other vendors' handhelds
-- [ ] Per-game profiles
-- [ ] winget / Microsoft Store distribution
-- [ ] Code signing
-
-Ideas and votes are welcome in [Issues](https://github.com/rozx/DockSense/issues).
 
 ## Contributing
 

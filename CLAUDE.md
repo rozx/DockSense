@@ -172,6 +172,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
   eGPU, each with its own profile). The eGPU Game Mode fix is where it started and one of its features. The README,
   the repository description, the social preview image and other public text lead with the mode switcher, not with
   the eGPU fix or with one device.
+- **No roadmap in the READMEs.** The user removed the section on 2026-11-18 because the planned items were not
+  real plans. Don't add one back, and don't promise future features in public text.
 - **Icons**: pixel art. The app icon is a one-piece widescreen handheld. Tray: Handheld = handheld with a green
   screen, Docked = monitor, eGPU = graphics card with a purple fan (variant "V4"), Paused = handheld with pause bars.
 - **UI**: minimal ("简约风"): neutral grays, monochrome accent, hairline borders, small colored status dots only.

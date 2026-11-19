@@ -58,7 +58,6 @@ Edit `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)):
 ### 4. Update the READMEs (always both)
 `README.md` (English) and `README.zh-CN.md` (Chinese) mirror each other section by section. Go through these:
 - **Features** list: add new capabilities.
-- **Roadmap**: tick (`[x]`) or remove items that shipped, and add newly planned ones.
 - **How it works** table and diagram: update if the mode detection or default profiles changed.
 - **Configuration** table: add new `config.json` keys with their defaults.
 - **Supported hardware**: add devices confirmed in issues or PRs.
