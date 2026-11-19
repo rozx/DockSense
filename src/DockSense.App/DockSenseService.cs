@@ -22,7 +22,8 @@ public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string?
 public sealed record ProgramStarted(string Name, DockMode Mode, ProgramTrigger Trigger, bool AtStartup);
 
 /// <summary>Programs to start for one profile application, with the transition that caused it.</summary>
-internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs);
+/// <param name="Wait">How long to hold the batch back before its first program (see <see cref="SignInSession.ShellWait"/>).</param>
+internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs, TimeSpan Wait);
 
 /// <summary>Why a mode's profile is being applied.</summary>
 internal enum ApplyReason
@@ -753,7 +754,10 @@ public sealed class DockSenseService : IDisposable
         var programs = ProgramPlanner.Select(Config, _lastApplied, mode, atStartup);
         if (programs.Count > 0)
         {
-            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs));
+            // Started by the sign-in task, DockSense is up before the Windows shell. Programs wait for the desktop,
+            // as Windows' own startup apps do; the wait sits in the queue so later batches keep their order.
+            var wait = atStartup ? SignInSession.ShellWait : TimeSpan.Zero;
+            _programBatches.Enqueue(new ProgramBatch(_lastApplied, mode, atStartup, programs, wait));
             if (!_programsRunning)
             {
                 _ = RunProgramBatchesAsync();
@@ -773,6 +777,12 @@ public sealed class DockSenseService : IDisposable
         {
             while (_programBatches.TryDequeue(out var batch))
             {
+                if (batch.Wait > TimeSpan.Zero)
+                {
+                    Log.Info($"Programs for {batch.Current} wait {batch.Wait.TotalSeconds:F0} s for the Windows shell.");
+                    await Task.Delay(batch.Wait);
+                }
+
                 foreach (var program in batch.Programs)
                 {
                     var name = ProgramLauncher.DisplayName(program);

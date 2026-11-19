@@ -128,7 +128,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
     sign-in; the second one finds the mutex and exits without showing the window. A task start first asks
     `AutoStart.AllowsLogonTaskStart` (exit when Windows would not start the Run entry; a task without a Run entry
     for this copy is removed). Then `SignInFastPath.Run` writes the mode's `StartupToGamingHome` before anything
-    else is loaded. Keep that path free of WPF and of anything slow. The Run entry stays as the setting and the
+    else is loaded. Keep that path free of WPF and of anything slow. Whatever needs the shell waits for
+    `SignInSession.ShellWait` (until 20 s after sign-in): the live FSE switch, startup programs and toasts. The Run entry stays as the setting and the
     fallback: Settings > Apps > Startup and Task Manager keep working, and DockSense still starts if the task fails.
     Development builds never register the task unless "Start with Windows" is turned on in them.
   - **Updates** (`Services/UpdateService`, `Platform/UpdateInstaller`, state in `%LOCALAPPDATA%\DockSense\update.json`

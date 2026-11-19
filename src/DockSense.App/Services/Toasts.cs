@@ -1,4 +1,5 @@
 using DockSense.App.Localization;
+using DockSense.App.Platform;
 using DockSense.Core;
 using Microsoft.Toolkit.Uwp.Notifications;
 
@@ -153,8 +154,15 @@ public static class Toasts
         Show(builder, IconAssets.App, tag: "warning");
     }
 
-    private static void Show(ToastContentBuilder builder, string iconName, string tag)
+    private static async void Show(ToastContentBuilder builder, string iconName, string tag)
     {
+        // Started by the sign-in task, DockSense is up before the Windows shell: a notification raised now (a
+        // restart is needed, a warning) is held until there is something to show it.
+        if (SignInSession.ShellWait is var wait && wait > TimeSpan.Zero)
+        {
+            await Task.Delay(wait);
+        }
+
         try
         {
             builder.AddAppLogoOverride(new Uri(IconAssets.ToastImagePath(iconName)));

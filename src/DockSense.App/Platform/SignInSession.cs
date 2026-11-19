@@ -47,6 +47,14 @@ internal static class SignInSession
     /// <summary>Time since sign-in, or null when unknown.</summary>
     public static TimeSpan? SinceSignIn => SignInTimeUtc is { } signIn ? DateTime.UtcNow - signIn : null;
 
+    /// <summary>
+    /// How long until the Windows shell can be expected to be up. Started by the sign-in task, DockSense runs before
+    /// the desktop, the taskbar and the notification center exist; what needs them (programs a profile starts,
+    /// notifications) waits this long. Zero from <see cref="DockSense.Core.FsePlanner.SignInSettleTime"/> after
+    /// sign-in on, and when the sign-in time is unknown.
+    /// </summary>
+    public static TimeSpan ShellWait => SinceSignIn is { } elapsed ? DockSense.Core.FsePlanner.StartupDelay(elapsed) : TimeSpan.Zero;
+
     [DllImport("wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytesReturned);
