@@ -168,6 +168,10 @@ Details and raw data: `docs/game-mode-throttle.md`.
   `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.
 
 ## Design decisions (from the user)
+- **Positioning** (2026-11-18): DockSense is the mode switcher for Windows gaming handhelds (Handheld / Docked /
+  eGPU, each with its own profile). The eGPU Game Mode fix is where it started and one of its features. The README,
+  the repository description, the social preview image and other public text lead with the mode switcher, not with
+  the eGPU fix or with one device.
 - **Icons**: pixel art. The app icon is a one-piece widescreen handheld. Tray: Handheld = handheld with a green
   screen, Docked = monitor, eGPU = graphics card with a purple fan (variant "V4"), Paused = handheld with pause bars.
 - **UI**: minimal ("简约风"): neutral grays, monochrome accent, hairline borders, small colored status dots only.

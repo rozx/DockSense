@@ -4,9 +4,9 @@
 
 # DockSense
 
-**Automatic power profiles for Windows gaming handhelds such as the ASUS ROG Xbox Ally X: Handheld, Docked or eGPU.**
+**The automatic mode switcher for Windows gaming handhelds: Handheld, Docked or eGPU.**
 
-Fixes low FPS with an eGPU (ROG XG Mobile, USB4, Thunderbolt, OCuLink) caused by a hidden Windows Game Mode CPU throttle.
+Each mode gets its own power plan, Xbox full screen experience, iGPU memory and programs, applied the moment you dock, undock or plug in an eGPU.
 
 [![CI](https://github.com/rozx/DockSense/actions/workflows/ci.yml/badge.svg)](https://github.com/rozx/DockSense/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/rozx/DockSense?include_prereleases&sort=semver&label=release)](https://github.com/rozx/DockSense/releases)
@@ -26,22 +26,13 @@ Fixes low FPS with an eGPU (ROG XG Mobile, USB4, Thunderbolt, OCuLink) caused by
 
 DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, and works out how your handheld is being used. Then it applies the matching **power plan** and **Xbox full screen experience**, sets the **iGPU memory** and starts **your own programs**. You don't have to switch anything by hand when you dock or undock.
 
-It started with one bug hunt: an ASUS ROG Xbox Ally X docked to an RTX 5090 was stuck at ~50 FPS with the CPU throttled to **2 GHz / 12 W**, and only while a game was in the foreground.
-
-**Does this look like your handheld with an eGPU?**
-
-- Low FPS or stutter in games, while the graphics card sits far below 100% usage.
-- Task Manager shows the CPU at 100%, but it draws only 10–15 W and runs at about 2 GHz.
-- Alt-tabbing out of the game makes the CPU speed up at once.
-- Armoury Crate reports Turbo at 35 W, yet the CPU never gets there in a game.
-
-That is the Game Mode throttle described [below](#why-docksense). DockSense works around it automatically, and Game Mode can stay on.
+It also [fixes low FPS with an eGPU](#the-egpu-fix-game-mode-cpu-throttle), the bug hunt this project started with.
 
 ## Contents
 
-- [Why DockSense](#why-docksense)
 - [Features](#features)
 - [How it works](#how-it-works)
+- [The eGPU fix: Game Mode CPU throttle](#the-egpu-fix-game-mode-cpu-throttle)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -53,26 +44,6 @@ That is the Game Mode throttle described [below](#why-docksense). DockSense work
 - [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
 - [License](#license)
-
-## Why DockSense
-
-Windows **Game Mode** has a hidden processor power profile called `GameMode`. It kicks in while a game has focus. On AMD handhelds, the vendor's provisioning package sets that profile to:
-
-| Setting | Normal | While a game is in the foreground |
-|---|---|---|
-| Energy performance preference (EPP) | 20 (favor performance) | **100 (maximum power saving)** |
-| Thread scheduling | prefer performance cores | **prefer efficient cores** |
-
-That is a sensible choice when the CPU and iGPU share one small power budget. With an **eGPU**, though, the CPU becomes the bottleneck and the expensive graphics card waits half the time. Measured on a ROG Xbox Ally X with an RTX 5090, Game Mode on and the game in the foreground:
-
-| Active power plan | CPU package | CPU clock | Result |
-|---|---|---|---|
-| Vendor "Turbo" plan (Balanced type) | 10–15 W | 2.2–2.6 GHz | throttled |
-| **DockSense Performance** (High Performance type) | **29–45 W** | **4.0–4.4 GHz** | full speed |
-
-The overrides are only provisioned for *Balanced*-type plans, and `powercfg` cannot see them. DockSense switches to a High Performance-based plan while an eGPU is connected, then hands control back to your vendor software when you undock. You can keep Game Mode on.
-
-📖 The full investigation, raw data and registry paths are in **[docs/game-mode-throttle.md](docs/game-mode-throttle.md)**.
 
 ## Features
 
@@ -116,6 +87,33 @@ Some details:
 
 - **Vendor IDs are never used.** AMD iGPUs and AMD eGPUs share a vendor. USB display adapters (DisplayLink) and virtual displays (streaming apps) are ignored.
 - **Unplugging is messy.** AC power drops about 10 seconds *before* Windows removes the eGPU, and vendor software reacts to the AC change. DockSense keeps the eGPU profile until the GPU is actually gone, then restores the plan your vendor software picked.
+
+## The eGPU fix: Game Mode CPU throttle
+
+DockSense started with one bug hunt: an ASUS ROG Xbox Ally X docked to an RTX 5090 was stuck at ~50 FPS with the CPU throttled to **2 GHz / 12 W**, and only while a game was in the foreground. If your handheld does this with an eGPU, it is the same problem:
+
+- Low FPS or stutter in games, while the graphics card sits far below 100% usage.
+- Task Manager shows the CPU at 100%, but it draws only 10–15 W and runs at about 2 GHz.
+- Alt-tabbing out of the game makes the CPU speed up at once.
+- Armoury Crate reports Turbo at 35 W, yet the CPU never gets there in a game.
+
+Windows **Game Mode** has a hidden processor power profile called `GameMode`. It kicks in while a game has focus. On AMD handhelds, the vendor's provisioning package sets that profile to:
+
+| Setting | Normal | While a game is in the foreground |
+|---|---|---|
+| Energy performance preference (EPP) | 20 (favor performance) | **100 (maximum power saving)** |
+| Thread scheduling | prefer performance cores | **prefer efficient cores** |
+
+That is a sensible choice when the CPU and iGPU share one small power budget. With an **eGPU**, though, the CPU becomes the bottleneck and the expensive graphics card waits half the time. Measured on a ROG Xbox Ally X with an RTX 5090, Game Mode on and the game in the foreground:
+
+| Active power plan | CPU package | CPU clock | Result |
+|---|---|---|---|
+| Vendor "Turbo" plan (Balanced type) | 10–15 W | 2.2–2.6 GHz | throttled |
+| **DockSense Performance** (High Performance type) | **29–45 W** | **4.0–4.4 GHz** | full speed |
+
+The overrides are only provisioned for *Balanced*-type plans, and `powercfg` cannot see them. DockSense switches to a High Performance-based plan while an eGPU is connected, then hands control back to your vendor software when you undock. You can keep Game Mode on.
+
+📖 The full investigation, raw data and registry paths are in **[docs/game-mode-throttle.md](docs/game-mode-throttle.md)**.
 
 ## Screenshots
 
@@ -333,7 +331,7 @@ Ideas and votes are welcome in [Issues](https://github.com/rozx/DockSense/issues
 
 ## Contributing
 
-Bug reports, device reports and pull requests are welcome. If DockSense fixed your FPS, a ⭐ helps other handheld owners find it.
+Bug reports, device reports and pull requests are welcome. If DockSense is useful to you, a ⭐ helps other handheld owners find it.
 
 - Please include the diagnostic report (**About → Copy diagnostic report**) with hardware-related issues.
 - Keep `DockSense.Core` free of Windows APIs, and add tests for new decision logic.
