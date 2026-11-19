@@ -4,7 +4,9 @@
 
 # DockSense
 
-**为 Windows 掌机自动切换电源配置：掌机 / 底座 / 外接显卡。**
+**为 ASUS ROG Xbox Ally X 等 Windows 掌机自动切换电源配置：掌机 / 底座 / 外接显卡。**
+
+修复掌机接外接显卡（ROG XG Mobile 显卡坞、USB4、雷电、OCuLink）后帧数低的问题：Windows 游戏模式里隐藏的 CPU 降频。
 
 [![CI](https://github.com/rozx/DockSense/actions/workflows/ci.yml/badge.svg)](https://github.com/rozx/DockSense/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/rozx/DockSense?include_prereleases&sort=semver&label=release)](https://github.com/rozx/DockSense/releases)
@@ -25,6 +27,15 @@
 DockSense 运行在系统托盘里。它会监测外接显卡、外接显示器和电源的变化，判断掌机当前的使用方式，然后自动切换到对应的**电源计划**和 **Xbox 全屏体验**，设置**核显显存**，并启动**你指定的程序**。插拔底座时，你不需要手动切换任何东西。
 
 这个项目源于一次问题排查：ASUS ROG Xbox Ally X 接上 RTX 5090 显卡坞后，游戏只有 50 帧左右，CPU 被压到了 **2 GHz / 12W**，而且只在游戏处于前台时才会这样。
+
+**你的掌机接上外接显卡后，是不是也这样？**
+
+- 游戏帧数低或卡顿，显卡占用率却远没有跑满。
+- 任务管理器显示 CPU 占用 100%，但功耗只有 10–15 W，频率在 2 GHz 左右。
+- 切出游戏（Alt+Tab）后，CPU 频率立刻上去。
+- Armoury Crate 显示 Turbo 模式 35 W，但游戏里 CPU 始终到不了这个功耗。
+
+这就是[下文](#为什么需要-docksense)说的游戏模式降频。DockSense 会自动绕开它，游戏模式可以保持开启。
 
 ## 目录
 
@@ -322,7 +333,7 @@ dotnet run --project src/DockSense.App
 
 ## 参与贡献
 
-欢迎提交问题反馈、设备测试报告和 PR。
+欢迎提交问题反馈、设备测试报告和 PR。如果 DockSense 解决了你的帧数问题，点个 ⭐ 能让更多掌机玩家找到它。
 
 - 硬件相关的问题，请附上诊断报告（**关于 → 复制诊断报告**）。
 - `DockSense.Core` 里不要引入 Windows API；新增的判断逻辑请补上测试。

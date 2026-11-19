@@ -1,5 +1,7 @@
 # The Game Mode CPU throttle on AMD handhelds with an eGPU
 
+**In short:** on a ROG Xbox Ally X with an eGPU (ROG XG Mobile), games run at low FPS because the CPU is held at about 2 GHz and 10–15 W while a game is in the foreground. The cause is a hidden Windows Game Mode power profile that the usual tools do not show. A power plan based on High Performance is not affected. [DockSense](https://github.com/rozx/DockSense#readme) switches to such a plan automatically while an eGPU is connected; the [manual workarounds](#manual-workarounds-without-docksense) are at the end.
+
 ## Symptom
 
 - Device: ASUS ROG Xbox Ally X (RC74XA, Ryzen AI Z2 Extreme, BIOS 303). It is docked over USB4 to a ROG XG Mobile (GC34) with an RTX 5090 Laptop GPU and a 5120×1440 display.

@@ -4,7 +4,9 @@
 
 # DockSense
 
-**Automatic power profiles for Windows gaming handhelds: Handheld, Docked or eGPU.**
+**Automatic power profiles for Windows gaming handhelds such as the ASUS ROG Xbox Ally X: Handheld, Docked or eGPU.**
+
+Fixes low FPS with an eGPU (ROG XG Mobile, USB4, Thunderbolt, OCuLink) caused by a hidden Windows Game Mode CPU throttle.
 
 [![CI](https://github.com/rozx/DockSense/actions/workflows/ci.yml/badge.svg)](https://github.com/rozx/DockSense/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/rozx/DockSense?include_prereleases&sort=semver&label=release)](https://github.com/rozx/DockSense/releases)
@@ -25,6 +27,15 @@
 DockSense lives in your system tray. It watches for external GPUs, external displays and power changes, and works out how your handheld is being used. Then it applies the matching **power plan** and **Xbox full screen experience**, sets the **iGPU memory** and starts **your own programs**. You don't have to switch anything by hand when you dock or undock.
 
 It started with one bug hunt: an ASUS ROG Xbox Ally X docked to an RTX 5090 was stuck at ~50 FPS with the CPU throttled to **2 GHz / 12 W**, and only while a game was in the foreground.
+
+**Does this look like your handheld with an eGPU?**
+
+- Low FPS or stutter in games, while the graphics card sits far below 100% usage.
+- Task Manager shows the CPU at 100%, but it draws only 10–15 W and runs at about 2 GHz.
+- Alt-tabbing out of the game makes the CPU speed up at once.
+- Armoury Crate reports Turbo at 35 W, yet the CPU never gets there in a game.
+
+That is the Game Mode throttle described [below](#why-docksense). DockSense works around it automatically, and Game Mode can stay on.
 
 ## Contents
 
@@ -322,7 +333,7 @@ Ideas and votes are welcome in [Issues](https://github.com/rozx/DockSense/issues
 
 ## Contributing
 
-Bug reports, device reports and pull requests are welcome.
+Bug reports, device reports and pull requests are welcome. If DockSense fixed your FPS, a ⭐ helps other handheld owners find it.
 
 - Please include the diagnostic report (**About → Copy diagnostic report**) with hardware-related issues.
 - Keep `DockSense.Core` free of Windows APIs, and add tests for new decision logic.
