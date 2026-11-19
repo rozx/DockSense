@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" width="192" alt="DockSense pixel-art handheld logo" />
+<img src="assets/logo.png" width="144" alt="DockSense pixel-art handheld logo" />
 
 # DockSense
 
