@@ -1,4 +1,4 @@
-# DockSense — project notes for Claude
+# DockSense — project notes for AI agents
 
 DockSense is an open-source Windows tray app for PC gaming handhelds (first target: ASUS ROG Xbox Ally X, Ryzen AI Z2 Extreme).
 It works out the device's **mode**: **Handheld**, **Docked** (external display) or **eGPU**. It then applies a per-mode profile:
@@ -180,7 +180,7 @@ Details and raw data: `docs/game-mode-throttle.md`.
   A retro pixel theme (navy palette and a pixel font) was tried and **rejected as ugly**, so keep pixel style to the icons.
 - The About page credits the author **rozx** (github.com/rozx).
 - **Releasing**: use the project skill `/release` (`.claude/skills/release/SKILL.md`). It walks through changelog,
-  README (both languages), version bump, the release PR and verification. Claude cannot merge PRs; the user merges.
+  README (both languages), version bump, the release PR and verification. Agents do not merge PRs; the user merges.
 - **Releases** come only from a **merged PR** whose branch is `release/v<major>.<minor>[.<patch>]` **and** that has
   the `release` label (`.github/workflows/release.yml`; the version comes from the branch name and the tag
   `v<version>` is created on the merge commit). The release description is the version's CHANGELOG section
@@ -193,7 +193,7 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - Prototype that DockSense will replace: scheduled task **"eGPU Power Plan Switch"** running
   `%LOCALAPPDATA%\EgpuPowerPlan\Switch-EgpuPlan.ps1`, plus the "eGPU Docked" plan `90b0541f-4daa-4804-82aa-02c1f564daf4`.
   Remove the task with `%LOCALAPPDATA%\EgpuPowerPlan\Uninstall.ps1` once DockSense covers it, or the two will fight.
-- Registering persistence (scheduled tasks, Run keys) from Claude's shell is blocked by the auto-mode classifier.
+- Registering persistence (scheduled tasks, Run keys) from an agent shell may be blocked (e.g., Claude's auto-mode classifier).
   The user runs such steps themselves with `!`.
 - The shell is Windows PowerShell 5.1. Multi-line commit messages that contain double quotes get mangled when passed
   as `-m @'...'@`, so write the message to a file and use `git commit -F <file>`. Create a fresh file with the Write
