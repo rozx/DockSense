@@ -2,6 +2,22 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.3] - 2026-11-18
+
+DockSense now starts right at sign-in instead of up to a minute and a half later, so a PC that was docked or undocked while it was off no longer sits in the wrong mode's setup first.
+
+### Changed
+
+- **Start with Windows starts DockSense right at sign-in.** Windows runs its startup apps late: on the Ally X, DockSense was started 36 seconds after sign-in when booting into the Xbox full screen experience, and 83 seconds after sign-in on the desktop. *Start with Windows* now also registers a sign-in task in Task Scheduler (`DockSense-<your user ID>`, no admin rights needed) that starts DockSense about two seconds after sign-in, before the Windows shell is up. The power plan and the rest of the profile are in place that much sooner.
+  - Existing installs get the task the next time DockSense runs. Turning *Start with Windows* off removes it.
+  - The startup entry stays, and Windows' own switches for it still decide: when the entry is switched off in Task Manager or Windows Settings, the task does not start DockSense either.
+  - If the task is missing or disabled, DockSense starts as before, and Settings says that it starts late.
+  - This early the taskbar does not exist yet, so the tray icon appears a few seconds after DockSense has started working.
+- **The full screen experience setting is applied before Windows reads it.** Windows decides once, when the shell starts, whether to boot into the full screen experience. If you shut down as a handheld and switched on docked to an eGPU, it booted into the full screen experience and DockSense left it again almost a minute later. DockSense now writes the current mode's setting as the very first thing it does at sign-in. If Windows was quicker anyway, DockSense switches about 20 seconds after sign-in.
+- **Restart for a mode also prepares the full screen experience.** *Restart for Handheld* (or Docked, or eGPU) in the tray menu now stores that mode's sign-in setting along with its iGPU memory size, so Windows comes back up the way the mode wants it.
+- When DockSense starts later than 20 seconds after sign-in, it no longer waits another 10 seconds before switching the full screen experience.
+- The diagnostic report shows the sign-in task and the sign-in time.
+
 ## [0.3.2] - 2026-11-15
 
 Switching modes with a different iGPU memory size now takes one restart instead of "unplug, wait, then restart".
@@ -83,6 +99,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.3.3]: https://github.com/rozx/DockSense/releases/tag/v0.3.3
 [0.3.2]: https://github.com/rozx/DockSense/releases/tag/v0.3.2
 [0.3.1]: https://github.com/rozx/DockSense/releases/tag/v0.3.1
 [0.3]: https://github.com/rozx/DockSense/releases/tag/v0.3
