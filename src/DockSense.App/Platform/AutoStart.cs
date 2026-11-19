@@ -39,29 +39,32 @@ internal static class AutoStart
     private static string LegacyCommand => $"\"{Environment.ProcessPath}\"";
 
     /// <summary>What really happens at sign-in. Never throws: an unreadable registry counts as off.</summary>
-    public static StartupStatus Status
+    public static StartupStatus Status => ReadStatus() ?? new StartupStatus(StartupState.Off);
+
+    /// <summary>
+    /// <see cref="Status"/>, or null when the registry could not be read. For callers that act on "off" (removing
+    /// the sign-in task): a failed read says nothing about the setting.
+    /// </summary>
+    private static StartupStatus? ReadStatus()
     {
-        get
+        try
         {
-            try
-            {
-                using var run = Registry.CurrentUser.OpenSubKey(RunKey);
-                using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
-                using var gaming = Registry.CurrentUser.OpenSubKey(GamingKey);
-                using var xboxMode = gaming?.OpenSubKey(XboxModeRunSubKey);
-                return StartupEntry.Evaluate(
-                    run?.GetValue(ValueName) as string,
-                    [Command, LegacyCommand],
-                    approved?.GetValue(ValueName) as byte[],
-                    xboxMode?.GetValue(ValueName) as int?,
-                    // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
-                    xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
-            }
-            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-            {
-                Log.Warn($"Could not read the Start with Windows entry: {ex.Message}");
-                return new StartupStatus(StartupState.Off);
-            }
+            using var run = Registry.CurrentUser.OpenSubKey(RunKey);
+            using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
+            using var gaming = Registry.CurrentUser.OpenSubKey(GamingKey);
+            using var xboxMode = gaming?.OpenSubKey(XboxModeRunSubKey);
+            return StartupEntry.Evaluate(
+                run?.GetValue(ValueName) as string,
+                [Command, LegacyCommand],
+                approved?.GetValue(ValueName) as byte[],
+                xboxMode?.GetValue(ValueName) as int?,
+                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
+                xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warn($"Could not read the Start with Windows entry: {ex.Message}");
+            return null;
         }
     }
 
@@ -111,24 +114,39 @@ internal static class AutoStart
     /// <summary>
     /// Called when the sign-in task started this process. False means: exit, Windows would not start DockSense now
     /// (Start with Windows was switched off in Windows, or DockSense is to wait for the desktop in Xbox mode). A
-    /// task left behind without a Run entry for this copy is removed.
+    /// task left behind without a Run entry for this copy is removed; nothing is removed when the setting could
+    /// not be read.
     /// </summary>
     public static bool AllowsLogonTaskStart()
     {
-        var status = Status;
+        if (ReadStatus() is not { } status)
+        {
+            // Unknown, so no early start and no cleanup: if the entry is on, Windows starts DockSense later.
+            Log.Info("The sign-in task started DockSense, but the Start with Windows setting could not be read; leaving the start to Windows.");
+            return false;
+        }
+
         if (StartupEntry.AllowsLogonTask(status))
         {
             return true;
         }
 
-        if (status.State is StartupState.Off or StartupState.OtherCopy)
+        switch (status.State)
         {
-            Log.Info($"The sign-in task started DockSense, but Start with Windows is {(status.State == StartupState.Off ? "off" : "set for another copy")}; removing the task.");
-            RemoveLogonTask();
-        }
-        else
-        {
-            Log.Info("The sign-in task started DockSense, but Windows holds its startup entry back; leaving the start to Windows.");
+            case StartupState.Off:
+            case StartupState.OtherCopy:
+                Log.Info($"The sign-in task started DockSense, but Start with Windows is {(status.State == StartupState.Off ? "off" : "set for another copy")}; removing the task.");
+                RemoveLogonTask();
+                break;
+
+            case StartupState.DisabledByWindows:
+                // The task stays: switching the entry back on in Windows brings the early start back with it.
+                Log.Info("The sign-in task started DockSense, but Start with Windows is switched off in Windows (Task Manager or Settings > Apps > Startup); not starting.");
+                break;
+
+            default:
+                Log.Info("The sign-in task started DockSense, but Windows holds its startup entry back until the desktop in Xbox mode; leaving the start to Windows.");
+                break;
         }
 
         return false;
@@ -193,14 +211,22 @@ internal static class AutoStart
             Log.Warn($"Could not update the Windows startup settings for DockSense: {ex.Message}");
         }
 
-        // After the registry: the task is only wanted when Windows starts the Run entry at sign-in.
-        if (enabled && StartupEntry.AllowsLogonTask(Status))
-        {
-            RegisterLogonTask();
-        }
-        else
+        // After the registry: the task is only wanted when Windows starts the Run entry at sign-in. When that
+        // cannot be read back, the task is left as it is.
+        if (!enabled)
         {
             RemoveLogonTask();
+        }
+        else if (ReadStatus() is { } status)
+        {
+            if (StartupEntry.AllowsLogonTask(status))
+            {
+                RegisterLogonTask();
+            }
+            else
+            {
+                RemoveLogonTask();
+            }
         }
     }
 
