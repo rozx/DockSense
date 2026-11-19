@@ -15,6 +15,10 @@ public static class Toasts
 
     // True at first: a toast from before DockSense (or Windows) restarted may still sit in the notification center.
     private static bool _restartToastMayExist = true;
+
+    // Counts requests to show or clear the restart toast (all on the UI thread); a held toast only goes out while
+    // its own request is still the latest.
+    private static int _restartRequest;
     private static bool _removeFailureLogged;
 
     /// <summary>
@@ -98,12 +102,20 @@ public static class Toasts
             .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)))
             .AddButton(new ToastButton().SetContent(Loc.T("Dash_RestartNow")).AddArgument(ActionKey, RestartAction));
         _restartToastMayExist = true;
-        Show(builder, IconAssets.App, tag: RestartTag);
+
+        // The toast may be held back until the shell is up (see Show). If the restart stops being needed in the
+        // meantime, ClearRestartNeeded moves the request on and the held toast is dropped.
+        var request = ++_restartRequest;
+        Show(builder, IconAssets.App, tag: RestartTag, stillWanted: () => request == _restartRequest);
     }
 
-    /// <summary>Takes the restart toast away once no restart is pending any more, so its button cannot mislead.</summary>
+    /// <summary>
+    /// Takes the restart toast away once no restart is pending any more, so its button cannot mislead. That
+    /// includes one that is still held back and not shown yet.
+    /// </summary>
     public static void ClearRestartNeeded()
     {
+        _restartRequest++;
         if (!_restartToastMayExist)
         {
             return;
@@ -154,13 +166,18 @@ public static class Toasts
         Show(builder, IconAssets.App, tag: "warning");
     }
 
-    private static async void Show(ToastContentBuilder builder, string iconName, string tag)
+    /// <param name="stillWanted">Asked after a wait: false drops the notification instead of showing it late.</param>
+    private static async void Show(ToastContentBuilder builder, string iconName, string tag, Func<bool>? stillWanted = null)
     {
         // Started by the sign-in task, DockSense is up before the Windows shell: a notification raised now (a
         // restart is needed, a warning) is held until there is something to show it.
         if (SignInSession.ShellWait is var wait && wait > TimeSpan.Zero)
         {
             await Task.Delay(wait);
+            if (stillWanted?.Invoke() == false)
+            {
+                return;
+            }
         }
 
         try
