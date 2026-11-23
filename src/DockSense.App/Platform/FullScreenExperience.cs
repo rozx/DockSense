@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace DockSense.App.Platform;
@@ -12,6 +13,7 @@ internal static class FullScreenExperience
     public const int E_ABORT = unchecked((int)0x80004004);
 
     private const string ApiSet = "api-ms-win-gaming-experience-l1-1-0.dll";
+    private static readonly TimeSpan SlowAnswer = TimeSpan.FromSeconds(1);
 
     private static readonly Api? Functions = Api.Load();
     private static ChangeRoutine? _changeRoutine; // kept alive while registered
@@ -32,8 +34,25 @@ internal static class FullScreenExperience
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate void UnregisterFunction(IntPtr registration);
 
-    /// <summary>This Windows build and device support FSE.</summary>
-    public static bool IsSupported => Functions is { } api && api.IsSupported() != 0;
+    /// <summary>
+    /// This Windows build and device support FSE. Not for <see cref="SignInFastPath"/>: Windows answers through
+    /// shell components, and right after sign-in that may take as long as the shell takes to start.
+    /// </summary>
+    public static bool IsSupported
+    {
+        get
+        {
+            if (Functions is not { } api)
+            {
+                return false;
+            }
+
+            var asked = Stopwatch.GetTimestamp();
+            var supported = api.IsSupported() != 0;
+            ReportSlow("say whether the full screen experience is supported", asked);
+            return supported;
+        }
+    }
 
     /// <summary>Whether FSE is active right now, or null when FSE is not supported.</summary>
     public static bool? IsActive => IsSupported ? Functions!.IsActive() != 0 : null;
@@ -76,6 +95,16 @@ internal static class FullScreenExperience
         }
     }
 
+    /// <summary>Notes in the log when Windows kept DockSense waiting, which so far only happens right after sign-in.</summary>
+    private static void ReportSlow(string what, long asked)
+    {
+        var waited = Stopwatch.GetElapsedTime(asked);
+        if (waited >= SlowAnswer)
+        {
+            Log.Info($"Windows took {waited.TotalSeconds:F1} s to {what}.");
+        }
+    }
+
     private sealed record Api(
         BoolFunction IsSupported,
         BoolFunction IsActive,
@@ -88,10 +117,13 @@ internal static class FullScreenExperience
         {
             try
             {
+                var asked = Stopwatch.GetTimestamp();
                 if (!NativeLibrary.TryLoad(ApiSet, out var library))
                 {
                     return null;
                 }
+
+                ReportSlow("load the gaming experience API", asked);
 
                 return new Api(
                     Get<BoolFunction>(library, "IsGamingFullScreenExperienceSupported"),
