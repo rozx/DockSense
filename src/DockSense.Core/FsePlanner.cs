@@ -29,28 +29,18 @@ public static class FsePlanner
     }
 
     /// <summary>
-    /// Returns true to enter FSE, false to leave it, or null to leave FSE as it is.
-    /// The mode being entered decides first (<see cref="ModeProfile.FseApplyImmediately"/> with a target), then the
-    /// mode being left (<see cref="ModeProfile.FseExitOnLeave"/>).
+    /// Returns true to enter FSE, false to leave it, or null to leave FSE as it is. Only the mode being entered
+    /// decides: its profile needs <see cref="ModeProfile.FseApplyImmediately"/> and a target.
     /// </summary>
     /// <param name="config">The current configuration.</param>
-    /// <param name="previous">The mode whose profile was applied before, or null at startup.</param>
-    /// <param name="current">The mode being applied.</param>
-    public static bool? LiveTarget(DockSenseConfig config, DockMode? previous, DockMode current)
+    /// <param name="mode">The mode being applied.</param>
+    public static bool? LiveTarget(DockSenseConfig config, DockMode mode)
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var entering = config.ProfileFor(current);
-        if (entering.FseApplyImmediately && entering.Fse != FseStartup.Unchanged)
-        {
-            return entering.Fse == FseStartup.FullScreenExperience;
-        }
-
-        if (previous is { } left && left != current && config.ProfileFor(left).FseExitOnLeave)
-        {
-            return false;
-        }
-
-        return null;
+        var entering = config.ProfileFor(mode);
+        return entering.FseApplyImmediately && entering.Fse != FseStartup.Unchanged
+            ? entering.Fse == FseStartup.FullScreenExperience
+            : null;
     }
 }

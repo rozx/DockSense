@@ -263,8 +263,6 @@
   <data name="Toast_ProgramLeave" xml:space="preserve"><value>Leaving {0} mode</value></data>
   <data name="Toast_ProgramStartup" xml:space="preserve"><value>DockSense started in {0} mode</value></data>
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
-  <data name="Prof_FseExitOnLeave" xml:space="preserve"><value>Exit when leaving this mode</value></data>
-  <data name="Prof_FseExitOnLeaveDesc" xml:space="preserve"><value>Leave the full screen experience when you switch to another mode, unless that mode&apos;s own &quot;Switch immediately&quot; says otherwise.</value></data>
   <!-- v0.2: power plan editor, live FSE switch, iGPU memory, programs -->
   <data name="Set_NotifyStartup" xml:space="preserve"><value>When you start DockSense</value></data>
   <data name="Set_NotifyStartupDesc" xml:space="preserve"><value>Show a notification that DockSense is running in the background when you start it yourself. Not shown when it starts with Windows.</value></data>

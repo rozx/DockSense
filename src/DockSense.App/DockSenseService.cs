@@ -53,7 +53,7 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _lastApplied;
     private int _fseRequest;
     private bool _fseSwitching;
-    private (DockMode? Previous, DockMode Current) _fseTransition;
+    private DockMode _fseMode;
     private readonly Queue<ProgramBatch> _programBatches = new();
     private bool _programsRunning;
     private IgpuMemoryBootState? _igpuBoot;
@@ -482,10 +482,9 @@ public sealed class DockSenseService : IDisposable
         }
 
         // Switching live while the user edits settings would yank the screen away; only real transitions do it.
-        // The new mode's live setting decides first, then "exit when leaving" of the mode being left.
-        if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, _lastApplied, mode) is not null)
+        if (reason != ApplyReason.SettingsChanged && FsePlanner.LiveTarget(Config, mode) is not null)
         {
-            _fseTransition = (_lastApplied, mode);
+            _fseMode = mode;
 
             // Right after sign-in the shell is still starting (and entering the full screen experience when Windows
             // boots into it): look at the live state only once it has settled.
@@ -494,9 +493,9 @@ public sealed class DockSenseService : IDisposable
     }
 
     /// <summary>
-    /// Brings the full screen experience in line with the latest mode transition. One switch runs at a time:
+    /// Brings the full screen experience in line with the mode applied last. One switch runs at a time:
     /// <see cref="FullScreenExperience.Set"/> can wait on Windows' confirmation dialog, and if the mode changes
-    /// meanwhile, the running switch reconciles with the newest transition when it returns.
+    /// meanwhile, the running switch reconciles with the newest mode when it returns.
     /// </summary>
     private async Task SwitchFseAsync(TimeSpan delay)
     {
@@ -533,10 +532,10 @@ public sealed class DockSenseService : IDisposable
 
     private async Task SwitchFseOnceAsync()
     {
-        // Always the latest transition, with the profiles as they are now, so a switch that waited on a prompt
-        // cannot leave a stale state.
-        var (previous, mode) = _fseTransition;
-        if (Paused || Mode != mode || FsePlanner.LiveTarget(Config, previous, mode) is not { } wantFse)
+        // Always the latest mode, with the profiles as they are now, so a switch that waited on a prompt cannot
+        // leave a stale state.
+        var mode = _fseMode;
+        if (Paused || Mode != mode || FsePlanner.LiveTarget(Config, mode) is not { } wantFse)
         {
             return;
         }
