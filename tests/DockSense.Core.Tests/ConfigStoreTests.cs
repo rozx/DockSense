@@ -91,6 +91,18 @@ public sealed class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_setting_that_no_longer_exists_is_ignored()
+    {
+        // "fseExitOnLeave" was a profile option up to 0.3.3.
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(ConfigPath, """{ "handheld": { "fse": "FullScreenExperience", "fseApplyImmediately": true, "fseExitOnLeave": true } }""");
+
+        var config = new ConfigStore(ConfigPath).Load();
+
+        Assert.Equal(new ModeProfile { Fse = FseStartup.FullScreenExperience, FseApplyImmediately = true }, config.Handheld);
+    }
+
+    [Fact]
     public void Json_is_human_readable()
     {
         new ConfigStore(ConfigPath).Save(new DockSenseConfig());

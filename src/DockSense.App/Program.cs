@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        SignInFastPath.MarkMainEntered();
+
         // DockSense.exe --probe [report.txt]: write a read-only diagnostic report and exit.
         if (args.Length > 0 && args[0].Equals("--probe", StringComparison.OrdinalIgnoreCase))
         {

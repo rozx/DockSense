@@ -45,7 +45,14 @@ internal static class AutoStart
     /// <see cref="Status"/>, or null when the registry could not be read. For callers that act on "off" (removing
     /// the sign-in task): a failed read says nothing about the setting.
     /// </summary>
-    private static StartupStatus? ReadStatus()
+    /// <param name="askWindows">
+    /// False reads the registry only and takes the full screen experience key as proof of the feature, without
+    /// asking Windows. For the start by the sign-in task, which runs before the shell is up and ahead of
+    /// <see cref="SignInFastPath"/>: the gaming experience API is not to be called there. The one case the key gets
+    /// wrong (0.2.1 created it on a PC without the feature) holds DockSense's own "Start at log in" value, so the
+    /// answer is the same.
+    /// </param>
+    private static StartupStatus? ReadStatus(bool askWindows = true)
     {
         try
         {
@@ -58,8 +65,9 @@ internal static class AutoStart
                 [Command, LegacyCommand],
                 approved?.GetValue(ValueName) as byte[],
                 xboxMode?.GetValue(ValueName) as int?,
-                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
-                xboxModeAvailable: gaming is not null && FullScreenExperience.IsSupported);
+                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so,
+                // except for the sign-in task check, where the key has to do (see askWindows).
+                xboxModeAvailable: gaming is not null && (!askWindows || XboxModeSupported()));
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
@@ -67,6 +75,10 @@ internal static class AutoStart
             return null;
         }
     }
+
+    // In a method of its own, so that reading the registry only does not even load the gaming experience API.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static bool XboxModeSupported() => FullScreenExperience.IsSupported;
 
     /// <summary>True when this copy of DockSense starts at sign-in.</summary>
     public static bool IsEnabled => Status.State == StartupState.On;
@@ -119,7 +131,7 @@ internal static class AutoStart
     /// </summary>
     public static bool AllowsLogonTaskStart()
     {
-        if (ReadStatus() is not { } status)
+        if (ReadStatus(askWindows: false) is not { } status)
         {
             // Unknown, so no early start and no cleanup: if the entry is on, Windows starts DockSense later.
             Log.Info("The sign-in task started DockSense, but the Start with Windows setting could not be read; leaving the start to Windows.");
@@ -283,7 +295,13 @@ internal static class AutoStart
     /// <summary>
     /// v0.2.1 created the full screen experience key on PCs that do not have the feature, which made DockSense
     /// treat it as available there. Removes the key again when it holds nothing but what DockSense wrote and
-    /// Windows says the feature is not supported. Call this before anything reads <see cref="FseSettings"/>.
+    /// Windows says the feature is not supported. Call this before the rest of DockSense reads
+    /// <see cref="FseSettings"/>.
+    /// <para>
+    /// The exception is <see cref="SignInFastPath"/>, which runs earlier and must not call this: it asks Windows
+    /// through the gaming experience API, which is kept out of that path. The fast path may write
+    /// <c>StartupToGamingHome</c> into a mistaken key first; that value is one this cleanup tolerates.
+    /// </para>
     /// </summary>
     public static void RemoveMistakenXboxModeKey()
     {
