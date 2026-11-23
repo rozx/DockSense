@@ -63,9 +63,20 @@ Details and raw data: `docs/game-mode-throttle.md`.
   old late start, a PC shut down as a handheld and switched on at the eGPU booted into FSE and DockSense left it 50 s
   after sign-in. From 0.3.3 a per-user logon task (`DockSense-<SID>` in the task root, the same shape as OneDrive's
   per-user task, no admin) starts DockSense, and `SignInFastPath` writes the value before any UI loads (114–227 ms
-  after process start in a Debug build). **Not yet measured**: whether that write beats the shell's read at a real
-  sign-in; the log line `Sign-in start in <mode> mode: ...` carries both times. Sign-in time comes from
+  after process start in a Debug build). Sign-in time comes from
   `WTSQuerySessionInformation(WTSSessionInfo)`, `LogonTime` at offset 200 of `WTSINFOW`.
+  - **0.3.3 at real sign-ins (log, 2026-11-19 to 11-22): the write came far too late.** The task did start DockSense
+    0.5–3.5 s after sign-in, but the write followed 15.7, 16.6, 17.2, 23.4 and 52.4 s after process start (one
+    eGPU boot left FSE again 60 s after sign-in). With the shell up the same code takes 0.1–0.3 s. The cause is
+    **not proven**; the suspects were the two `FullScreenExperience.IsSupported` calls ahead of the write
+    (`gamemode.dll` activates WinRT classes from `twinui.pcshell.dll` and `SystemSettings.DataModel.dll`; on the
+    handheld boot the write came 2 s after the Xbox app started). After 0.3.3 the path up to the write uses only
+    the registry, the settings file and the hardware probe, and the log line lists each step
+    (`runtime`, `startup check`, `settings`, `adapters`, `displays`, `write`); a slow gaming API call logs
+    `Windows took N s to ...`. Warm, in a Debug build: 170 ms in total, of which runtime 70 and settings (JSON) 85.
+    **Still to read from the first real sign-in on the new build**: the step times, and whether the write now
+    beats the shell. The margin is small: on 2026-11-22 the shell's logon tasks (Shell-Core 62170) began 0.8 s
+    after sign-in and DockSense's process 0.5 s after it; on an eGPU boot the shell took 3.5 s.
   - Before the shell is up, `Shell_NotifyIcon` fails and H.NotifyIcon's `Create` throws `InvalidOperationException`
     ("TryCreate failed."); it can be called again. `TrayIconService` retries every 2 s. Test without a reboot by
     starting DockSense on a new desktop (`CreateDesktop` + `STARTUPINFO.lpDesktop`), which has no taskbar.
@@ -85,8 +96,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - `src/DockSense.Core` (net10.0): pure logic, fully unit tested.
   - `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld) and `ModeStabilizer` (debounce)
   - `PowerPlanController`: remembers the previous plan, restores it on leave, re-asserts with a give-up guard
-  - `FsePlanner` (live FSE target for a transition: the entered mode's `FseApplyImmediately` wins, then the left
-    mode's `FseExitOnLeave`; `StartupDelay`: at its own start DockSense switches FSE live no sooner than 20 s after
+  - `FsePlanner` (live FSE target: only the entered mode's `FseApplyImmediately` and target decide; the per-mode
+    "exit when leaving" option was removed after 0.3.3 as redundant, and an old `fseExitOnLeave` key in a config
+    is ignored; `StartupDelay`: at its own start DockSense switches FSE live no sooner than 20 s after
     sign-in), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply), `IgpuRestartPlanner` (the other modes
     whose iGPU memory size differs from the one in effect: the tray offers "Restart for `<mode>`" for them, which
@@ -128,7 +140,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
     sign-in; the second one finds the mutex and exits without showing the window. A task start first asks
     `AutoStart.AllowsLogonTaskStart` (exit when Windows would not start the Run entry; a task without a Run entry
     for this copy is removed). Then `SignInFastPath.Run` writes the mode's `StartupToGamingHome` before anything
-    else is loaded. Keep that path free of WPF and of anything slow. Whatever needs the shell waits until
+    else is loaded. Keep that path free of WPF, of the gaming experience API and of anything else that asks the
+    shell (the task-start check reads the registry only: `ReadStatus(askWindows: false)`). Whatever needs the shell waits until
     20 s after sign-in: startup programs and toasts through `SignInSession.ShellWait` (no wait when the sign-in time
     is unknown), the live FSE switch through `FsePlanner.StartupDelay` (10 s when it is unknown, as before 0.3.3). The Run entry stays as the setting and the
     fallback: Settings > Apps > Startup and Task Manager keep working, and DockSense still starts if the task fails.
@@ -201,6 +214,11 @@ Details and raw data: `docs/game-mode-throttle.md`.
   ends up at the start of the commit message (commits b633cd4 and 23d2146 have one).
 - WPF projects do not import `System.IO` implicitly (the csproj adds it). XML comments in csproj files must not
   contain `--`.
+- Touch: WPF runs on `WM_POINTER` (`Switch.System.Windows.Input.Stylus.EnablePointerSupport` in the App csproj), not
+  on its default WISP stack, after the user reported on 2026-11-23 that the window ignored touch completely while
+  mouse and keyboard worked. The cause was not reproduced: injected touch worked on a freshly started 0.3.3. A
+  process on the pointer stack has no `PenIMC_cor3.dll` loaded. Test touch without a finger with
+  `InitializeTouchInjection` + `InjectTouchInput` (works unelevated; taps and pans were checked this way).
 - UI screenshots: launch with `--show`, then render the window with `PrintWindow` (PW_RENDERFULLCONTENT) so other
   windows on top don't spoil the capture. WPF-UI nav items and content inside `ItemsControl` cards expose no Invoke pattern
   to UI Automation, and posted mouse messages are ignored, so click with a real `SetCursorPos` + `mouse_event`. Make the
