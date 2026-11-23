@@ -58,8 +58,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
     switch shows the result and a note explains a mismatch.
 - **Sign-in timing** (event logs, 2026-11-18): Windows runs the HKCU Run key late. FSE boot: sign-in 19:47:54.7,
   shell logon tasks 19:47:58, Run key 19:48:31 (33 s after the shell). Desktop boot: sign-in 19:51:30, logon-triggered
-  tasks of other apps 19:51:31.9, `explorer.exe` 19:51:36.3, Run key entry for DockSense 19:52:53 (83 s). So a task
-  with a logon trigger runs ~4 s before the shell. Windows reads `StartupToGamingHome` once at shell start: with the
+  tasks of other apps 19:51:31.9, `explorer.exe` 19:51:36.3, Run key entry for DockSense 19:52:53 (83 s). On those two
+  boots a task with a logon trigger ran 3–4 s before the shell. **Don't budget with that**: later boots showed a lead
+  of 0.3 s to 2.8 s (see the 0.3.3 bullet below). Windows reads `StartupToGamingHome` once at shell start: with the
   old late start, a PC shut down as a handheld and switched on at the eGPU booted into FSE and DockSense left it 50 s
   after sign-in. From 0.3.3 a per-user logon task (`DockSense-<SID>` in the task root, the same shape as OneDrive's
   per-user task, no admin) starts DockSense, and `SignInFastPath` writes the value before any UI loads (114–227 ms
@@ -75,8 +76,10 @@ Details and raw data: `docs/game-mode-throttle.md`.
     (`runtime`, `startup check`, `settings`, `adapters`, `displays`, `write`); a slow gaming API call logs
     `Windows took N s to ...`. Warm, in a Debug build: 170 ms in total, of which runtime 70 and settings (JSON) 85.
     **Still to read from the first real sign-in on the new build**: the step times, and whether the write now
-    beats the shell. The margin is small: on 2026-11-22 the shell's logon tasks (Shell-Core 62170) began 0.8 s
-    after sign-in and DockSense's process 0.5 s after it; on an eGPU boot the shell took 3.5 s.
+    beats the shell. The margin is small and varies, which replaces the "3–4 s" of 2026-11-18: on 2026-11-22
+    (handheld, FSE boot) the shell's logon tasks (Shell-Core 62170) began 0.8 s after sign-in and DockSense's
+    process 0.5 s after it, a lead of 0.3 s; on 2026-11-21 (eGPU, desktop boot) 3.5 s and 0.7 s, a lead of 2.8 s.
+    The release is a compressed single-file build, whose start-up time at sign-in is not measured either.
   - Before the shell is up, `Shell_NotifyIcon` fails and H.NotifyIcon's `Create` throws `InvalidOperationException`
     ("TryCreate failed."); it can be called again. `TrayIconService` retries every 2 s. Test without a reboot by
     starting DockSense on a new desktop (`CreateDesktop` + `STARTUPINFO.lpDesktop`), which has no taskbar.
@@ -141,7 +144,8 @@ Details and raw data: `docs/game-mode-throttle.md`.
     `AutoStart.AllowsLogonTaskStart` (exit when Windows would not start the Run entry; a task without a Run entry
     for this copy is removed). Then `SignInFastPath.Run` writes the mode's `StartupToGamingHome` before anything
     else is loaded. Keep that path free of WPF, of the gaming experience API and of anything else that asks the
-    shell (the task-start check reads the registry only: `ReadStatus(askWindows: false)`). Whatever needs the shell waits until
+    shell (the task-start check reads the registry only: `ReadStatus(askWindows: false)`, and
+    `RemoveMistakenXboxModeKey` runs only in the normal startup, no longer ahead of the write). Whatever needs the shell waits until
     20 s after sign-in: startup programs and toasts through `SignInSession.ShellWait` (no wait when the sign-in time
     is unknown), the live FSE switch through `FsePlanner.StartupDelay` (10 s when it is unknown, as before 0.3.3). The Run entry stays as the setting and the
     fallback: Settings > Apps > Startup and Task Manager keep working, and DockSense still starts if the task fails.
@@ -217,7 +221,7 @@ Details and raw data: `docs/game-mode-throttle.md`.
 - Touch: WPF runs on `WM_POINTER` (`Switch.System.Windows.Input.Stylus.EnablePointerSupport` in the App csproj), not
   on its default WISP stack, after the user reported on 2026-11-23 that the window ignored touch completely while
   mouse and keyboard worked. The cause was not reproduced: injected touch worked on a freshly started 0.3.3. A
-  process on the pointer stack has no `PenIMC_cor3.dll` loaded. Test touch without a finger with
+  process on the pointer stack has no `PenImc_cor3.dll` loaded. Test touch without a finger with
   `InitializeTouchInjection` + `InjectTouchInput` (works unelevated; taps and pans were checked this way).
 - UI screenshots: launch with `--show`, then render the window with `PrintWindow` (PW_RENDERFULLCONTENT) so other
   windows on top don't spoil the capture. WPF-UI nav items and content inside `ItemsControl` cards expose no Invoke pattern

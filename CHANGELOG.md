@@ -4,13 +4,13 @@ All notable changes to DockSense are documented here. The format follows [Keep a
 
 ## [0.3.4] - 2026-11-23
 
-The DockSense window works with touch, and the early full screen experience setting from 0.3.3 no longer waits on Windows before it is written.
+DockSense takes touch input a different way, and the early full screen experience setting from 0.3.3 no longer waits on Windows before it is written. Both changes are aimed at problems seen on the Ally X, and neither is confirmed as a fix yet.
 
-### Fixed
+### Changed
 
-- **The window responds to touch.** On a handheld the DockSense window could ignore taps and swipes completely, while mouse and keyboard kept working. DockSense now receives touch through Windows pointer input, which does not depend on the older tablet input layer that WPF apps use by default.
-- **The full screen experience setting at sign-in is written much sooner.** 0.3.3 was meant to put the current mode's setting in place before Windows reads it. At real sign-ins the write came 16 to 52 seconds after DockSense had started, so a PC switched on at the eGPU could still boot into the full screen experience and leave it again a minute later. Before writing, DockSense asked Windows whether the full screen experience is supported, and right after sign-in that answer appears to wait for the Windows shell. DockSense now writes first, using only the registry, its settings file and the hardware check, which takes about 0.2 seconds once Windows is up.
-  - Whether this is early enough at every sign-in is not confirmed yet: on some boots Windows starts its shell less than a second after sign-in. When the write is too late, DockSense still switches about 20 seconds after sign-in, provided the mode's profile has *Switch immediately* on.
+- **Touch input goes through Windows pointer input.** On a handheld the DockSense window could ignore taps and swipes completely, while mouse and keyboard kept working. The failure could not be reproduced in testing, so this is a likely fix, not a confirmed one: DockSense no longer depends on the older tablet input layer that WPF apps use by default, which is the suspected cause. If touch still does not work for you, please open an issue.
+- **The full screen experience setting at sign-in no longer waits on Windows.** 0.3.3 was meant to put the current mode's setting in place before Windows reads it. At real sign-ins the write came 16 to 52 seconds after DockSense had started, so a PC switched on at the eGPU could still boot into the full screen experience and leave it again a minute later. Before writing, DockSense asked Windows whether the full screen experience is supported, and right after sign-in that answer appears to wait for the Windows shell. DockSense now writes first, using only the registry, its settings file and its own hardware check.
+  - This has not been measured at a real sign-in yet, so it is not confirmed that the write now comes in time. The room is small: on some boots Windows starts its shell less than a second after sign-in. When the write is too late, DockSense still switches about 20 seconds after sign-in, provided the mode's profile has *Switch immediately* on.
   - The log line `Sign-in start in <mode> mode` now lists how long each step took. If you report a late switch, please include it (`%LOCALAPPDATA%\DockSense\dock-sense.log`).
 
 ### Removed

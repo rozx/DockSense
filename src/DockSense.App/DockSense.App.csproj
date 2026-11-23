@@ -22,10 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Touch through WM_POINTER instead of WPF's default pen and touch stack (WISP). That one keeps its own list
-         of touch devices and discards the mouse messages Windows makes from touches; when the list goes stale
-         (the touch screen leaves and returns with the internal panel on docking, or DockSense starts before the
-         shell), no touch reaches the window at all while the mouse still works. -->
+    <!-- Touch through WM_POINTER instead of WPF's default pen and touch stack (WISP). The window was reported to
+         ignore touch completely while the mouse worked. That was not reproduced, so the cause is a suspicion: WISP
+         keeps its own list of touch devices and discards the mouse messages Windows makes from touches, so a stale
+         list (the touch screen leaves and returns with the internal panel on docking, or DockSense starts before
+         the shell) would give exactly that. -->
     <RuntimeHostConfigurationOption Include="Switch.System.Windows.Input.Stylus.EnablePointerSupport" Value="true" />
   </ItemGroup>
 

@@ -65,7 +65,8 @@ internal static class AutoStart
                 [Command, LegacyCommand],
                 approved?.GetValue(ValueName) as byte[],
                 xboxMode?.GetValue(ValueName) as int?,
-                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so.
+                // The key alone does not prove the feature (0.2.1 created it by mistake); Windows has to say so,
+                // except for the sign-in task check, where the key has to do (see askWindows).
                 xboxModeAvailable: gaming is not null && (!askWindows || XboxModeSupported()));
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
@@ -294,7 +295,13 @@ internal static class AutoStart
     /// <summary>
     /// v0.2.1 created the full screen experience key on PCs that do not have the feature, which made DockSense
     /// treat it as available there. Removes the key again when it holds nothing but what DockSense wrote and
-    /// Windows says the feature is not supported. Call this before anything reads <see cref="FseSettings"/>.
+    /// Windows says the feature is not supported. Call this before the rest of DockSense reads
+    /// <see cref="FseSettings"/>.
+    /// <para>
+    /// The exception is <see cref="SignInFastPath"/>, which runs earlier and must not call this: it asks Windows
+    /// through the gaming experience API, which is kept out of that path. The fast path may write
+    /// <c>StartupToGamingHome</c> into a mistaken key first; that value is one this cleanup tolerates.
+    /// </para>
     /// </summary>
     public static void RemoveMistakenXboxModeKey()
     {
