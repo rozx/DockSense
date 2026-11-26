@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Claude Code project skills (the VS pattern [Rr]elease/ above would hide the release skill)
 !.claude/skills/release/
+
+# Claude Code worktrees (local checkouts of other branches)
+.claude/worktrees/
