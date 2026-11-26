@@ -13,7 +13,21 @@ using Wpf.Ui.Controls;
 
 namespace DockSense.App.ViewModels;
 
-public sealed record Option<T>(T Value, string Label);
+/// <summary>One choice of a list, as the views see it whatever the type of its value.</summary>
+public interface IOption
+{
+    object? Value { get; }
+
+    string Label { get; }
+
+    /// <summary>The number someone would type for this choice (watts, gigabytes), or null when it has none.</summary>
+    double? Number { get; }
+}
+
+public sealed record Option<T>(T Value, string Label, double? Number = null) : IOption
+{
+    object? IOption.Value => Value;
+}
 
 public sealed record HardwareItem(string Name, string Badge, bool IsExternal);
 
@@ -59,6 +73,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string IgpuOfferTitle { get; set; } = string.Empty;
     [ObservableProperty] public partial string IgpuOfferMessage { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IgpuOfferChangeVisible { get; set; }
+    [ObservableProperty] public partial bool TdpVisible { get; set; }
+    [ObservableProperty] public partial string TdpText { get; set; } = string.Empty;
     [ObservableProperty] public partial string PowerText { get; set; } = string.Empty;
     [ObservableProperty] public partial string PauseButtonText { get; set; } = string.Empty;
     [ObservableProperty] public partial InfoBarSeverity ThrottleSeverity { get; set; }
@@ -107,6 +123,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool NotifyOnProgramStart { get; set; }
     [ObservableProperty] public partial bool NotifyOnWarnings { get; set; }
     [ObservableProperty] public partial bool ReassertPowerPlan { get; set; }
+    [ObservableProperty] public partial bool TdpHelperInstalled { get; set; }
     [ObservableProperty] public partial IReadOnlyList<Option<UpdateMode>> UpdateModeOptions { get; set; } = [];
     [ObservableProperty] public partial UpdateMode SelectedUpdateMode { get; set; }
     [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
@@ -261,6 +278,16 @@ public sealed partial class MainViewModel : ObservableObject
         _service.RemindIgpuRestartPending();
     }
 
+    /// <summary>The "Remove" button of the TDP helper card under Settings.</summary>
+    [RelayCommand]
+    private async Task RemoveTdpHelper()
+    {
+        if (await Dialogs.ConfirmAsync(Loc.T("Tdp_RemoveTitle"), Loc.T("Tdp_RemoveMessage"), Loc.T("Tdp_RemoveConfirm")))
+        {
+            await _service.RemoveTdpHelperAsync();
+        }
+    }
+
     [RelayCommand]
     private static void OpenLog() => Open(Log.FilePath);
 
@@ -356,6 +383,8 @@ public sealed partial class MainViewModel : ObservableObject
             null => Loc.T("Common_NotAvailable"),
         };
         PowerText = Loc.T(snapshot?.OnAcPower == false ? "Power_Battery" : "Power_Ac");
+        TdpVisible = _service.TdpInForceWatts is not null;
+        TdpText = _service.TdpInForceWatts is { } tdp ? Loc.F("Tdp_Watts", tdp) : string.Empty;
 
         IgpuAvailable = _service.IgpuMemory is not null;
         var effective = _service.IgpuMemoryEffectiveMb;
@@ -412,6 +441,8 @@ public sealed partial class MainViewModel : ObservableObject
         };
         var fseLiveSupported = FullScreenExperience.IsSupported;
         var igpu = _service.IgpuMemory;
+        var tdpDevice = _service.TdpDevice;
+        var tdpReadiness = tdpDevice is null ? TdpReadiness.Ready : _service.TdpReadiness;
 
         foreach (var profile in Profiles)
         {
@@ -449,6 +480,41 @@ public sealed partial class MainViewModel : ObservableObject
             profile.IgpuDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuDescAmd" : "Prof_IgpuDesc");
             profile.IgpuAskDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuAskDescAmd" : "Prof_IgpuAskDesc");
 
+            profile.TdpAvailable = tdpDevice is not null;
+            if (tdpDevice is not null)
+            {
+                var tdpOptions = BuildTdpOptions(tdpDevice, config.TdpWatts);
+                if (!profile.TdpOptions.SequenceEqual(tdpOptions))
+                {
+                    profile.TdpOptions = tdpOptions;
+                }
+
+                // Switched off, the slider keeps the last value; never used before, it starts at the manufacturer's
+                // maximum, which is what the vendor software's fastest mode sustains.
+                profile.SelectedTdp = config.TdpWatts ?? ModeProfileViewModel.TdpUnchanged;
+                profile.TdpEnabled = config.TdpWatts is not null;
+                profile.TdpWatts = config.TdpWatts ?? (tdpDevice.Offers(profile.TdpWatts) ? profile.TdpWatts : tdpDevice.PluggedIn.Max);
+                profile.TdpDescription = Loc.F("Prof_TdpDesc", tdpDevice.MinWatts, ManufacturerMaxText(tdpDevice));
+
+                // What keeps the value from being applied, with the way out where there is one.
+                var blocked = config.TdpWatts is not null && tdpReadiness != TdpReadiness.Ready;
+                profile.TdpNote = !blocked ? string.Empty : Loc.T(tdpReadiness switch
+                {
+                    TdpReadiness.DriverMissing => "Tdp_NoteDriverMissing",
+                    TdpReadiness.UnprotectedFolder => "Tdp_NoteUnprotected",
+                    _ => "Tdp_NoteHelperMissing",
+                });
+                profile.TdpNoteAction = !blocked ? string.Empty : tdpReadiness switch
+                {
+                    TdpReadiness.DriverMissing => Loc.T("Tdp_GetDriver"),
+                    TdpReadiness.HelperMissing => Loc.T("Tdp_SetUp"),
+                    _ => string.Empty,
+                };
+                profile.TdpWarning = config.TdpWatts is { } watts && tdpDevice.Offers(watts) && tdpDevice.ExceedsManufacturerMax(watts)
+                    ? Loc.F("Tdp_Warning", watts, ManufacturerMaxText(tdpDevice))
+                    : string.Empty;
+            }
+
             if (!profile.WhenOptions.SequenceEqual(whenOptions))
             {
                 profile.WhenOptions = whenOptions;
@@ -473,6 +539,105 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         return options;
+    }
+
+    private static List<Option<int>> BuildTdpOptions(TdpDevice device, int? configured)
+    {
+        var options = new List<Option<int>>();
+        for (var watts = device.MinWatts; watts <= device.CeilingWatts; watts++)
+        {
+            options.Add(new Option<int>(watts, Loc.F("Tdp_Watts", watts), watts));
+        }
+
+        // A value from another device's config stays visible instead of silently changing.
+        if (configured is { } value && !device.Offers(value))
+        {
+            options.Add(new Option<int>(value, Loc.F("Tdp_NotOffered", value)));
+        }
+
+        return options;
+    }
+
+    /// <summary>"35 W", or "30 W plugged in, 25 W on battery" where the two differ.</summary>
+    private static string ManufacturerMaxText(TdpDevice device) => device.PluggedIn.Max == device.OnBattery.Max
+        ? Loc.F("Tdp_Watts", device.PluggedIn.Max)
+        : Loc.F("Tdp_MaxBySource", device.PluggedIn.Max, device.OnBattery.Max);
+
+    /// <summary>
+    /// A new TDP choice in a profile. Above the manufacturer's maximum it asks first, and the first value ever
+    /// chosen sets up the elevated helper (Windows asks for approval). Saying no puts the old choice back.
+    /// </summary>
+    internal async void ChangeTdp(ModeProfileViewModel profile, int previous, int value)
+    {
+        if (_syncing || _service.TdpDevice is not { } device)
+        {
+            return;
+        }
+
+        if (value != ModeProfileViewModel.TdpUnchanged && device.Offers(value))
+        {
+            var wasAbove = previous != ModeProfileViewModel.TdpUnchanged && device.ExceedsManufacturerMax(previous);
+            if (device.ExceedsManufacturerMax(value) && !wasAbove
+                && !await Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", value, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm")))
+            {
+                SetTdpSelection(profile, previous);
+                return;
+            }
+
+            if (_service.TdpReadiness == TdpReadiness.HelperMissing
+                && !(await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
+                    && await _service.SetUpTdpHelperAsync()))
+            {
+                SetTdpSelection(profile, previous);
+                return;
+            }
+        }
+
+        // The window may have been refreshed from the saved settings while a dialog was open.
+        SetTdpSelection(profile, value);
+        SaveProfile(profile);
+    }
+
+    /// <summary>The button next to a profile's "not applied" note: get the driver, or set up the helper.</summary>
+    internal async Task ResolveTdpNote()
+    {
+        switch (_service.TdpReadiness)
+        {
+            case TdpReadiness.DriverMissing:
+                Open(TdpHelper.PawnIoUrl);
+                break;
+
+            case TdpReadiness.HelperMissing:
+                if (await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
+                {
+                    await _service.SetUpTdpHelperAsync();
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>True while the view models are being filled from the saved settings: nothing is to be saved then.</summary>
+    internal bool IsSyncing => _syncing;
+
+    /// <summary>Shows a TDP choice (<see cref="ModeProfileViewModel.TdpUnchanged"/> = off) without acting on it.</summary>
+    private void SetTdpSelection(ModeProfileViewModel profile, int value)
+    {
+        var wasSyncing = _syncing;
+        _syncing = true;
+        try
+        {
+            profile.SelectedTdp = value;
+            profile.TdpEnabled = value != ModeProfileViewModel.TdpUnchanged;
+            if (profile.TdpEnabled)
+            {
+                profile.TdpWatts = value;
+            }
+        }
+        finally
+        {
+            _syncing = wasSyncing;
+        }
     }
 
     private List<Option<string>> BuildPlanOptions(IReadOnlyList<PlanInfo> plans)
@@ -593,6 +758,8 @@ public sealed partial class MainViewModel : ObservableObject
         NotifyOnWarnings = ui.NotifyOnWarnings;
         ReassertPowerPlan = _service.Config.ReassertPowerPlan;
 
+        TdpHelperInstalled = _service.TdpHelperInstalled;
+
         List<Option<UpdateMode>> updateModes =
         [
             new(UpdateMode.Off, Loc.T("UpdateMode_Off")),
@@ -684,6 +851,7 @@ public sealed partial class MainViewModel : ObservableObject
             // The switch is locked on while the size goes through the AMD driver: keep what the profile said.
             IgpuMemoryApply = profile.IgpuExperimental ? _service.Config.ProfileFor(profile.Mode).IgpuMemoryApply
                 : profile.IgpuAsk ? IgpuMemoryApply.Ask : IgpuMemoryApply.Automatic,
+            TdpWatts = profile.SelectedTdp == ModeProfileViewModel.TdpUnchanged ? null : profile.SelectedTdp,
             Programs = profile.Programs.Select(p => p.ToModel()).ToList(),
         };
 
@@ -930,6 +1098,31 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
 
     [ObservableProperty] public partial string IgpuDescription { get; set; } = string.Empty;
     [ObservableProperty] public partial string IgpuAskDescription { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool TdpAvailable { get; set; }
+    [ObservableProperty] public partial IReadOnlyList<Option<int>> TdpOptions { get; set; } = [];
+    /// <summary>The profile's TDP in watts, or <see cref="TdpUnchanged"/>. The switch and the slider feed it.</summary>
+    [ObservableProperty] public partial int SelectedTdp { get; set; } = TdpUnchanged;
+
+    /// <summary>The switch: off leaves the TDP to the vendor software.</summary>
+    [ObservableProperty] public partial bool TdpEnabled { get; set; }
+
+    /// <summary>The slider's value. It keeps its place while the switch is off.</summary>
+    [ObservableProperty] public partial int TdpWatts { get; set; }
+
+    [ObservableProperty] public partial string TdpDescription { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TdpNoteVisible))]
+    public partial string TdpNote { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TdpNoteActionVisible))]
+    public partial string TdpNoteAction { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TdpWarningVisible))]
+    public partial string TdpWarning { get; set; } = string.Empty;
+
     [ObservableProperty] public partial IReadOnlyList<Option<ProgramTrigger>> WhenOptions { get; set; } = [];
 
     /// <summary>"Don't change" in the iGPU memory list.</summary>
@@ -937,6 +1130,17 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
 
     /// <summary>Asking first needs a size to ask about.</summary>
     public bool IgpuAskEnabled => SelectedIgpu != IgpuUnchanged && !IgpuExperimental;
+    /// <summary><see cref="SelectedTdp"/> when the override is off.</summary>
+    public const int TdpUnchanged = -1;
+
+    public bool TdpNoteVisible => TdpNote.Length > 0;
+
+    public bool TdpNoteActionVisible => TdpNoteAction.Length > 0;
+
+    public bool TdpWarningVisible => TdpWarning.Length > 0;
+
+    [RelayCommand]
+    private Task ResolveTdpNote() => owner.ResolveTdpNote();
 
     /// <summary>The live switch needs a target (desktop or FSE) and the Windows API.</summary>
     public bool FseLiveEnabled => FseLiveSupported && SelectedFse != FseStartup.Unchanged;
@@ -988,6 +1192,23 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     partial void OnSelectedIgpuChanged(int value) => owner.SaveProfile(this);
 
     partial void OnIgpuAskChanged(bool value) => owner.SaveProfile(this);
+    partial void OnSelectedTdpChanged(int oldValue, int newValue) => owner.ChangeTdp(this, oldValue, newValue);
+
+    partial void OnTdpEnabledChanged(bool value)
+    {
+        if (!owner.IsSyncing)
+        {
+            SelectedTdp = value ? TdpWatts : TdpUnchanged;
+        }
+    }
+
+    partial void OnTdpWattsChanged(int value)
+    {
+        if (!owner.IsSyncing && TdpEnabled)
+        {
+            SelectedTdp = value;
+        }
+    }
 }
 
 public sealed partial class AdapterOverrideViewModel(string instanceId, MainViewModel owner) : ObservableObject

@@ -53,6 +53,12 @@ public sealed class DockSenseService : IDisposable
     private static readonly TimeSpan AwaitedModeWait = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan AmdDriverRetry = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long after an event that may have replaced the TDP (power source, resume, plan or Armoury Crate mode
+    /// change) DockSense sends its value again: late enough to land after the vendor software's own reaction.
+    /// </summary>
+    private static readonly TimeSpan TdpReassertDelay = TimeSpan.FromSeconds(3);
+
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
@@ -76,6 +82,16 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _modeAtUnansweredStore;
     private bool _resumedInSameMode;
     private bool _disposed;
+    private readonly DispatcherTimer _tdpTimer = new() { Interval = TdpReassertDelay };
+    private IDisposable? _armouryCrateWatch;
+    private TdpState? _tdpState;
+    private int? _tdpWanted;
+    private string _tdpReason = string.Empty;
+    private bool _tdpWriting;
+    private bool _tdpWriteAgain;
+    private string? _tdpWarned;
+    private TdpReadiness? _tdpReadiness;
+    private bool? _tdpHelperInstalled;
 
     public DockSenseService(ConfigStore configStore)
     {
@@ -83,6 +99,7 @@ public sealed class DockSenseService : IDisposable
         _rescanTimer.Tick += (_, _) => { _rescanTimer.Stop(); Evaluate(); };
         _settleTimer.Tick += (_, _) => { _settleTimer.Stop(); Evaluate(); };
         _igpuWaitTimer.Tick += (_, _) => OnAwaitedModeWaitOver();
+        _tdpTimer.Tick += (_, _) => { _tdpTimer.Stop(); _ = WriteTdpAsync(); };
     }
 
     /// <summary>Raised whenever anything shown in the UI may have changed.</summary>
@@ -163,6 +180,19 @@ public sealed class DockSenseService : IDisposable
         ? IgpuRestartPlanner.Options(Config, Mode, options, boot.EffectiveRaw)
         : [];
 
+    /// <summary>The device's TDP limits, or null when DockSense cannot set the TDP on this device.</summary>
+    public TdpDevice? TdpDevice { get; private set; }
+
+    /// <summary>The TDP DockSense set and that is in force, in watts; null when the vendor software decides.</summary>
+    public int? TdpInForceWatts => _tdpState?.Watts;
+
+    /// <summary>What keeps a TDP override from being written, if anything. Read on demand and remembered.</summary>
+    public TdpReadiness TdpReadiness => _tdpReadiness ??= TdpHelper.Readiness();
+
+    /// <summary>True while the elevated helper task is registered for this copy (whatever else may be missing).</summary>
+    public bool TdpHelperInstalled => TdpDevice is not null
+        && (TdpReadiness == TdpReadiness.Ready || (_tdpHelperInstalled ??= TdpHelper.IsInstalled));
+
     /// <summary>True when config.json did not exist at startup (first run).</summary>
     public bool IsFirstRun { get; private set; }
 
@@ -186,6 +216,7 @@ public sealed class DockSenseService : IDisposable
         }
 
         InitializeIgpuMemory();
+        InitializeTdp();
         Snapshot = TakeSnapshot() ?? new DeviceSnapshot([], [], OnAcPower: true);
         var mode = ModeResolver.Resolve(Snapshot, Config.Detection);
         _stabilizer = new ModeStabilizer(mode, SettleTime);
@@ -204,6 +235,11 @@ public sealed class DockSenseService : IDisposable
             _lastApplied = mode;
             _resumedInSameMode = true;
             Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
+
+            // So does its TDP; this instance only needs to know the value to send it again after a reset.
+            _tdpWanted = TdpPlanner.Plan(Config.ProfileFor(mode), TdpDevice, _tdpState is not null) == TdpAction.Set
+                ? Config.ProfileFor(mode).TdpWatts
+                : null;
         }
         else if (Paused)
         {
@@ -224,6 +260,11 @@ public sealed class DockSenseService : IDisposable
         _notifications.HardwareChanged += ScheduleRescan;
         _notifications.ActivePlanChanged += OnActivePlanChanged;
         FullScreenExperience.Subscribe(() => _dispatcher.BeginInvoke(RaiseStatusChanged));
+        if (TdpDevice is not null)
+        {
+            _armouryCrateWatch = ArmouryCrate.WatchModeChanges(
+                () => _dispatcher.BeginInvoke(() => QueueTdpReassert("Armoury Crate changed its settings")));
+        }
     }
 
     public void ScheduleRescan(string reason)
@@ -231,6 +272,7 @@ public sealed class DockSenseService : IDisposable
         Log.Info($"Re-check scheduled: {reason}");
         _rescanTimer.Stop();
         _rescanTimer.Start();
+        QueueTdpReassert(reason);
     }
 
     public void SetPaused(bool paused)
@@ -364,9 +406,11 @@ public sealed class DockSenseService : IDisposable
     {
         FullScreenExperience.Unsubscribe();
         _notifications?.Dispose();
+        _armouryCrateWatch?.Dispose();
         _rescanTimer.Stop();
         _settleTimer.Stop();
         _igpuWaitTimer.Stop();
+        _tdpTimer.Stop();
         _disposed = true;
     }
 
@@ -437,6 +481,7 @@ public sealed class DockSenseService : IDisposable
         ApplyPowerPlan(mode, profile, reason);
         ApplyFse(mode, profile, reason);
         ApplyIgpuMemory(mode, profile, reason);
+        ApplyTdp(mode, profile, reason);
         StartPrograms(mode, reason);
         _lastApplied = mode;
 
@@ -1229,6 +1274,267 @@ public sealed class DockSenseService : IDisposable
         }
     }
 
+    // ------------------------------------------------------------------ TDP
+
+    private void InitializeTdp()
+    {
+        if (!TdpHelper.IsSupported)
+        {
+            return;
+        }
+
+        TdpDevice = TdpWriter.Device;
+
+        // A limit set before a restart of the PC is gone; one set earlier in this boot is still DockSense's to
+        // give back.
+        var saved = StateStore.LoadTdp();
+        _tdpState = saved is not null && saved.Boot.IsSameBoot(CurrentBoot()) ? saved : null;
+        if (saved is not null && _tdpState is null)
+        {
+            StateStore.SaveTdp(null);
+        }
+
+        Log.Info($"TDP: {TdpDevice!.Board}, {TdpDevice.MinWatts}-{TdpDevice.CeilingWatts} W"
+            + (_tdpState is null ? string.Empty : $"; {_tdpState.Watts} W set by DockSense is in force"));
+    }
+
+    private void ApplyTdp(DockMode mode, ModeProfile profile, ApplyReason reason)
+    {
+        switch (TdpPlanner.Plan(profile, TdpDevice, _tdpState is not null))
+        {
+            case TdpAction.Set:
+                // Every edit of a profile applies it again: no need to send a value that was sent already.
+                var unchanged = reason == ApplyReason.SettingsChanged
+                    && _tdpWanted == profile.TdpWatts
+                    && _tdpState?.Watts == TdpDevice!.Clamp(profile.TdpWatts!.Value, SafeOnAcPower());
+                _tdpWanted = profile.TdpWatts;
+                if (!unchanged)
+                {
+                    _tdpReason = mode.ToString();
+                    InvalidateTdpReadiness(); // The driver may have been installed since it was last looked at.
+                    _ = WriteTdpAsync();
+                }
+
+                break;
+
+            case TdpAction.HandBack:
+                _tdpWanted = null;
+                _tdpTimer.Stop();
+                if (_tdpWriting)
+                {
+                    _tdpWriteAgain = true; // The running write gives the TDP back when it returns.
+                }
+                else
+                {
+                    HandBackTdp();
+                }
+
+                break;
+
+            default:
+                _tdpWanted = null;
+                _tdpTimer.Stop();
+                if (profile.TdpWatts is { } watts && TdpDevice is { } device && !device.Offers(watts))
+                {
+                    Log.Warn($"{mode}: {watts} W is outside this device's range ({device.MinWatts}-{device.CeilingWatts} W); not changing the TDP.");
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Sends the TDP again in a moment, because something may just have replaced it. The firmware loads its own
+    /// limits whenever the vendor software sends a performance mode, which it does on power source changes.
+    /// </summary>
+    private void QueueTdpReassert(string reason)
+    {
+        if (_tdpWanted is null || Paused)
+        {
+            return;
+        }
+
+        _tdpReason = reason;
+        _tdpTimer.Stop();
+        _tdpTimer.Start();
+    }
+
+    /// <summary>
+    /// Has the helper task send the wanted TDP. One write runs at a time; a request that arrives meanwhile makes
+    /// the running one go round again, with whatever is wanted by then.
+    /// </summary>
+    private async Task WriteTdpAsync()
+    {
+        if (_tdpWriting)
+        {
+            _tdpWriteAgain = true;
+            return;
+        }
+
+        _tdpWriting = true;
+        try
+        {
+            do
+            {
+                _tdpWriteAgain = false;
+                if (Paused || _tdpWanted is not { } watts || TdpDevice is not { } device)
+                {
+                    break;
+                }
+
+                // The helper works this out by itself as well; this is for what DockSense shows and remembers.
+                var sent = device.Clamp(watts, SafeOnAcPower());
+                var reason = _tdpReason;
+                var result = TdpReadiness == TdpReadiness.Ready ? await Task.Run(() => TdpHelper.Write(watts)) : TdpWriteResult.Failed;
+                OnTdpWritten(sent, result, reason);
+            }
+            while (_tdpWriteAgain);
+
+            // The mode moved on to one without an override while a value was on its way.
+            if (_tdpWanted is null && _tdpState is not null && !Paused)
+            {
+                HandBackTdp();
+            }
+        }
+        finally
+        {
+            _tdpWriting = false;
+            RaiseStatusChanged();
+        }
+    }
+
+    private void OnTdpWritten(int sent, TdpWriteResult result, string reason)
+    {
+        if (result == TdpWriteResult.Ok)
+        {
+            if (_tdpState?.Watts != sent)
+            {
+                AddActivity(Loc.F("Act_Tdp", sent));
+            }
+
+            Log.Info($"TDP set to {sent} W ({reason}).");
+            _tdpState = new TdpState(CurrentBoot(), sent);
+            StateStore.SaveTdp(_tdpState);
+            _tdpWarned = null;
+            return;
+        }
+
+        // Whatever was in the way may have changed since it was last looked at (the driver or the task removed).
+        InvalidateTdpReadiness();
+        var readiness = TdpReadiness;
+        Log.Warn($"Could not set the TDP to {sent} W ({reason}): {result}; {readiness}.");
+        var message = readiness switch
+        {
+            TdpReadiness.DriverMissing => Loc.T("Act_TdpDriverMissing"),
+            TdpReadiness.UnprotectedFolder => Loc.T("Act_TdpUnprotected"),
+            TdpReadiness.HelperMissing => Loc.T("Act_TdpHelperMissing"),
+            _ => Loc.F("Act_TdpFailed", result),
+        };
+        if (_tdpWarned != message)
+        {
+            // Once per cause: the value is sent again after every power source change.
+            _tdpWarned = message;
+            NotifyWarning(message);
+        }
+    }
+
+    /// <summary>
+    /// Gives the TDP back to the vendor software by re-sending the performance mode Armoury Crate has selected:
+    /// the firmware then loads that mode's own limits (measured on the RC74XA).
+    /// </summary>
+    private void HandBackTdp()
+    {
+        var onAc = SafeOnAcPower();
+        var asusMode = TdpPlanner.AsusModeToRestore(ArmouryCrate.SelectedMode(onAc), onAc);
+        var done = false;
+        try
+        {
+            done = AsusAcpi.WritePerformanceMode(asusMode);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not re-send the performance mode", ex);
+        }
+
+        if (done)
+        {
+            Log.Info($"TDP handed back: re-sent performance mode {asusMode}.");
+            AddActivity(Loc.T("Act_TdpHandedBack"));
+        }
+        else
+        {
+            Log.Warn($"Could not hand the TDP back (performance mode {asusMode}); {_tdpState?.Watts} W stays until the vendor software or a restart changes it.");
+            NotifyWarning(Loc.F("Act_TdpHandBackFailed", _tdpState?.Watts));
+        }
+
+        _tdpState = null;
+        StateStore.SaveTdp(null);
+    }
+
+    /// <summary>Registers the elevated helper task (Windows asks for approval), then sends the wanted TDP.</summary>
+    public async Task<bool> SetUpTdpHelperAsync()
+    {
+        var result = await Task.Run(TdpHelper.Install);
+        InvalidateTdpReadiness();
+        if (result == TdpSetupResult.Done)
+        {
+            AddActivity(Loc.T("Act_TdpHelperInstalled"));
+            _tdpWarned = null;
+            _tdpReason = "helper set up";
+            _ = WriteTdpAsync();
+        }
+        else if (result == TdpSetupResult.Failed)
+        {
+            NotifyWarning(Loc.T("Act_TdpHelperFailed"));
+        }
+
+        RaiseStatusChanged();
+        return result == TdpSetupResult.Done;
+    }
+
+    private void InvalidateTdpReadiness()
+    {
+        _tdpReadiness = null;
+        _tdpHelperInstalled = null;
+    }
+
+    /// <summary>
+    /// Removes the helper task (Windows asks for approval). A TDP in force is given back first, because nothing
+    /// could change it afterwards.
+    /// </summary>
+    public async Task<bool> RemoveTdpHelperAsync()
+    {
+        var result = await Task.Run(TdpHelper.Remove);
+        InvalidateTdpReadiness();
+        if (result == TdpSetupResult.Done)
+        {
+            AddActivity(Loc.T("Act_TdpHelperRemoved"));
+            if (_tdpState is not null && !_tdpWriting)
+            {
+                HandBackTdp();
+            }
+        }
+        else if (result == TdpSetupResult.Failed)
+        {
+            NotifyWarning(Loc.T("Act_TdpHelperFailed"));
+        }
+
+        RaiseStatusChanged();
+        return result == TdpSetupResult.Done;
+    }
+
+    private bool SafeOnAcPower()
+    {
+        try
+        {
+            return DeviceProbe.OnAcPower;
+        }
+        catch (Win32Exception)
+        {
+            return Snapshot?.OnAcPower ?? true;
+        }
+    }
+
     // ------------------------------------------------------------------ Programs
 
     private void StartPrograms(DockMode mode, ApplyReason reason)
@@ -1307,6 +1613,8 @@ public sealed class DockSenseService : IDisposable
             return;
         }
 
+        // Armoury Crate changes the plan together with its performance mode, and the mode replaces the TDP.
+        QueueTdpReassert("power plan changed");
         var reapply = _planController.OnActivePlanChanged(newActive, DateTimeOffset.Now);
         if (reapply is { } plan)
         {

@@ -35,6 +35,7 @@ DockSense runs quietly in your system tray, watching for external GPUs, external
 - ⚡ **Power plans & built-in editor.** Applies a plan per mode, restores your previous plan on leave, and re-asserts your choice (with backoff) if vendor software such as Armoury Crate changes it back. Includes an eGPU-safe **DockSense Performance** plan and an editor for plugged-in/on-battery settings (including hidden High Performance-type plans).
 - 🎮 **Xbox full screen experience.** Sets the sign-in behavior per mode and can switch **immediately** when the mode changes, not only at the next sign-in.
 - 🧠 **iGPU memory** *(ASUS handhelds such as the ROG Xbox Ally X; experimental on other AMD handhelds)*. Sets the firmware UMA frame buffer size per mode—for example 8 GB handheld and minimum with an eGPU—and offers **Restart for `<mode>`** in the tray menu so one restart is enough.
+- 🔥 **TDP override** *(ROG Ally family; needs the [PawnIO](https://pawnio.eu/) driver)*. Enforces a processor power limit per mode over what Armoury Crate sets—for example 15 W handheld and full power with an eGPU—re-sends it when the vendor software resets it, and hands control back when the mode ends. Values above the manufacturer's maximum come with a clear warning.
 - 🚀 **Run programs on mode changes.** Launches apps, scripts or URLs when a mode begins, ends, or starts up, with arguments, a hidden window or administrator rights.
 
 ### Built for daily use
@@ -43,7 +44,7 @@ DockSense runs quietly in your system tray, watching for external GPUs, external
 - 🔔 **Native notifications & 🩺 Diagnostics.** Toast alerts on mode changes and program launches, a live Game Mode throttle check on the Status page, and a one-click diagnostic report.
 - ⬆️ **Self-updating.** Daily GitHub release checks verified with SHA-256 checksums, with one-click or automatic next-start updates (can be turned off).
 - 🌐 **English & 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus, for the optional iGPU memory, the ASUS ACPI interface. *(The experimental AMD-driver route for other handhelds uses AMD's own API; whether that needs admin rights is not known yet.)* *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
+- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus, for the optional iGPU memory, the ASUS ACPI interface. *(The experimental AMD-driver route for other handhelds uses AMD's own API; whether that needs admin rights is not known yet.)* *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)* *(The optional TDP override is the one feature that goes further: it uses the PawnIO driver and asks for administrator approval once.)*
 
 ## How it works
 
@@ -152,6 +153,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
   - the power plan: *Don't change* (your vendor software decides), *DockSense Performance* (the eGPU-safe plan), or any Windows plan, including hidden ones
   - the full screen experience at sign-in, and whether to **switch immediately** when entering the mode. For example, with Handheld set to the full screen experience and Docked set to the desktop, both switching immediately, docking leaves the full screen experience and undocking enters it again.
   - the **iGPU memory** (on supported ASUS devices, and experimentally on other AMD devices through the AMD graphics driver; applies after a restart), and whether DockSense should **ask before changing** it
+  - the **TDP override** (ROG Ally family with the PawnIO driver): switch it on, then drag the slider or type the watts; switched off, the TDP stays with your vendor software
   - **programs to run** when the mode begins or ends. **Test** starts one right away.
 - **Power plans:** create a plan from any existing one (High performance-based plans avoid the Game Mode throttle), edit its plugged-in and on-battery settings, rename or delete it.
 - **Detection:** settle time, "Docked only when plugged in", and per-adapter overrides (*Always / Never an eGPU*).
@@ -172,6 +174,7 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | Also enter or leave the full screen experience as soon as the mode changes |
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | iGPU memory in MB to store in the firmware (`0` = Auto, `null` = don't change). Applies after a restart |
 | `handheld` / `docked` / `egpu` → `igpuMemoryApply` | `Automatic` | `Automatic` stores the size as soon as the mode starts. `Ask` asks in a notification first and stores nothing until you agree |
+| `handheld` / `docked` / `egpu` → `tdpWatts` | `null` | Processor power limit in watts to enforce in the mode (`null` = don't change). Supported devices only; values outside the device's range are not sent |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | Programs to start: `path`, `arguments`, `when` (`Enter`, `EnterOrStartup` or `Leave`), `hidden`, `runAsAdministrator`, `enabled` |
 | `detection.settleSeconds` | `5` | How long a new mode must stay stable before it is applied |
 | `detection.dockedRequiresAcPower` | `false` | Count external displays only while plugged in |
@@ -186,10 +189,13 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 
 ## Supported hardware
 
-All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Only the optional **iGPU memory** setting depends on the device:
+All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Two optional settings depend on the device. **iGPU memory**:
 
 - **ASUS** handhelds: through the `ATKACPI` firmware interface. Tested.
 - **Other AMD handhelds** whose Radeon driver offers *Variable Graphics Memory* (for example the MSI Claw A8): through the AMD driver. 🧪 **Experimental.** It was written from AMD's SDK and has not been run on such a device yet. The driver may restart the PC as soon as a size is stored, so DockSense always asks first and offers the change only together with a restart. If you try it, please [report how it went](https://github.com/rozx/DockSense/issues), problems and successes alike, with the diagnostic report attached.
+All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Two optional settings are device-specific: **iGPU memory** is for ASUS devices (via the `ATKACPI` firmware interface), and the **TDP override** covers the ROG Ally family (ROG Ally, ROG Ally X, ROG Xbox Ally X), whose power limits DockSense knows. The TDP override has been measured on the ROG Xbox Ally X only; the other models use the same method and are untested.
+
+The **TDP override** covers the ROG Ally family (ROG Ally, ROG Ally X, ROG Xbox Ally X), whose power limits DockSense knows. It has been measured on the ROG Xbox Ally X only; the other models use the same method and are untested.
 
 Tested so far:
 
@@ -222,6 +228,20 @@ Some PCs do not start with an eGPU attached. On those, use **Restart for eGPU** 
 </details>
 
 <details>
+<summary><b>How does the TDP override work, and is it safe?</b></summary>
+
+Each mode can enforce its own processor power limit (TDP), whatever Armoury Crate is set to: for example 15 W as a handheld for battery life, and switched off with an eGPU.
+
+- **What it needs.** The [PawnIO](https://pawnio.eu/) driver, which you install yourself (DockSense does not ship or install a driver), an administrator account, and DockSense in a folder that needs administrator rights to change, such as Program Files.
+- **Why a driver.** On the ROG Xbox Ally X the firmware accepts power limits through ASUS's own interface and then ignores them. DockSense therefore sends the limit to the processor directly, the way RyzenAdj, Universal x86 Tuning Utility, G-Helper and Handheld Companion do, and that takes a driver. PawnIO is signed and only runs modules signed by its author; DockSense includes the unchanged AMD module from the PawnIO project.
+- **Why administrator approval.** PawnIO only talks to administrators. The first time you choose a value, Windows asks once and DockSense registers a task (`DockSense-TDP-<your user ID>` in Task Scheduler) that sets the TDP with administrator rights. DockSense itself keeps running without them. The task takes nothing but a watt value and checks it against the device's range itself. This is also why the folder matters: the task runs `DockSense.exe`, so in a folder any program can write to, that file could be replaced. **Settings → TDP helper → Remove** takes the task away again.
+- **What it sets.** One value for the sustained, medium and short-term limits, so the processor stays at that power. The range runs from the manufacturer's minimum (7 W on the Ally family) up to the highest short-burst limit the firmware itself uses (55 W on the ROG Xbox Ally X, less on battery for the older models).
+- **Above the manufacturer's maximum.** For a value above what the manufacturer allows (35 W on the ROG Xbox Ally X), DockSense asks before it accepts it and keeps a warning under the setting. Running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it. You do this at your own risk. It may also gain you little: on the ROG Xbox Ally X, a 45 W setting ran the processor at 44 W for about a minute, then the firmware pulled it back to 35 W once it was hot (93 °C) and held it there, the same as Armoury Crate's Turbo does. Other devices may behave differently.
+- **Staying in force.** The firmware loads its own limits again whenever the vendor software sends a performance mode, which happens when you plug in or unplug the charger, after sleep, and when you switch modes in Armoury Crate. DockSense sends its value again a few seconds after each of these.
+- **Giving it back.** When a mode with the override switched off begins, DockSense re-sends the performance mode Armoury Crate has selected, and the firmware goes back to that mode's own limits. A restart of the PC also clears every limit.
+</details>
+
+<details>
 <summary><b>Switching the full screen experience right away doesn't work.</b></summary>
 
 It needs a Windows build with the full screen experience (Windows 11 on a handheld, or with "Xbox mode" enabled) and a home app (the Xbox app, or a launcher such as AnyFSE). If Windows asks for confirmation, choose to start without restarting. When Windows is set to *Restart to optimize* on entering, DockSense won't switch live, because that would restart the PC; the setting still applies at the next sign-in.
@@ -230,7 +250,7 @@ It needs a Windows build with the full screen experience (Windows 11 on a handhe
 <details>
 <summary><b>Will DockSense fight with Armoury Crate / Legion Space / other vendor tools?</b></summary>
 
-Only in modes where you chose a specific plan, and only within limits. If something switches the plan more than 5 times in 2 minutes, DockSense stops re-applying it until the next mode change and tells you. Vendor TDP settings (e.g. Armoury Crate's 35 W Turbo) are separate from Windows plans and keep working.
+Only in modes where you chose a specific plan, and only within limits. If something switches the plan more than 5 times in 2 minutes, DockSense stops re-applying it until the next mode change and tells you. Vendor TDP settings (e.g. Armoury Crate's 35 W Turbo) are separate from Windows plans and keep working, unless you give the mode a TDP override of its own.
 </details>
 
 <details>
@@ -278,7 +298,7 @@ The builds are not code-signed yet, so the checksum shows that the download is t
 <summary><b>How do I uninstall DockSense completely?</b></summary>
 
 1. Optionally delete the DockSense Performance plan on the **Power plans** page while it isn't active (Windows can't delete the active plan). `powercfg /delete <guid>` works too; the GUID is `dockSensePerformancePlanId` in `config.json`.
-2. Turn off **Start with Windows** (this also removes the sign-in task), then exit from the tray.
+2. Turn off **Start with Windows** (this also removes the sign-in task). If you used the TDP override, remove the helper task with **Settings → TDP helper → Remove**. Then exit from the tray.
 3. Delete the DockSense folder, plus `%APPDATA%\DockSense` and `%LOCALAPPDATA%\DockSense`.
 </details>
 
@@ -303,7 +323,7 @@ dotnet run --project src/DockSense.App
 | Project | Purpose |
 |---|---|
 | `src/DockSense.Core` | Platform-independent logic: mode resolution, debouncing, power plan policy, program triggers, power setting catalog, iGPU memory decoding, config (fully unit tested) |
-| `src/DockSense.App` | WPF tray app: Windows APIs (SetupAPI, display config, powrprof, gaming experience), ASUS ACPI, UI, notifications |
+| `src/DockSense.App` | WPF tray app: Windows APIs (SetupAPI, display config, powrprof, gaming experience), ASUS ACPI, the TDP override (PawnIO), UI, notifications |
 | `tests/DockSense.Core.Tests` | xUnit tests, including the measured Ally X / XG Mobile unplug sequence |
 | `tools/DockSense.IconGen` | Generates every icon from the pixel-art grids in `Sprites.cs` |
 
@@ -335,6 +355,8 @@ Bug reports, device reports and pull requests are welcome. If DockSense is usefu
 - [WPF-UI](https://github.com/lepoco/wpfui): Fluent controls for WPF
 - [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon): tray icon
 - [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) and the [Windows Community Toolkit](https://github.com/CommunityToolkit/WindowsCommunityToolkit) notifications
+- [PawnIO](https://pawnio.eu/) and its [modules](https://github.com/namazso/PawnIO.Modules) by namazso (the AMD SMU module is included unchanged, LGPL-2.1), for the TDP override
+- [RyzenAdj](https://github.com/FlyGoat/RyzenAdj), [Universal x86 Tuning Utility](https://github.com/JamesCJ60/Universal-x86-Tuning-Utility) and [G-Helper](https://github.com/seerge/g-helper) for how the processor's power limits are set, and the Linux `asus-armoury` driver for the Ally family's limits
 - [Sweetie 16](https://lospec.com/palette-list/sweetie-16) palette by GrafxKid, used for the pixel-art icons
 
 ## License

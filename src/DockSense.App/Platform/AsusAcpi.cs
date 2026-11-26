@@ -6,8 +6,9 @@ using Microsoft.Win32.SafeHandles;
 namespace DockSense.App.Platform;
 
 /// <summary>
-/// The ASUS ATK ACPI device (<c>\\.\ATKACPI</c>), used here only for the iGPU memory (UMA frame buffer) setting.
-/// Standard users can open it; no admin rights are needed. Writes are limited to values the firmware lists itself.
+/// The ASUS ATK ACPI device (<c>\\.\ATKACPI</c>), used here for the iGPU memory (UMA frame buffer) setting and for
+/// re-sending the performance mode. Standard users can open it; no admin rights are needed. Writes are limited to
+/// values the firmware lists itself, and for the mode to the three every model has.
 /// </summary>
 internal static class AsusAcpi
 {
@@ -16,6 +17,7 @@ internal static class AsusAcpi
     private const uint Dsts = 0x53545344; // get device status
     private const uint Devs = 0x53564544; // set device status
     private const uint VramMemory = 0x000600C4;
+    private const uint PerformanceMode = 0x00120075;
 
     private const uint GENERIC_READ = 0x80000000;
     private const uint GENERIC_WRITE = 0x40000000;
@@ -73,6 +75,20 @@ internal static class AsusAcpi
             return false;
         }
 
+        return Set(VramMemory, raw);
+    }
+
+    /// <summary>
+    /// Sends a performance mode (0 Performance, 1 Turbo, 2 Silent), as Armoury Crate does when its mode is
+    /// switched. The firmware loads that mode's own power limits again, which is how DockSense gives the TDP back
+    /// after an override. Returns true when the firmware accepted it. Measured on the RC74XA: Silent holds 13 W,
+    /// Performance settles at 17 W, Turbo runs at about 45 W; any other value (4, "Manual" on some laptops)
+    /// behaves as Performance, so only these three are sent.
+    /// </summary>
+    public static bool WritePerformanceMode(uint mode) => mode <= 2 && Set(PerformanceMode, mode);
+
+    private static bool Set(uint deviceId, uint value)
+    {
         using var device = Open();
         if (device is null)
         {
@@ -82,8 +98,8 @@ internal static class AsusAcpi
         var input = new byte[16];
         BitConverter.GetBytes(Devs).CopyTo(input, 0);
         BitConverter.GetBytes(8u).CopyTo(input, 4);
-        BitConverter.GetBytes(VramMemory).CopyTo(input, 8);
-        BitConverter.GetBytes(raw).CopyTo(input, 12);
+        BitConverter.GetBytes(deviceId).CopyTo(input, 8);
+        BitConverter.GetBytes(value).CopyTo(input, 12);
         var output = new byte[16];
         return Control(device, input, output) && BitConverter.ToInt32(output, 0) == 1;
     }

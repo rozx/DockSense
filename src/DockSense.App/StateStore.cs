@@ -34,6 +34,7 @@ internal static class StateStore
     private const string IgpuMemoryFile = "igpu-memory.json";
     private const string IgpuRestartFile = "igpu-restart.json";
     private const string UpdateFile = "update.json";
+    private const string TdpFile = "tdp.json";
 
     /// <summary>Which plan DockSense owns and what to restore.</summary>
     public static PowerPlanState? Load() => Load<PowerPlanState>(PowerPlanFile);
@@ -58,6 +59,27 @@ internal static class StateStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Warn($"Could not remove {IgpuRestartFile}: {ex.Message}");
+        }
+    }
+
+    /// <summary>The TDP DockSense set and that is still in force, if any (null also after "no longer ours").</summary>
+    public static TdpState? LoadTdp() => Load<TdpState>(TdpFile);
+
+    public static void SaveTdp(TdpState? state)
+    {
+        if (state is not null)
+        {
+            Save(TdpFile, state);
+            return;
+        }
+
+        try
+        {
+            File.Delete(Path.Combine(Log.DataDirectory, TdpFile));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Could not delete {TdpFile}: {ex.Message}");
         }
     }
 

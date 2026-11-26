@@ -89,7 +89,7 @@ internal static class LogonTaskRegistration
     }
 
     /// <summary>The root task folder (late-bound <c>ITaskFolder</c>), or null without Task Scheduler.</summary>
-    private static dynamic? OpenRootFolder()
+    internal static dynamic? OpenRootFolder()
     {
         if (Type.GetTypeFromProgID("Schedule.Service") is not { } type || Activator.CreateInstance(type) is not { } instance)
         {

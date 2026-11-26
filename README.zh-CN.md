@@ -35,6 +35,7 @@ DockSense 安静地运行在系统托盘里，实时监测外接显卡、外接�
 - ⚡ **电源计划与内置编辑器**：为每个模式切换电源计划、离开时恢复原计划，并在厂商软件（如 Armoury Crate）改回时自动重设（带退让保护）；自带不受游戏模式降频影响的 **DockSense Performance** 计划，并可编辑接通电源/电池设置（包括隐藏的高性能计划）。
 - 🎮 **Xbox 全屏体验**：按模式设置登录行为，还支持在模式切换时**立即切换**，无需等到下次登录。
 - 🧠 **核显显存** *（ROG Xbox Ally X 等 ASUS 掌机；其他 AMD 掌机为实验性支持）*：按模式写入固件 UMA 帧缓冲大小——例如掌机给 8 GB、接外接显卡设最小以归还内存；托盘菜单提供**重启到`<模式>`**，一次重启即可生效。
+- 🔥 **TDP 覆盖** *（ROG Ally 系列；需要 [PawnIO](https://pawnio.eu/) 驱动）*：按模式强制设定处理器功耗上限，覆盖 Armoury Crate 的设置——例如掌机 15 W、接外接显卡时全功率；厂商软件把它改回去时会重新写入，离开模式时交还控制权。超出厂商上限的数值会有明确警告。
 - 🚀 **模式切换时运行程序**：在进入、离开某模式或在该模式启动时运行程序、脚本或网址，支持参数、隐藏窗口和管理员权限。
 
 ### 省心与可靠
@@ -43,7 +44,7 @@ DockSense 安静地运行在系统托盘里，实时监测外接显卡、外接�
 - 🔔 **原生通知与 🩺 诊断**：模式切换与程序启动原生通知、状态页实时检测游戏模式降频，以及一键导出诊断报告。
 - ⬆️ **自动更新**：每日检查 GitHub 发布页并校验 SHA-256，支持一键安装或下次启动自动安装（可关闭）。
 - 🌐 **中英双语**、浅色/深色主题，以及覆盖每种状态的像素风托盘图标。
-- 🪶 **轻量免安装**：无需管理员权限、不装驱动、不装后台服务，只用公开 Windows API，可选的核显显存功能使用 ASUS ACPI 接口。*（其他掌机上的实验性 AMD 驱动方式使用 AMD 自带的 API，是否需要管理员权限尚不清楚。）**（仅在 Program Files 等受保护目录更新时需要一次 UAC 确认。）*
+- 🪶 **轻量免安装**：无需管理员权限、不装驱动、不装后台服务，只用公开 Windows API，可选的核显显存功能使用 ASUS ACPI 接口。*（其他掌机上的实验性 AMD 驱动方式使用 AMD 自带的 API，是否需要管理员权限尚不清楚。）**（仅在 Program Files 等受保护目录更新时需要一次 UAC 确认。）**（可选的 TDP 覆盖是唯一的例外：它使用 PawnIO 驱动，并需要一次管理员批准。）*
 
 ## 工作原理
 
@@ -152,6 +153,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
   - 电源计划：*不更改*（由厂商软件决定）、*DockSense Performance*（外接显卡专用计划），或任意一个 Windows 电源计划（包括隐藏的计划）
   - 登录时是否进入全屏体验，以及进入该模式时是否**立即切换**。例如掌机模式设为全屏体验、底座模式设为桌面，并且都开启立即切换后，接上底座就会退出全屏体验，拔下后又会重新进入。
   - **核显显存**（支持的 ASUS 设备，以及通过 AMD 显卡驱动实验性支持的其他 AMD 设备；重启后生效），以及 DockSense 是否在**更改前先询问**
+  - **TDP 覆盖**（装有 PawnIO 驱动的 ROG Ally 系列）：打开开关后拖动滑块或直接输入瓦数；关闭时 TDP 仍由厂商软件决定
   - 进入或离开该模式时**要运行的程序**。点击**测试**可以立即启动。
 - **电源计划**：以任意已有计划为基础新建计划（基于"高性能"的计划不受游戏模式降频影响），修改接通电源和使用电池时的设置，重命名或删除计划。
 - **检测**：稳定等待时间、"仅在接通电源时识别为底座模式"，以及逐块显卡的手动指定（*始终 / 始终不视为外接显卡*）。
@@ -172,6 +174,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 | `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | 模式切换时也立即进入或退出全屏体验 |
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | 写入固件的核显显存大小，单位 MB（`0` = 自动，`null` = 不更改），重启后生效 |
 | `handheld` / `docked` / `egpu` → `igpuMemoryApply` | `Automatic` | `Automatic`：进入该模式时立即写入。`Ask`：先通过通知询问，在你确认之前不会写入 |
+| `handheld` / `docked` / `egpu` → `tdpWatts` | `null` | 该模式下强制设定的处理器功耗上限，单位瓦（`null` = 不更改）。仅限支持的设备；超出设备范围的数值不会写入 |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | 要启动的程序：`path`、`arguments`、`when`（`Enter`、`EnterOrStartup` 或 `Leave`）、`hidden`、`runAsAdministrator`、`enabled` |
 | `detection.settleSeconds` | `5` | 新模式需要保持多久才会生效 |
 | `detection.dockedRequiresAcPower` | `false` | 仅在接通电源时才把外接显示器计入底座模式 |
@@ -186,10 +189,12 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 ## 支持的硬件
 
-所有核心功能——模式识别、电源计划、游戏模式外接显卡降频修复、Xbox 全屏体验以及启动程序——均基于标准 Windows API，适用于所有 Windows 掌机（如 ROG Ally / Ally X、Legion Go、MSI Claw、Ayaneo、GPD、OneXPlayer）和笔记本。只有可选的**核显显存**设置取决于设备：
+所有核心功能——模式识别、电源计划、游戏模式外接显卡降频修复、Xbox 全屏体验以及启动程序——均基于标准 Windows API，适用于所有 Windows 掌机（如 ROG Ally / Ally X、Legion Go、MSI Claw、Ayaneo、GPD、OneXPlayer）和笔记本。有两项可选设置取决于设备。**核显显存**：
 
 - **ASUS** 掌机：通过 `ATKACPI` 固件接口，已实测。
 - Radeon 驱动提供 *Variable Graphics Memory* 的**其他 AMD 掌机**（例如 MSI Claw A8）：通过 AMD 驱动设置。🧪 **实验性功能**：按照 AMD 的 SDK 编写，尚未在这类设备上实际运行过。驱动可能在保存后立即重启电脑，因此 DockSense 总是先询问，并且只提供“更改并重启”。如果你试用了，欢迎[反馈结果](https://github.com/rozx/DockSense/issues)（无论成功还是遇到问题），并附上诊断报告。
+
+**TDP 覆盖**支持 ROG Ally 系列（ROG Ally、ROG Ally X、ROG Xbox Ally X），因为 DockSense 知道它们的功耗范围。目前只在 ROG Xbox Ally X 上实测过，其他型号使用同样的方法，尚未测试。
 
 目前已经实测过的设备：
 
@@ -222,6 +227,20 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 </details>
 
 <details>
+<summary><b>TDP 覆盖是怎么工作的？安全吗？</b></summary>
+
+每个模式都可以强制设定自己的处理器功耗上限（TDP），不管 Armoury Crate 设成什么：例如掌机模式设 15 W 以延长续航，接外接显卡时关闭开关。
+
+- **需要什么**：[PawnIO](https://pawnio.eu/) 驱动（需要你自己安装，DockSense 不附带也不安装任何驱动）、管理员帐户，并且 DockSense 要放在需要管理员权限才能修改的文件夹里，例如 Program Files。
+- **为什么需要驱动**：在 ROG Xbox Ally X 上，固件会接受通过 ASUS 自家接口写入的功耗上限，然后直接无视。所以 DockSense 把上限直接发给处理器，做法和 RyzenAdj、Universal x86 Tuning Utility、G-Helper、Handheld Companion 一样，而这需要驱动。PawnIO 带有签名，并且只运行其作者签名的模块；DockSense 内置的是 PawnIO 项目原样的 AMD 模块。
+- **为什么需要管理员批准**：PawnIO 只接受管理员调用。第一次选择数值时，Windows 会询问一次，然后 DockSense 注册一个以管理员权限设置 TDP 的任务（任务计划程序中的 `DockSense-TDP-<你的用户 ID>`）；DockSense 本身仍以普通权限运行。这个任务只接受一个瓦数，并且自己按设备范围检查。文件夹的要求也来自这里：任务运行的是 `DockSense.exe`，如果它所在的文件夹任何程序都能写入，这个文件就可能被替换。**设置 → TDP 辅助任务 → 移除**可以删掉这个任务。
+- **写入的内容**：持续、中期和短时三个上限使用同一个数值，处理器的功耗就稳定在这个值。范围从厂商规定的下限（Ally 系列为 7 W）到固件自身使用的最高短时上限（ROG Xbox Ally X 为 55 W，旧型号使用电池时更低）。
+- **超出厂商上限**：数值超过厂商允许的范围（ROG Xbox Ally X 为 35 W）时，DockSense 会先询问，并在该设置下方保留一条警告。超出上限运行可能导致设备过热、电池损耗加快，甚至损坏硬件，而且可能不在保修范围内。风险由你自行承担。效果也可能有限：在 ROG Xbox Ally X 上设为 45 W 时，处理器以 44 W 运行了大约一分钟，变热（93 °C）后固件又把它拉回 35 W 并一直保持，和 Armoury Crate 的 Turbo 模式表现相同。其他设备的表现可能不同。
+- **保持生效**：只要厂商软件发送性能模式，固件就会重新载入自己的上限；插拔充电器、从睡眠唤醒、在 Armoury Crate 里切换模式时都会发生。DockSense 会在这些情况发生几秒后重新写入自己的数值。
+- **交还控制权**：进入关闭了 TDP 覆盖的模式时，DockSense 会重新发送 Armoury Crate 当前选中的性能模式，固件随即恢复该模式自己的上限。重启电脑也会清除所有上限。
+</details>
+
+<details>
 <summary><b>立即切换全屏体验不起作用？</b></summary>
 
 需要支持全屏体验的 Windows 版本（掌机上的 Windows 11，或开启了"Xbox 模式"），并且设置了主页应用（Xbox 应用，或 AnyFSE 等启动器）。如果 Windows 弹出确认，请选择不重启直接进入。如果 Windows 设置为进入时"重启以优化"，DockSense 不会立即切换，因为那会重启电脑；登录时的设置仍会在下次登录时生效。
@@ -230,7 +249,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 <details>
 <summary><b>DockSense 会和 Armoury Crate / Legion Space 等厂商软件冲突吗？</b></summary>
 
-只在你选择了具体计划的模式下才会接管，而且有限度：如果有程序在 2 分钟内切换计划超过 5 次，DockSense 会停止自动切回，直到下次模式切换，并提醒你。厂商的 TDP 设置（例如 Armoury Crate 的 35 W Turbo）和 Windows 电源计划是两回事，会照常生效。
+只在你选择了具体计划的模式下才会接管，而且有限度：如果有程序在 2 分钟内切换计划超过 5 次，DockSense 会停止自动切回，直到下次模式切换，并提醒你。厂商的 TDP 设置（例如 Armoury Crate 的 35 W Turbo）和 Windows 电源计划是两回事，会照常生效，除非你给该模式单独设置了 TDP 覆盖。
 </details>
 
 <details>
@@ -278,7 +297,7 @@ DockSense 每天向 GitHub 查询一次本仓库的最新版本（如果检查�
 <summary><b>怎么彻底卸载？</b></summary>
 
 1. 如果需要，在 **电源计划** 页面删除 DockSense Performance 计划（它不能是当前正在使用的计划，Windows 不允许删除正在使用的计划）。也可以用 `powercfg /delete <guid>`，GUID 就是 `config.json` 里的 `dockSensePerformancePlanId`。
-2. 关闭 **开机自启**（同时会删除登录计划任务），然后从托盘退出。
+2. 关闭 **开机自启**（同时会删除登录计划任务）。如果用过 TDP 覆盖，请用 **设置 → TDP 辅助任务 → 移除** 删除辅助任务。然后从托盘退出。
 3. 删除 DockSense 所在的文件夹，以及 `%APPDATA%\DockSense` 和 `%LOCALAPPDATA%\DockSense`。
 </details>
 
@@ -303,7 +322,7 @@ dotnet run --project src/DockSense.App
 | 项目 | 用途 |
 |---|---|
 | `src/DockSense.Core` | 与平台无关的逻辑：模式判断、防抖、电源计划策略、程序触发、电源设置目录、核显显存解码、配置（全部有单元测试） |
-| `src/DockSense.App` | WPF 托盘程序：Windows API（SetupAPI、显示配置、powrprof、gaming experience）、ASUS ACPI、界面、通知 |
+| `src/DockSense.App` | WPF 托盘程序：Windows API（SetupAPI、显示配置、powrprof、gaming experience）、ASUS ACPI、TDP 覆盖（PawnIO）、界面、通知 |
 | `tests/DockSense.Core.Tests` | xUnit 测试，包括实测的 Ally X / XG Mobile 拔线过程 |
 | `tools/DockSense.IconGen` | 从 `Sprites.cs` 里的像素画生成所有图标 |
 
@@ -335,6 +354,8 @@ dotnet run --project src/DockSense.App
 - [WPF-UI](https://github.com/lepoco/wpfui)：WPF 的 Fluent 控件库
 - [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon)：托盘图标
 - [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 和 [Windows Community Toolkit](https://github.com/CommunityToolkit/WindowsCommunityToolkit) 的通知组件
+- namazso 的 [PawnIO](https://pawnio.eu/) 及其[模块](https://github.com/namazso/PawnIO.Modules)（内置的 AMD SMU 模块未作修改，LGPL-2.1），用于 TDP 覆盖
+- [RyzenAdj](https://github.com/FlyGoat/RyzenAdj)、[Universal x86 Tuning Utility](https://github.com/JamesCJ60/Universal-x86-Tuning-Utility) 和 [G-Helper](https://github.com/seerge/g-helper)：处理器功耗上限的设置方法；Linux 的 `asus-armoury` 驱动：Ally 系列的功耗范围
 - 像素图标使用了 GrafxKid 的 [Sweetie 16](https://lospec.com/palette-list/sweetie-16) 调色板
 
 ## 许可证
