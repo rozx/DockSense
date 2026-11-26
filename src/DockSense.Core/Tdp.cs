@@ -129,7 +129,10 @@ public enum TdpWriteResult
     /// <summary>Anything else, including a helper that could not be started or did not finish.</summary>
     Failed = 8,
 
-    /// <summary>Another hardware tool was using the SMU and did not let go in time; nothing was set.</summary>
+    /// <summary>
+    /// The mutex hardware tools share for the SMU could not be taken: another tool held it too long, or created
+    /// it in a way the helper cannot open. Nothing was set.
+    /// </summary>
     Busy = 9,
 
     /// <summary>

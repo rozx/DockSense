@@ -42,7 +42,7 @@ PawnIO refuses callers without administrator rights (opening it fails with error
   - It runs twice: before DockSense asks for approval, and again in the elevated `--install-tdp-helper` itself,
     because that command can be started by anyone. A write test would not do there: elevated, it always succeeds.
 - The helper takes the mutex hardware tools share for SMU access (`Global\Access_PCI`). If another tool holds it
-  for more than 2 s, nothing is sent (`TdpWriteResult.Busy`) and DockSense tries again, up to three times.
+  for more than 2 s, or the mutex cannot be opened at all, nothing is sent (`TdpWriteResult.Busy`) and DockSense tries again, up to three times.
 - Registering the task from an agent shell is blocked; the user does that step in the UI.
 
 ## Keeping it in force, and giving it back

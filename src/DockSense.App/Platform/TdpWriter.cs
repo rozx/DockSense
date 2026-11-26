@@ -118,10 +118,9 @@ internal static class TdpWriter
         var milliwatts = checked((uint)device.Clamp(watts, DeviceProbe.OnAcPower) * 1000);
 
         // Without the mutex another tool's request and this one could overwrite each other's arguments and take
-        // each other's answers, so a mutex that exists but stays taken means: not now.
+        // each other's answers. So no mutex, no write: neither when it stays taken nor when it cannot be opened.
         using var mutex = OpenPciMutex();
-        var held = Acquire(mutex);
-        if (mutex is not null && !held)
+        if (!Acquire(mutex))
         {
             return TdpWriteResult.Busy;
         }
@@ -150,10 +149,7 @@ internal static class TdpWriter
         }
         finally
         {
-            if (held)
-            {
-                mutex!.ReleaseMutex();
-            }
+            mutex!.ReleaseMutex();
         }
     }
 
@@ -217,7 +213,7 @@ internal static class TdpWriter
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
         {
-            return null; // It cannot even be opened, so no other tool can be coordinated with through it.
+            return null; // Another tool created it in a way this process cannot open: the write is not made.
         }
     }
 
