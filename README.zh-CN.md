@@ -193,7 +193,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 所有核心功能——模式识别、电源计划、游戏模式外接显卡降频修复、Xbox 全屏体验以及启动程序——均基于标准 Windows API，适用于所有 Windows 掌机（如 ROG Ally / Ally X、Legion Go、MSI Claw、Ayaneo、GPD、OneXPlayer）和笔记本。有两项可选设置取决于设备。**核显显存**：
 
 - **ASUS** 掌机：通过 `ATKACPI` 固件接口，已实测。
-- Radeon 驱动提供 *Variable Graphics Memory* 的**其他 AMD 掌机**（例如 MSI Claw A8）：通过 AMD 驱动设置。🧪 **实验性功能**：按照 AMD 的 SDK 编写，尚未在这类设备上实际运行过。驱动可能在保存后立即重启电脑，因此 DockSense 总是先询问，并且只提供“更改并重启”。如果你试用了，欢迎[反馈结果](https://github.com/rozx/DockSense/issues)（无论成功还是遇到问题），并附上诊断报告。
+- Radeon 驱动提供 *Variable Graphics Memory* 的**其他 AMD 掌机**（例如 MSI Claw A8）：通过 AMD 驱动设置。🧪 **实验性功能**：按照 AMD 的 SDK 编写。读取可选大小已在 Claw A8 上确认可用，但保存大小尚未在这类设备上实际运行过。驱动可能在保存后立即重启电脑，因此 DockSense 总是先询问，并且只提供“更改并重启”。如果你试用了，欢迎[反馈结果](https://github.com/rozx/DockSense/issues)（无论成功还是遇到问题），并附上诊断报告。
 
 **TDP 覆盖**支持 ROG Ally 系列（ROG Ally、ROG Ally X、ROG Xbox Ally X），因为 DockSense 知道它们的功耗范围。目前只在 ROG Xbox Ally X 上实测过，其他型号使用同样的方法，尚未测试。
 
