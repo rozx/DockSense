@@ -64,4 +64,65 @@ public sealed class IgpuRestartPlannerTests
         Assert.Equal([new IgpuRestartOption(DockMode.Handheld, 0, 0)], options);
         Assert.Empty(IgpuRestartPlanner.Options(config, DockMode.Egpu, Firmware(currentRaw: 0), effectiveRaw: 0));
     }
+
+    private static readonly DateTime Started = new(2026, 11, 26, 8, 0, 0, DateTimeKind.Utc);
+
+    private static BootSession Boot(uint? id, int minutesLater = 0) => new(id, Started.AddMinutes(minutesLater));
+
+    [Fact]
+    public void Waits_for_the_mode_the_pc_was_restarted_for_while_its_size_is_in_effect()
+    {
+        // "Restart for eGPU" as a handheld, and the eGPU gets connected only after sign-in.
+        var config = Config(handheld: 8192, docked: null, egpu: 512);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+
+        var awaited = IgpuRestartPlanner.AwaitedMode(target, Boot(42, minutesLater: 2), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1);
+
+        Assert.Equal(DockMode.Egpu, awaited);
+    }
+
+    [Fact]
+    public void Does_not_wait_without_such_a_restart_or_when_the_pc_came_back_in_that_mode()
+    {
+        var config = Config(handheld: 8192, docked: null, egpu: 512);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(null, Boot(42), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(42, minutesLater: 2), DockMode.Egpu, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+    }
+
+    [Fact]
+    public void Does_not_wait_before_the_restart_or_on_a_later_boot()
+    {
+        var config = Config(handheld: 8192, docked: null, egpu: 512);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+
+        // DockSense restarted, Windows did not (the user cancelled the restart).
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(41), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 16));
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(43, minutesLater: 90), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+    }
+
+    [Fact]
+    public void Does_not_wait_when_the_size_in_effect_is_not_the_one_restarted_for()
+    {
+        // The profile was changed since, or another tool stored something else before the restart.
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(
+            target, Boot(42, minutesLater: 2), DockMode.Handheld, Config(handheld: 8192, docked: null, egpu: 512), Firmware(currentRaw: 8), effectiveRaw: 8));
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(
+            target, Boot(42, minutesLater: 2), DockMode.Handheld, Config(handheld: 8192, docked: null, egpu: null), Firmware(currentRaw: 1), effectiveRaw: 1));
+    }
+
+    [Fact]
+    public void Without_a_boot_counter_the_start_time_tells_the_boots_apart()
+    {
+        var config = Config(handheld: 8192, docked: null, egpu: 512);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(null));
+
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(null), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+        Assert.Equal(
+            DockMode.Egpu,
+            IgpuRestartPlanner.AwaitedMode(target, Boot(null, minutesLater: 2), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+    }
 }

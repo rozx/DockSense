@@ -55,6 +55,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string IgpuText { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IgpuPending { get; set; }
     [ObservableProperty] public partial string IgpuPendingMessage { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IgpuOfferVisible { get; set; }
+    [ObservableProperty] public partial string IgpuOfferTitle { get; set; } = string.Empty;
+    [ObservableProperty] public partial string IgpuOfferMessage { get; set; } = string.Empty;
     [ObservableProperty] public partial string PowerText { get; set; } = string.Empty;
     [ObservableProperty] public partial string PauseButtonText { get; set; } = string.Empty;
     [ObservableProperty] public partial InfoBarSeverity ThrottleSeverity { get; set; }
@@ -129,12 +132,64 @@ public sealed partial class MainViewModel : ObservableObject
     private void OpenConfig() => Open(_service.ConfigPath);
 
     [RelayCommand]
-    private static async Task Restart()
+    private async Task Restart()
     {
-        if (await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), Loc.T("Restart_Message"), Loc.T("Restart_Confirm")))
+        if (await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(), Loc.T("Restart_Confirm")))
         {
-            SystemPower.Restart();
+            RestartWindows();
         }
+    }
+
+    /// <summary>
+    /// Restarts Windows for the iGPU memory size that waits for it. Every restart the user asks for goes through
+    /// here, apart from "Restart for &lt;mode&gt;", which prepares its own.
+    /// </summary>
+    internal bool RestartWindows()
+    {
+        _service.NoteRestartForPendingSize();
+        return SystemPower.Restart();
+    }
+
+    /// <summary>The restart confirmation, with a reminder while an eGPU is connected: some PCs do not start with one attached.</summary>
+    private string RestartMessage() => _service.EgpuConnected
+        ? $"{Loc.T("Restart_Message")}\n\n{Loc.T("Restart_EgpuHint")}"
+        : Loc.T("Restart_Message");
+
+    /// <summary>The Status card's "Change": stores the size the current mode asks for; the restart comes later.</summary>
+    [RelayCommand]
+    private Task ChangeIgpuMemory() =>
+        _service.IgpuMemoryOffer is { } offer ? AcceptIgpuOfferAsync(offer, restart: false) : Task.CompletedTask;
+
+    /// <summary>The Status card's "Change and restart": asks first, as every restart from the window does.</summary>
+    [RelayCommand]
+    private async Task ChangeIgpuMemoryAndRestart()
+    {
+        if (_service.IgpuMemoryOffer is { } offer
+            && await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(), Loc.T("Restart_Confirm")))
+        {
+            await AcceptIgpuOfferAsync(offer, restart: true);
+        }
+    }
+
+    /// <summary>
+    /// Stores the iGPU memory size the user agreed to and, when asked, restarts Windows for it. Does nothing when
+    /// the offer no longer stands or the size could not be stored (the service says so).
+    /// </summary>
+    internal async Task AcceptIgpuOfferAsync(IgpuMemoryOffer offer, bool restart)
+    {
+        if (!_service.AcceptIgpuMemory(offer, notify: !restart) || !restart)
+        {
+            return;
+        }
+
+        if (RestartWindows())
+        {
+            // Windows may still not restart: an app with unsaved work holds it up, and the user can cancel there.
+            await Task.Delay(RestartGrace);
+        }
+
+        // Still running: the size is stored, and the notification offers the restart again.
+        _service.RemindIgpuRestartPending();
     }
 
     /// <summary>
@@ -151,6 +206,12 @@ public sealed partial class MainViewModel : ObservableObject
 
         var name = DockSenseService.ModeName(mode);
         var message = Loc.F("RestartFor_Message", name, DockSenseService.FormatMemory(option.MemoryMb));
+        if (mode == DockMode.Egpu && !_service.EgpuConnected)
+        {
+            // The message says to plug in while the PC restarts, which is exactly what some PCs cannot take.
+            message += $"\n\n{Loc.T("RestartFor_EgpuHint")}";
+        }
+
         if (!await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
             || !_service.PrepareRestart(mode))
         {
@@ -268,6 +329,10 @@ public sealed partial class MainViewModel : ObservableObject
         IgpuText = effective is { } now ? DockSenseService.FormatMemory(now) : Loc.T("Common_Unknown");
         IgpuPending = pending is not null;
         IgpuPendingMessage = pending is { } next ? Loc.F("Dash_IgpuPendingMessage", DockSenseService.FormatMemory(next)) : string.Empty;
+        var offer = _service.IgpuMemoryOffer;
+        IgpuOfferVisible = offer is not null;
+        IgpuOfferTitle = offer is null ? string.Empty : Loc.F("Dash_IgpuOfferTitle", DockSenseService.FormatMemory(offer.MemoryMb));
+        IgpuOfferMessage = offer is null ? string.Empty : Loc.F("Dash_IgpuOfferMessage", DockSenseService.ModeName(offer.Mode));
 
         var gameMode = _service.GameMode;
         if (gameMode is null || !gameMode.GameModeEnabled || gameMode.Overrides.Count == 0)
@@ -340,6 +405,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             profile.SelectedIgpu = config.IgpuMemoryMb ?? ModeProfileViewModel.IgpuUnchanged;
+            profile.IgpuAsk = config.IgpuMemoryApply == IgpuMemoryApply.Ask;
 
             if (!profile.WhenOptions.SequenceEqual(whenOptions))
             {
@@ -573,6 +639,7 @@ public sealed partial class MainViewModel : ObservableObject
             Fse = profile.SelectedFse,
             FseApplyImmediately = profile.FseLive,
             IgpuMemoryMb = profile.SelectedIgpu == ModeProfileViewModel.IgpuUnchanged ? null : profile.SelectedIgpu,
+            IgpuMemoryApply = profile.IgpuAsk ? IgpuMemoryApply.Ask : IgpuMemoryApply.Automatic,
             Programs = profile.Programs.Select(p => p.ToModel()).ToList(),
         };
 
@@ -806,11 +873,19 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     [ObservableProperty] public partial string FseLiveDescription { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IgpuAvailable { get; set; }
     [ObservableProperty] public partial IReadOnlyList<Option<int>> IgpuOptions { get; set; } = [];
-    [ObservableProperty] public partial int SelectedIgpu { get; set; } = IgpuUnchanged;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IgpuAskEnabled))]
+    public partial int SelectedIgpu { get; set; } = IgpuUnchanged;
+
+    [ObservableProperty] public partial bool IgpuAsk { get; set; }
     [ObservableProperty] public partial IReadOnlyList<Option<ProgramTrigger>> WhenOptions { get; set; } = [];
 
     /// <summary>"Don't change" in the iGPU memory list.</summary>
     public const int IgpuUnchanged = -1;
+
+    /// <summary>Asking first needs a size to ask about.</summary>
+    public bool IgpuAskEnabled => SelectedIgpu != IgpuUnchanged;
 
     /// <summary>The live switch needs a target (desktop or FSE) and the Windows API.</summary>
     public bool FseLiveEnabled => FseLiveSupported && SelectedFse != FseStartup.Unchanged;
@@ -860,6 +935,8 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     partial void OnFseLiveChanged(bool value) => owner.SaveProfile(this);
 
     partial void OnSelectedIgpuChanged(int value) => owner.SaveProfile(this);
+
+    partial void OnIgpuAskChanged(bool value) => owner.SaveProfile(this);
 }
 
 public sealed partial class AdapterOverrideViewModel(string instanceId, MainViewModel owner) : ObservableObject

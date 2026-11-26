@@ -12,6 +12,10 @@ public static class Toasts
     private const string RestartTag = "igpu";
     private const string ActionKey = "action";
     private const string RestartAction = "restart";
+    private const string ChangeAction = "igpu-change";
+    private const string ChangeRestartAction = "igpu-change-restart";
+    private const string ModeKey = "mode";
+    private const string MemoryKey = "mb";
 
     // True at first: a toast from before DockSense (or Windows) restarted may still sit in the notification center.
     private static bool _restartToastMayExist = true;
@@ -22,17 +26,25 @@ public static class Toasts
     private static bool _removeFailureLogged;
 
     /// <summary>
-    /// Clicking a toast calls <paramref name="onOpen"/>; its "Restart now" button calls <paramref name="onRestart"/>
-    /// (both on a background thread). Windows also starts DockSense for a click on a toast left in the notification
-    /// center, so <paramref name="onRestart"/> must check that a restart is still called for.
+    /// Clicking a toast calls <paramref name="onOpen"/>; its "Restart now" button calls <paramref name="onRestart"/>,
+    /// and the buttons of the iGPU memory question call <paramref name="onIgpuAnswer"/> with the offer the toast was
+    /// about and whether to restart as well (all on a background thread). Windows also starts DockSense for a click
+    /// on a toast left in the notification center, so the two button handlers must check that what the toast offered
+    /// is still called for.
     /// </summary>
-    public static void Initialize(Action onOpen, Action onRestart)
+    public static void Initialize(Action onOpen, Action onRestart, Action<IgpuMemoryOffer, bool> onIgpuAnswer)
     {
         ToastNotificationManagerCompat.OnActivated += e =>
         {
-            if (IsRestartAction(e.Argument))
+            var args = Parse(e.Argument);
+            var action = args is not null && args.TryGetValue(ActionKey, out var value) ? value : null;
+            if (action == RestartAction)
             {
                 onRestart();
+            }
+            else if (action is ChangeAction or ChangeRestartAction && OfferFrom(args!) is { } offer)
+            {
+                onIgpuAnswer(offer, action == ChangeRestartAction);
             }
             else
             {
@@ -95,12 +107,47 @@ public static class Toasts
         Show(builder, IconAssets.NameFor(started.Mode), tag: tag.Length > 64 ? tag[..64] : tag);
     }
 
-    public static void ShowRestartNeeded(int megabytes)
+    /// <summary>
+    /// Asks whether to store the iGPU memory size a mode's profile wants ("ask first"). It takes the place of the
+    /// restart toast and the other way round: once the size is stored, a restart is what is left to do.
+    /// </summary>
+    /// <param name="offer">The mode and the size.</param>
+    /// <param name="egpuConnected">Adds the reminder for PCs that do not start with an eGPU attached.</param>
+    public static void ShowIgpuQuestion(IgpuMemoryOffer offer, bool egpuConnected)
+    {
+        ToastButton Button(string textKey, string action) => new ToastButton()
+            .SetContent(Loc.T(textKey))
+            .AddArgument(ActionKey, action)
+            .AddArgument(ModeKey, offer.Mode.ToString())
+            .AddArgument(MemoryKey, offer.MemoryMb.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var builder = new ToastContentBuilder()
+            .AddText(Loc.F("Toast_IgpuAskTitle", DockSenseService.FormatMemory(offer.MemoryMb)))
+            .AddText(Loc.F("Toast_IgpuAskMessage", DockSenseService.ModeName(offer.Mode)));
+        if (egpuConnected)
+        {
+            builder.AddText(Loc.T("Toast_EgpuHint"));
+        }
+
+        builder.AddButton(Button("Igpu_Change", ChangeAction)).AddButton(Button("Igpu_ChangeRestart", ChangeRestartAction));
+        _restartToastMayExist = true;
+        var request = ++_restartRequest;
+        Show(builder, IconAssets.NameFor(offer.Mode), tag: RestartTag, stillWanted: () => request == _restartRequest);
+    }
+
+    /// <param name="megabytes">The size that applies after the restart.</param>
+    /// <param name="egpuConnected">Adds the reminder for PCs that do not start with an eGPU attached.</param>
+    public static void ShowRestartNeeded(int megabytes, bool egpuConnected)
     {
         var builder = new ToastContentBuilder()
             .AddText(Loc.T("Toast_IgpuTitle"))
-            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)))
-            .AddButton(new ToastButton().SetContent(Loc.T("Dash_RestartNow")).AddArgument(ActionKey, RestartAction));
+            .AddText(Loc.F("Toast_IgpuMessage", DockSenseService.FormatMemory(megabytes)));
+        if (egpuConnected)
+        {
+            builder.AddText(Loc.T("Toast_EgpuHint"));
+        }
+
+        builder.AddButton(new ToastButton().SetContent(Loc.T("Dash_RestartNow")).AddArgument(ActionKey, RestartAction));
         _restartToastMayExist = true;
 
         // The toast may be held back until the shell is up (see Show). If the restart stops being needed in the
@@ -110,8 +157,8 @@ public static class Toasts
     }
 
     /// <summary>
-    /// Takes the restart toast away once no restart is pending any more, so its button cannot mislead. That
-    /// includes one that is still held back and not shown yet.
+    /// Takes the restart toast or the iGPU memory question away once neither a restart nor an answer is pending any
+    /// more, so its buttons cannot mislead. That includes one that is still held back and not shown yet.
     /// </summary>
     public static void ClearRestartNeeded()
     {
@@ -137,17 +184,25 @@ public static class Toasts
         }
     }
 
-    private static bool IsRestartAction(string argument)
+    private static ToastArguments? Parse(string argument)
     {
         try
         {
-            return ToastArguments.Parse(argument).TryGetValue(ActionKey, out var action) && action == RestartAction;
+            return ToastArguments.Parse(argument);
         }
         catch (ArgumentException)
         {
-            return false;
+            return null;
         }
     }
+
+    /// <summary>The offer a button of the iGPU memory question was shown for.</summary>
+    private static IgpuMemoryOffer? OfferFrom(ToastArguments args) =>
+        args.TryGetValue(ModeKey, out var modeText) && Enum.TryParse<DockMode>(modeText, out var mode) && Enum.IsDefined(mode)
+        && args.TryGetValue(MemoryKey, out var memoryText)
+        && int.TryParse(memoryText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var megabytes)
+            ? new IgpuMemoryOffer(mode, megabytes)
+            : null;
 
     /// <param name="installsAtNextStart">True when the update goes in by itself the next time DockSense starts.</param>
     public static void ShowUpdateAvailable(string version, bool installsAtNextStart)

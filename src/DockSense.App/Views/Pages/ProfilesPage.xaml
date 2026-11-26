@@ -122,6 +122,24 @@
                                     SelectedValuePath="Value" />
                             </Grid>
 
+                            <!-- Ask before the iGPU memory size is stored -->
+                            <Grid Style="{StaticResource SettingRow}" Visibility="{Binding IgpuAvailable, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,24,0">
+                                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_IgpuAsk}" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_IgpuAskDesc}" FontSize="12" />
+                                </StackPanel>
+                                <ui:ToggleSwitch
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_IgpuAsk}"
+                                    IsChecked="{Binding IgpuAsk}"
+                                    IsEnabled="{Binding IgpuAskEnabled}" />
+                            </Grid>
+
                             <!-- Programs -->
                             <Grid Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>

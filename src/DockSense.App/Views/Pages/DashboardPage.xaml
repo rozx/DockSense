@@ -93,6 +93,29 @@
             </Grid>
         </ui:Card>
 
+        <!-- iGPU memory the current mode asks for, waiting for a go-ahead (the profile is set to ask first) -->
+        <ui:Card Margin="0,12,0,0" Padding="16,12" Visibility="{Binding IgpuOfferVisible, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                    <ui:Button
+                        AutomationProperties.Name="{loc:T Igpu_Change}"
+                        Command="{Binding ChangeIgpuMemoryCommand}"
+                        Content="{loc:T Igpu_Change}" />
+                    <ui:Button
+                        Margin="8,0,0,0"
+                        AutomationProperties.Name="{loc:T Igpu_ChangeRestart}"
+                        Command="{Binding ChangeIgpuMemoryAndRestartCommand}"
+                        Content="{loc:T Igpu_ChangeRestart}"
+                        Icon="{ui:SymbolIcon ArrowClockwise24}" />
+                </StackPanel>
+                <Ellipse Style="{StaticResource Dot}" Fill="#FBBF24" Margin="2,0,12,0" />
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{Binding IgpuOfferTitle}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding IgpuOfferMessage}" TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </ui:Card>
+
         <!-- iGPU memory waiting for a restart -->
         <ui:Card Margin="0,12,0,0" Padding="16,12" Visibility="{Binding IgpuPending, Converter={StaticResource BoolToVisibility}}">
             <DockPanel>

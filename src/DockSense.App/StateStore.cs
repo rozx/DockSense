@@ -28,6 +28,7 @@ internal static class StateStore
 {
     private const string PowerPlanFile = "state.json";
     private const string IgpuMemoryFile = "igpu-memory.json";
+    private const string IgpuRestartFile = "igpu-restart.json";
     private const string UpdateFile = "update.json";
 
     /// <summary>Which plan DockSense owns and what to restore.</summary>
@@ -38,6 +39,23 @@ internal static class StateStore
     public static IgpuMemoryBootState? LoadIgpuMemory() => Load<IgpuMemoryBootState>(IgpuMemoryFile);
 
     public static void SaveIgpuMemory(IgpuMemoryBootState state) => Save(IgpuMemoryFile, state);
+
+    /// <summary>The last restart the user started from DockSense for a mode's iGPU memory, until the boot after it has been seen.</summary>
+    public static IgpuRestartTarget? LoadIgpuRestartTarget() => Load<IgpuRestartTarget>(IgpuRestartFile);
+
+    public static void SaveIgpuRestartTarget(IgpuRestartTarget target) => Save(IgpuRestartFile, target);
+
+    public static void ClearIgpuRestartTarget()
+    {
+        try
+        {
+            File.Delete(Path.Combine(Log.DataDirectory, IgpuRestartFile));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Could not remove {IgpuRestartFile}: {ex.Message}");
+        }
+    }
 
     public static UpdateState LoadUpdate() => Load<UpdateState>(UpdateFile) ?? new UpdateState();
 

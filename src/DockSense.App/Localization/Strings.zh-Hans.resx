@@ -311,4 +311,18 @@
   <data name="RestartFor_Title" xml:space="preserve"><value>重启到{0}模式？</value></data>
   <data name="RestartFor_Message" xml:space="preserve"><value>DockSense 会先按{0}模式把核显显存设为 {1}，然后 Windows 立即重启。请在重启过程中插上或拔下底座 / 外接显卡。请先保存工作，有未保存内容的应用仍可以阻止重启。</value></data>
   <data name="Act_IgpuRestartFailed" xml:space="preserve"><value>无法为{0}模式设置核显显存，电脑没有重启。</value></data>
+  <!-- iGPU memory: ask before storing, the reminder for PCs that do not start with an eGPU attached, and waiting for the mode restarted for -->
+  <data name="Prof_IgpuAsk" xml:space="preserve"><value>更改核显显存前先询问</value></data>
+  <data name="Prof_IgpuAskDesc" xml:space="preserve"><value>进入此模式时通过通知询问。在你确认之前不会写入固件。</value></data>
+  <data name="Igpu_Change" xml:space="preserve"><value>更改</value></data>
+  <data name="Igpu_ChangeRestart" xml:space="preserve"><value>更改并重启</value></data>
+  <data name="Dash_IgpuOfferTitle" xml:space="preserve"><value>将核显显存改为 {0}？</value></data>
+  <data name="Dash_IgpuOfferMessage" xml:space="preserve"><value>{0}模式需要这个大小。在你确认之前不会写入固件，重启后生效。</value></data>
+  <data name="Toast_IgpuAskTitle" xml:space="preserve"><value>将核显显存改为 {0}？</value></data>
+  <data name="Toast_IgpuAskMessage" xml:space="preserve"><value>{0}模式需要这个大小，重启后生效。</value></data>
+  <data name="Act_IgpuStoreFailed" xml:space="preserve"><value>无法设置核显显存（{0}），未做任何更改。</value></data>
+  <data name="Toast_EgpuHint" xml:space="preserve"><value>如果你的电脑连接着外接显卡时无法启动，请在重启过程中拔下它。</value></data>
+  <data name="Restart_EgpuHint" xml:space="preserve"><value>当前连接着外接显卡。如果你的电脑连接着它时无法启动，请在重启过程中拔下它，登录后再重新连接。</value></data>
+  <data name="RestartFor_EgpuHint" xml:space="preserve"><value>如果你的电脑连接着外接显卡时无法启动，请改为登录后再连接。</value></data>
+  <data name="Act_IgpuAwaiting" xml:space="preserve"><value>已为{0}模式重启，但该模式尚未开始。核显显存将在几分钟内保持不变。</value></data>
 </root>

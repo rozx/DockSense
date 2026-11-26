@@ -75,6 +75,16 @@ public sealed record ProgramLaunch
     public bool RunAsAdministrator { get; init; }
 }
 
+/// <summary>How a mode's iGPU memory size gets into the firmware when the mode becomes active.</summary>
+public enum IgpuMemoryApply
+{
+    /// <summary>Store it right away; a notification then says that a restart is needed.</summary>
+    Automatic,
+
+    /// <summary>Ask first: nothing is stored until the user agrees.</summary>
+    Ask,
+}
+
 /// <summary>What DockSense applies when a mode becomes active.</summary>
 public sealed record ModeProfile
 {
@@ -98,6 +108,9 @@ public sealed record ModeProfile
     /// </summary>
     public int? IgpuMemoryMb { get; init; }
 
+    /// <summary>Whether <see cref="IgpuMemoryMb"/> is stored as soon as the mode starts, or only after the user agreed.</summary>
+    public IgpuMemoryApply IgpuMemoryApply { get; init; }
+
     // Value equality for the program list too, so an unchanged profile compares equal after a JSON round trip.
     public bool Equals(ModeProfile? other) =>
         other is not null
@@ -105,7 +118,8 @@ public sealed record ModeProfile
         && Fse == other.Fse
         && FseApplyImmediately == other.FseApplyImmediately
         && IgpuMemoryMb == other.IgpuMemoryMb
+        && IgpuMemoryApply == other.IgpuMemoryApply
         && Programs.SequenceEqual(other.Programs);
 
-    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, Programs.Count);
+    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, IgpuMemoryApply, Programs.Count);
 }

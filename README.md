@@ -151,7 +151,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - **Mode profiles:** for each mode, pick:
   - the power plan: *Don't change* (your vendor software decides), *DockSense Performance* (the eGPU-safe plan), or any Windows plan, including hidden ones
   - the full screen experience at sign-in, and whether to **switch immediately** when entering the mode. For example, with Handheld set to the full screen experience and Docked set to the desktop, both switching immediately, docking leaves the full screen experience and undocking enters it again.
-  - the **iGPU memory** (on supported ASUS devices; applies after a restart)
+  - the **iGPU memory** (on supported ASUS devices; applies after a restart), and whether DockSense should **ask before changing** it
   - **programs to run** when the mode begins or ends. **Test** starts one right away.
 - **Power plans:** create a plan from any existing one (High performance-based plans avoid the Game Mode throttle), edit its plugged-in and on-battery settings, rename or delete it.
 - **Detection:** settle time, "Docked only when plugged in", and per-adapter overrides (*Always / Never an eGPU*).
@@ -171,6 +171,7 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 | `handheld` / `docked` / `egpu` → `fse` | `FullScreenExperience` / `Desktop` / `Desktop` | `Unchanged`, `Desktop` or `FullScreenExperience`, applied at the next sign-in |
 | `handheld` / `docked` / `egpu` → `fseApplyImmediately` | `false` | Also enter or leave the full screen experience as soon as the mode changes |
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | iGPU memory in MB to store in the firmware (`0` = Auto, `null` = don't change). Applies after a restart |
+| `handheld` / `docked` / `egpu` → `igpuMemoryApply` | `Automatic` | `Automatic` stores the size as soon as the mode starts. `Ask` asks in a notification first and stores nothing until you agree |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | Programs to start: `path`, `arguments`, `when` (`Enter`, `EnterOrStartup` or `Leave`), `hidden`, `runAsAdministrator`, `enabled` |
 | `detection.settleSeconds` | `5` | How long a new mode must stay stable before it is applied |
 | `detection.dockedRequiresAcPower` | `false` | Count external displays only while plugged in |
@@ -209,6 +210,10 @@ On Modern Standby devices, Windows hides High Performance-type plans from Contro
 The memory reserved for the built-in GPU (the UMA frame buffer) is set by the firmware while the PC starts, the same as in Armoury Crate. DockSense stores the size for the current mode right away. Status then shows the new size as pending, with a **Restart now** button, and the notification has the same button. DockSense never restarts on its own, and it only writes sizes that the firmware itself offers. If you unplug an eGPU and keep playing without restarting, the old size stays in effect until the next restart. Most games run fine either way, because Windows also lends the iGPU shared memory.
 
 To skip the "unplug, wait, then restart" order, use the tray menu before you switch: **Restart for Handheld (8 GB)** (the entry names the mode and its size) stores that mode's size and restarts Windows after you confirm. Plug in or unplug the dock or eGPU while the PC restarts, and it comes up with the right memory already in effect. The entry only appears when another mode's size differs from the one in effect.
+
+If you would rather decide each time, turn on **Ask before changing the iGPU memory** in a mode's profile. When that mode starts, a notification asks first, with **Change** and **Change and restart**. Nothing is stored in the firmware until you pick one, and the Status page keeps the question open if you miss the notification.
+
+Some PCs do not start with an eGPU attached. On those, use **Restart for eGPU** while the eGPU is unplugged and connect it after you sign in. DockSense keeps the eGPU size for a few minutes after that restart instead of putting the handheld size back.
 </details>
 
 <details>

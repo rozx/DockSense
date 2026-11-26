@@ -21,6 +21,11 @@ public sealed record ModeApplied(DockMode Mode, DeviceSnapshot Snapshot, string?
 /// <param name="AtStartup">True when it ran because DockSense started in <paramref name="Mode"/>.</param>
 public sealed record ProgramStarted(string Name, DockMode Mode, ProgramTrigger Trigger, bool AtStartup);
 
+/// <summary>An iGPU memory size a mode's profile asks for, waiting for the user's go-ahead.</summary>
+/// <param name="Mode">The mode whose profile asks for it.</param>
+/// <param name="MemoryMb">The size in MB (0 = Auto).</param>
+public sealed record IgpuMemoryOffer(DockMode Mode, int MemoryMb);
+
 /// <summary>Programs to start for one profile application, with the transition that caused it.</summary>
 /// <param name="Wait">How long to hold the batch back before its first program (see <see cref="SignInSession.ShellWait"/>).</param>
 internal sealed record ProgramBatch(DockMode? Previous, DockMode Current, bool AtStartup, IReadOnlyList<ProgramLaunch> Programs, TimeSpan Wait);
@@ -43,6 +48,10 @@ public sealed class DockSenseService : IDisposable
     private const int MaxActivity = 50;
     private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(1500);
 
+    // After a restart the user asked for to get a mode's iGPU memory size: how long that mode may take to show up
+    // before the mode the PC came back in gets its own size again. Long enough to connect an eGPU after signing in.
+    private static readonly TimeSpan AwaitedModeWait = TimeSpan.FromMinutes(5);
+
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
@@ -57,12 +66,16 @@ public sealed class DockSenseService : IDisposable
     private readonly Queue<ProgramBatch> _programBatches = new();
     private bool _programsRunning;
     private IgpuMemoryBootState? _igpuBoot;
+    private readonly DispatcherTimer _igpuWaitTimer = new() { Interval = AwaitedModeWait };
+    private DockMode? _igpuAwaitedMode;
+    private IgpuMemoryOffer? _igpuAsked;
 
     public DockSenseService(ConfigStore configStore)
     {
         _configStore = configStore;
         _rescanTimer.Tick += (_, _) => { _rescanTimer.Stop(); Evaluate(); };
         _settleTimer.Tick += (_, _) => { _settleTimer.Stop(); Evaluate(); };
+        _igpuWaitTimer.Tick += (_, _) => OnAwaitedModeWaitOver();
     }
 
     /// <summary>Raised whenever anything shown in the UI may have changed.</summary>
@@ -79,6 +92,12 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>Raised after a new iGPU memory size (in MB, 0 = Auto) was stored; it applies after a restart.</summary>
     public event Action<int>? IgpuMemoryChanged;
+
+    /// <summary>
+    /// Raised when the mode's profile asks for an iGPU memory size but is set to ask first: nothing is stored until
+    /// <see cref="AcceptIgpuMemory"/>. The offer stays open as <see cref="IgpuMemoryOffer"/>.
+    /// </summary>
+    public event Action<IgpuMemoryOffer>? IgpuMemoryAsked;
 
     public ObservableCollection<ActivityEntry> Activity { get; } = [];
 
@@ -108,6 +127,19 @@ public sealed class DockSenseService : IDisposable
     public int? IgpuMemoryPendingMb => IgpuMemory is { } options && _igpuBoot is { } boot && options.CurrentRaw != boot.EffectiveRaw
         ? options.ToMb(options.CurrentRaw)
         : null;
+
+    /// <summary>
+    /// The size the current mode's profile asks for and that waits for the user's go-ahead (the profile is set to
+    /// ask first), or null. Not while paused: the profile is not being applied then.
+    /// </summary>
+    public IgpuMemoryOffer? IgpuMemoryOffer =>
+        !Paused && _igpuAwaitedMode is null && IgpuMemory is { } options
+        && IgpuMemoryPlanner.Decide(Config.ProfileFor(Mode), options, _igpuBoot?.EffectiveRaw) is { Step: IgpuMemoryStep.Ask } decision
+            ? new IgpuMemoryOffer(Mode, decision.MemoryMb)
+            : null;
+
+    /// <summary>True while an eGPU is connected. Some PCs do not start with one attached, which matters before a restart.</summary>
+    public bool EgpuConnected => Snapshot is { } snapshot && ModeResolver.FindEgpu(snapshot, Config.Detection) is not null;
 
     /// <summary>
     /// The other modes it is worth restarting for: their iGPU memory size differs from the one in effect, so storing
@@ -144,6 +176,7 @@ public sealed class DockSenseService : IDisposable
         var mode = ModeResolver.Resolve(Snapshot, Config.Detection);
         _stabilizer = new ModeStabilizer(mode, SettleTime);
         _planController = CreatePlanController(StateStore.Load());
+        BeginAwaitedModeWait(mode);
 
         Log.Info($"Started{(resumeFrom is null ? string.Empty : " after an update")}. {Describe(Snapshot)} -> {mode}");
         AddActivity(Loc.F("Act_Started", ModeName(mode)));
@@ -318,6 +351,7 @@ public sealed class DockSenseService : IDisposable
         _notifications?.Dispose();
         _rescanTimer.Stop();
         _settleTimer.Stop();
+        _igpuWaitTimer.Stop();
     }
 
     public static string ModeName(DockMode mode) => Loc.T($"Mode_{mode}");
@@ -386,7 +420,7 @@ public sealed class DockSenseService : IDisposable
         var profile = Config.ProfileFor(mode);
         ApplyPowerPlan(mode, profile, reason);
         ApplyFse(mode, profile, reason);
-        ApplyIgpuMemory(mode, profile);
+        ApplyIgpuMemory(mode, profile, reason);
         StartPrograms(mode, reason);
         _lastApplied = mode;
 
@@ -602,29 +636,142 @@ public sealed class DockSenseService : IDisposable
         Log.Info($"iGPU memory: {options.ToMb(_igpuBoot.EffectiveRaw)} MB in effect, {options.ToMb(options.CurrentRaw)} MB stored in the firmware.");
     }
 
-    private void ApplyIgpuMemory(DockMode mode, ModeProfile profile)
+    /// <summary>
+    /// After a restart the user started from DockSense for a mode's iGPU memory size, the PC may come back up in
+    /// another mode, because the dock or eGPU gets connected only after sign-in (some PCs do not start with an eGPU
+    /// attached). The size the user restarted for is in effect then. Putting this mode's size back at once would
+    /// undo that restart and ask for another one, so the startup apply leaves the iGPU memory alone and that mode
+    /// gets a while to show up.
+    /// </summary>
+    private void BeginAwaitedModeWait(DockMode mode)
     {
+        if (StateStore.LoadIgpuRestartTarget() is not { } target)
+        {
+            return;
+        }
+
+        var boot = _igpuBoot?.Boot ?? CurrentBoot();
+        if (target.Boot.IsSameBoot(boot))
+        {
+            return; // DockSense restarted, Windows has not (yet): the note stays for the boot that follows.
+        }
+
+        StateStore.ClearIgpuRestartTarget();
+        if (IgpuMemory is not { } options || _igpuBoot is not { } state
+            || IgpuRestartPlanner.AwaitedMode(target, boot, mode, Config, options, state.EffectiveRaw) is not { } awaited)
+        {
+            return;
+        }
+
+        _igpuAwaitedMode = awaited;
+        _igpuWaitTimer.Start();
+        Log.Info($"Restarted for {awaited}, now {mode}: the iGPU memory stays as it is until {awaited} starts, for up to {AwaitedModeWait.TotalMinutes:0} minutes.");
+        AddActivity(Loc.F("Act_IgpuAwaiting", ModeName(awaited)));
+    }
+
+    private void EndAwaitedModeWait()
+    {
+        _igpuWaitTimer.Stop();
+        _igpuAwaitedMode = null;
+    }
+
+    private void OnAwaitedModeWaitOver()
+    {
+        if (_igpuAwaitedMode is not { } awaited)
+        {
+            _igpuWaitTimer.Stop();
+            return;
+        }
+
+        EndAwaitedModeWait();
+        Log.Info($"{awaited} did not start within {AwaitedModeWait.TotalMinutes:0} minutes of the restart for it.");
+        if (!Paused)
+        {
+            // What the startup apply held back.
+            ApplyIgpuMemory(Mode, Config.ProfileFor(Mode), ApplyReason.Startup);
+        }
+
+        RaiseStatusChanged();
+    }
+
+    private void ApplyIgpuMemory(DockMode mode, ModeProfile profile, ApplyReason reason)
+    {
+        if (reason != ApplyReason.Startup)
+        {
+            // The mode or the settings changed: the wait for the mode the PC was restarted for is over.
+            EndAwaitedModeWait();
+        }
+
+        var asked = _igpuAsked;
+        _igpuAsked = null;
         if (profile.IgpuMemoryMb is not { } target || IgpuMemory is null)
         {
             return;
         }
 
-        // Re-read: Armoury Crate or another tool may have changed it since.
-        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
-        if (IgpuMemory.RawToWrite(target) is not { } raw)
+        if (_igpuAwaitedMode is { } awaited)
         {
-            if (IgpuMemory.RawFor(target) is null)
-            {
-                Log.Warn($"{mode}: the firmware does not offer {target} MB of iGPU memory; not changing it.");
-            }
-
+            Log.Info($"{mode}: leaving the iGPU memory alone while waiting for {awaited}.");
             return;
         }
 
-        if (StoreIgpuMemory(mode.ToString(), target, raw) && IgpuMemoryPendingMb is not null)
+        // Re-read: Armoury Crate or another tool may have changed it since.
+        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
+        if (IgpuMemory.RawFor(target) is null)
         {
-            IgpuMemoryChanged?.Invoke(target);
+            Log.Warn($"{mode}: the firmware does not offer {target} MB of iGPU memory; not changing it.");
+            return;
         }
+
+        var decision = IgpuMemoryPlanner.Decide(profile, IgpuMemory, _igpuBoot?.EffectiveRaw);
+        if (decision.Step == IgpuMemoryStep.Store)
+        {
+            if (StoreIgpuMemory(mode.ToString(), target, decision.Raw) && IgpuMemoryPendingMb is not null)
+            {
+                IgpuMemoryChanged?.Invoke(target);
+            }
+        }
+        else if (decision.Step == IgpuMemoryStep.Ask)
+        {
+            // Saving any setting applies the profile again: the same question is not asked twice for that.
+            _igpuAsked = new IgpuMemoryOffer(mode, target);
+            if (reason != ApplyReason.SettingsChanged || _igpuAsked != asked)
+            {
+                Log.Info($"{mode}: the profile asks for {target} MB of iGPU memory; waiting for the user's go-ahead.");
+                IgpuMemoryAsked?.Invoke(_igpuAsked);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stores the size of <paramref name="offer"/> after the user agreed to it. Returns false when the offer no
+    /// longer stands (an old notification: the mode or the profile changed since) or the size could not be stored.
+    /// </summary>
+    /// <param name="offer">The offer the user answered.</param>
+    /// <param name="notify">Say that a restart is needed (<see cref="IgpuMemoryChanged"/>). False when the caller restarts right away.</param>
+    public bool AcceptIgpuMemory(IgpuMemoryOffer offer, bool notify)
+    {
+        if (IgpuMemoryOffer != offer || IgpuMemory is null)
+        {
+            return false;
+        }
+
+        IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
+        var decision = IgpuMemoryPlanner.Decide(Config.ProfileFor(offer.Mode), IgpuMemory, _igpuBoot?.EffectiveRaw);
+        var stored = decision.Step == IgpuMemoryStep.None
+            ? IgpuMemory.RawFor(offer.MemoryMb) == IgpuMemory.CurrentRaw // another tool stored it in the meantime
+            : StoreIgpuMemory($"{offer.Mode} (agreed)", offer.MemoryMb, decision.Raw);
+        if (!stored)
+        {
+            NotifyWarning(Loc.F("Act_IgpuStoreFailed", FormatMemory(offer.MemoryMb)));
+        }
+        else if (notify && IgpuMemoryPendingMb is not null)
+        {
+            IgpuMemoryChanged?.Invoke(offer.MemoryMb);
+        }
+
+        RaiseStatusChanged();
+        return stored;
     }
 
     /// <summary>
@@ -659,7 +806,13 @@ public sealed class DockSenseService : IDisposable
         {
             NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
         }
-        else if (Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
+        else
+        {
+            // If the PC comes back up before the dock or eGPU is connected, the size stays for a while.
+            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(mode, _igpuBoot?.Boot ?? CurrentBoot()));
+        }
+
+        if (stored && Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
         {
             // Windows reads this when the shell starts after the restart; DockSense itself may be up too late.
             var wantFse = fse == FseStartup.FullScreenExperience;
@@ -672,6 +825,19 @@ public sealed class DockSenseService : IDisposable
 
         RaiseStatusChanged();
         return stored;
+    }
+
+    /// <summary>
+    /// Called right before a restart the user asked for while the current mode's size waits for one ("Restart now").
+    /// If the PC then comes back up before this mode's dock or eGPU is connected again, the size stays for a while
+    /// (<see cref="BeginAwaitedModeWait"/>).
+    /// </summary>
+    public void NoteRestartForPendingSize()
+    {
+        if (IgpuMemoryPendingMb is { } pending && Config.ProfileFor(Mode).IgpuMemoryMb == pending)
+        {
+            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(Mode, _igpuBoot?.Boot ?? CurrentBoot()));
+        }
     }
 
     /// <summary>

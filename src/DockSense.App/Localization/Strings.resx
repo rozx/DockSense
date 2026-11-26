@@ -311,4 +311,18 @@
   <data name="RestartFor_Title" xml:space="preserve"><value>Restart for {0}?</value></data>
   <data name="RestartFor_Message" xml:space="preserve"><value>DockSense sets the iGPU memory to {1} for {0} mode, then Windows restarts right away. Plug in or unplug your dock or eGPU while the PC restarts. Save your work first. Apps with unsaved changes can still stop the restart.</value></data>
   <data name="Act_IgpuRestartFailed" xml:space="preserve"><value>Could not store the iGPU memory for {0} mode, so the PC was not restarted.</value></data>
+  <!-- iGPU memory: ask before storing, the reminder for PCs that do not start with an eGPU attached, and waiting for the mode restarted for -->
+  <data name="Prof_IgpuAsk" xml:space="preserve"><value>Ask before changing the iGPU memory</value></data>
+  <data name="Prof_IgpuAskDesc" xml:space="preserve"><value>A notification asks when this mode starts. Nothing is stored in the firmware until you agree.</value></data>
+  <data name="Igpu_Change" xml:space="preserve"><value>Change</value></data>
+  <data name="Igpu_ChangeRestart" xml:space="preserve"><value>Change and restart</value></data>
+  <data name="Dash_IgpuOfferTitle" xml:space="preserve"><value>Change the iGPU memory to {0}?</value></data>
+  <data name="Dash_IgpuOfferMessage" xml:space="preserve"><value>{0} mode asks for it. Nothing is stored until you agree, and it takes effect after a restart.</value></data>
+  <data name="Toast_IgpuAskTitle" xml:space="preserve"><value>Change the iGPU memory to {0}?</value></data>
+  <data name="Toast_IgpuAskMessage" xml:space="preserve"><value>{0} mode asks for it. It takes effect after a restart.</value></data>
+  <data name="Act_IgpuStoreFailed" xml:space="preserve"><value>Could not store the iGPU memory ({0}). Nothing was changed.</value></data>
+  <data name="Toast_EgpuHint" xml:space="preserve"><value>If your PC does not start with the eGPU attached, unplug it as the PC restarts.</value></data>
+  <data name="Restart_EgpuHint" xml:space="preserve"><value>An eGPU is connected. If your PC does not start with it attached, unplug it as the PC restarts and reconnect it after you sign in.</value></data>
+  <data name="RestartFor_EgpuHint" xml:space="preserve"><value>If your PC does not start with the eGPU attached, connect it after you sign in instead.</value></data>
+  <data name="Act_IgpuAwaiting" xml:space="preserve"><value>Restarted for {0} mode, which has not started yet. The iGPU memory stays as it is for a few minutes.</value></data>
 </root>

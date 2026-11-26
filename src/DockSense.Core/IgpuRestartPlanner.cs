@@ -39,4 +39,47 @@ public static class IgpuRestartPlanner
 
         return options;
     }
+
+    /// <summary>
+    /// The mode the user restarted the PC for, when it has come back up from that restart with that mode's size in
+    /// effect but in another mode: the dock or eGPU that makes it that mode is not connected yet. Some PCs do not
+    /// start with an eGPU attached, so connecting it after sign-in is a normal way to get there, and until then the
+    /// size the user restarted for should stay. Null when there is nothing to wait for.
+    /// </summary>
+    /// <param name="target">The restart the user asked DockSense for, if any.</param>
+    /// <param name="boot">The current boot.</param>
+    /// <param name="current">The mode the device is in now.</param>
+    /// <param name="config">The current configuration.</param>
+    /// <param name="firmware">The sizes the firmware offers.</param>
+    /// <param name="effectiveRaw">The raw firmware value in effect during this Windows session.</param>
+    public static DockMode? AwaitedMode(
+        IgpuRestartTarget? target, BootSession boot, DockMode current, DockSenseConfig config, IgpuMemoryOptions firmware, uint effectiveRaw)
+    {
+        ArgumentNullException.ThrowIfNull(boot);
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(firmware);
+
+        if (target is null || target.Mode == current || target.Boot.IsSameBoot(boot))
+        {
+            return null;
+        }
+
+        // Only the boot that followed the restart: a later one was not started for that mode.
+        if (target.Boot.BootId is { } before && boot.BootId is { } now && now != before + 1)
+        {
+            return null;
+        }
+
+        return config.ProfileFor(target.Mode).IgpuMemoryMb is { } megabytes && firmware.RawFor(megabytes) == effectiveRaw
+            ? target.Mode
+            : null;
+    }
 }
+
+/// <summary>
+/// A restart the user started from DockSense to bring a mode's iGPU memory size into effect: "Restart for
+/// &lt;mode&gt;", or a restart for the size stored for the current mode.
+/// </summary>
+/// <param name="Mode">The mode the user restarted for.</param>
+/// <param name="Boot">The boot during which they did, i.e. the one before the restart.</param>
+public sealed record IgpuRestartTarget(DockMode Mode, BootSession Boot);
