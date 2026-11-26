@@ -1424,6 +1424,14 @@ public sealed class DockSenseService : IDisposable
             StateStore.SaveTdp(_tdpState);
             _tdpWarned = null;
             _tdpBusyRetries = 0;
+        if (result == TdpWriteResult.PartlyApplied)
+        {
+            // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the
+            // TDP back to the vendor software right away. If that fails too, the record makes a later apply retry.
+            _tdpState ??= new TdpState(CurrentBoot(), sent);
+            StateStore.SaveTdp(_tdpState);
+            HandBackTdp();
+        }
             return;
         }
 
@@ -1437,6 +1445,14 @@ public sealed class DockSenseService : IDisposable
         }
 
         _tdpBusyRetries = 0;
+        if (result == TdpWriteResult.PartlyApplied)
+        {
+            // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the
+            // TDP back to the vendor software right away. If that fails too, the record makes a later apply retry.
+            _tdpState ??= new TdpState(CurrentBoot(), sent);
+            StateStore.SaveTdp(_tdpState);
+            HandBackTdp();
+        }
 
         // Whatever was in the way may have changed since it was last looked at (the driver or the task removed).
         InvalidateTdpReadiness();

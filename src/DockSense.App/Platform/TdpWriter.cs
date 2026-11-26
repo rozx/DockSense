@@ -134,12 +134,16 @@ internal static class TdpWriter
                 return TdpWriteResult.NoAnswer;
             }
 
+            // Whether anything was changed before a refusal decides what DockSense has to put right afterwards.
+            var applied = 0;
             foreach (var command in new[] { commands.Sustained, commands.Fast, commands.Slow })
             {
                 if (Send(driver, commands.Mailbox, command, milliwatts).Status != AmdSmuPowerCommands.Ok)
                 {
-                    return TdpWriteResult.Rejected;
+                    return applied == 0 ? TdpWriteResult.Rejected : TdpWriteResult.PartlyApplied;
                 }
+
+                applied++;
             }
 
             return TdpWriteResult.Ok;

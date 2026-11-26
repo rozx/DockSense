@@ -123,7 +123,7 @@ public enum TdpWriteResult
     /// <summary>The SMU did not answer its test message as expected; nothing was set.</summary>
     NoAnswer = 6,
 
-    /// <summary>The SMU refused a limit.</summary>
+    /// <summary>The SMU refused the first limit; nothing was changed.</summary>
     Rejected = 7,
 
     /// <summary>Anything else, including a helper that could not be started or did not finish.</summary>
@@ -131,6 +131,12 @@ public enum TdpWriteResult
 
     /// <summary>Another hardware tool was using the SMU and did not let go in time; nothing was set.</summary>
     Busy = 9,
+
+    /// <summary>
+    /// The SMU took one limit and then refused another: the processor is left with a mix of the new value and
+    /// the old ones, which is neither what was asked for nor what the vendor software set.
+    /// </summary>
+    PartlyApplied = 10,
 }
 
 /// <summary>Why a TDP override cannot be written right now, if anything is in the way.</summary>
