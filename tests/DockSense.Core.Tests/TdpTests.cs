@@ -220,8 +220,11 @@ public sealed class TdpTests
     }
 
     [Theory]
-    [InlineData(120, TdpWriteResult.Ok, 20)]            // 100 plus the watts that were sent
-    [InlineData(155, TdpWriteResult.Ok, 55)]
+    [InlineData(155, TdpWriteResult.Ok, 55)]            // 100 plus the watts that were sent
+    [InlineData(135, TdpWriteResult.Ok, 35)]            // less than asked for: clamped for battery
+    [InlineData(156, TdpWriteResult.Unconfirmed, null)] // more than was asked for cannot have been sent
+    [InlineData(255, TdpWriteResult.Unconfirmed, null)]
+    [InlineData(100, TdpWriteResult.Unconfirmed, null)] // no watts at all
     [InlineData(0, TdpWriteResult.Unconfirmed, null)]   // "done" without saying what was sent is not an answer
     [InlineData(3, TdpWriteResult.NotElevated, null)]
     [InlineData(9, TdpWriteResult.Busy, null)]
@@ -230,13 +233,13 @@ public sealed class TdpTests
     [InlineData(42, TdpWriteResult.Unconfirmed, null)]
     public void The_helpers_exit_code_says_how_it_ended_and_what_it_sent(int exitCode, TdpWriteResult result, int? sent)
     {
-        Assert.Equal(new TdpWriteOutcome(result, sent), TdpHelperTask.OutcomeOf(exitCode));
+        Assert.Equal(new TdpWriteOutcome(result, sent), TdpHelperTask.OutcomeOf(exitCode, requestedWatts: 55));
     }
 
     [Fact]
     public void A_write_that_went_through_reports_its_watts()
     {
-        Assert.Equal(new TdpWriteOutcome(TdpWriteResult.Ok, 35), TdpHelperTask.OutcomeOf(TdpHelperTask.ExitCodeForSent(35)));
+        Assert.Equal(new TdpWriteOutcome(TdpWriteResult.Ok, 35), TdpHelperTask.OutcomeOf(TdpHelperTask.ExitCodeForSent(35), requestedWatts: 35));
     }
 
     [Theory]

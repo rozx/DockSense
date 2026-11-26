@@ -175,7 +175,7 @@ internal static class TdpHelper
         && TdpHelperTask.Starts(LogonTaskDefinition.Parse(xml), ExecutablePath);
 
     /// <summary>True when a task with the helper's name exists for this user, whatever it does.</summary>
-    public static bool TaskExists => ReadTaskXml() is not null;
+    public static bool TaskExists => ReadTaskXml(out _) is not null;
 
     /// <summary>What, if anything, keeps a TDP override from being written.</summary>
     public static TdpReadiness Readiness() =>
@@ -265,7 +265,7 @@ internal static class TdpHelper
                     // A write that went through says how many watts it sent. Any code the helper does not use
                     // means it did not end by itself (ended by Task Scheduler, or crashed), possibly after a
                     // limit had gone in.
-                    return TdpHelperTask.OutcomeOf(exitCode);
+                    return TdpHelperTask.OutcomeOf(exitCode, watts);
                 }
 
                 Thread.Sleep(50);
@@ -361,8 +361,13 @@ internal static class TdpHelper
                 return TdpSetupResult.Failed;
             }
 
-            // Installed means this copy's task, ready to use; removed means no task under that name at all.
-            if (expectInstalled ? (process.ExitCode != 0 || !IsInstalled) : TaskExists)
+            // Installed means this copy's task, ready to use. Removed means Task Scheduler says there is no task
+            // under that name: when it cannot be asked, the task may still be there, and "removed" would tell
+            // the user it is safe to delete the installation.
+            var failed = expectInstalled
+                ? process.ExitCode != 0 || !IsInstalled
+                : ReadTaskXml(out var known) is not null || !known;
+            if (failed)
             {
                 Log.Warn($"The TDP helper {what} failed with exit code {process.ExitCode}; task: {DescribeTask()}.");
                 return TdpSetupResult.Failed;
@@ -383,8 +388,15 @@ internal static class TdpHelper
     }
 
     /// <summary>The registered helper task as Task Scheduler XML, or null when there is none.</summary>
-    private static string? ReadTaskXml()
+    private static string? ReadTaskXml() => ReadTaskXml(out _);
+
+    /// <summary>
+    /// As above. <paramref name="known"/> is false when Task Scheduler could not be asked, so that null does not
+    /// mean "no such task".
+    /// </summary>
+    private static string? ReadTaskXml(out bool known)
     {
+        known = false;
         try
         {
             if (LogonTaskRegistration.OpenRootFolder() is not { } folder || CurrentUserSid() is not { } sid)
@@ -392,10 +404,13 @@ internal static class TdpHelper
                 return null;
             }
 
-            return (string)folder.GetTask(TdpHelperTask.NameFor(sid)).Xml;
+            var xml = (string)folder.GetTask(TdpHelperTask.NameFor(sid)).Xml;
+            known = true;
+            return xml;
         }
         catch (FileNotFoundException)
         {
+            known = true;
             return null; // No such task.
         }
         catch (Exception ex)

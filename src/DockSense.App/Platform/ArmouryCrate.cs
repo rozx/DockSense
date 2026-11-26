@@ -68,8 +68,12 @@ internal static class ArmouryCrate
         {
             _key = key;
             _changed = changed;
-            _wait = ThreadPool.RegisterWaitForSingleObject(_signal, (_, _) => OnSignal(), null, Timeout.Infinite, executeOnlyOnce: false);
-            Arm();
+            // Under the gate like every later one: the callback can run as soon as the first registration is made.
+            lock (_gate)
+            {
+                _wait = ThreadPool.RegisterWaitForSingleObject(_signal, (_, _) => OnSignal(), null, Timeout.Infinite, executeOnlyOnce: false);
+                Arm();
+            }
         }
 
         public void Dispose()

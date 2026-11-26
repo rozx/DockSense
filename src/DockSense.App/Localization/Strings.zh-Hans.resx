@@ -345,14 +345,15 @@
   <data name="Tdp_MaxBySource" xml:space="preserve"><value>接通电源时 {0} W、使用电池时 {1} W</value></data>
   <data name="Tdp_Warning" xml:space="preserve"><value>{0} W 超出了厂商规定的上限（{1}）。这可能导致设备过热、电池损耗加快，甚至损坏硬件。设备变热后，固件仍可能把功耗拉回它自己的上限。</value></data>
   <data name="Tdp_WarningTitle" xml:space="preserve"><value>要超出厂商规定的上限吗？</value></data>
-  <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W 超出了厂商为此设备规定的上限（{1}）。超出上限运行可能导致设备过热、电池损耗加快，甚至损坏硬件，而且可能不在保修范围内。风险由你自行承担。</value></data>
+  <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W 超出了厂商为此设备规定的上限（{1}）。超出上限运行可能导致设备过热、电池损耗加快，甚至损坏硬件，而且可能不在保修范围内。风险由你自行承担。你的确认适用于所有模式配置中的这个数值及更低的数值。</value></data>
   <data name="Tdp_WarningConfirm" xml:space="preserve"><value>仍然设置</value></data>
   <data name="Tdp_SetupTitle" xml:space="preserve"><value>允许 DockSense 设置 TDP 吗？</value></data>
   <data name="Tdp_SetupMessage" xml:space="preserve"><value>设置 TDP 需要管理员权限。Windows 会请你批准一次，之后 DockSense 会注册一个任务，在进入模式时设置 TDP，不再弹出提示；DockSense 本身仍以普通权限运行。你可以在“设置”中移除这个任务。</value></data>
   <data name="Tdp_SetupConfirm" xml:space="preserve"><value>继续</value></data>
   <data name="Tdp_NoteDriverMissing" xml:space="preserve"><value>未生效：没有安装 PawnIO 驱动。</value></data>
   <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>未生效：此功能需要 DockSense 安装在受保护的位置。请把它复制到 Program Files 下的新文件夹中（要复制而不是移动：移动的文件会保留原来的权限），从托盘退出 DockSense，然后启动 Program Files 中的那一份。</value></data>
-  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>未生效：{0} W 超出了厂商规定的上限，并且尚未在此设备上确认。请重新设置这个数值以确认。</value></data>
+  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>未生效：{0} W 超出了厂商规定的上限，并且尚未在此设备上确认。</value></data>
+  <data name="Tdp_Confirm" xml:space="preserve"><value>确认</value></data>
   <data name="Tdp_NoteHelperMissing" xml:space="preserve"><value>未生效：还没有获得管理员批准。</value></data>
   <data name="Tdp_GetDriver" xml:space="preserve"><value>获取 PawnIO</value></data>
   <data name="Tdp_SetUp" xml:space="preserve"><value>设置</value></data>

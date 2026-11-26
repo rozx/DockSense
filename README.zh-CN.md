@@ -175,7 +175,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 | `handheld` / `docked` / `egpu` → `igpuMemoryMb` | `null` | 写入固件的核显显存大小，单位 MB（`0` = 自动，`null` = 不更改），重启后生效 |
 | `handheld` / `docked` / `egpu` → `igpuMemoryApply` | `Automatic` | `Automatic`：进入该模式时立即写入。`Ask`：先通过通知询问，在你确认之前不会写入 |
 | `handheld` / `docked` / `egpu` → `tdpWatts` | `null` | 该模式下强制设定的处理器功耗上限，单位瓦（`null` = 不更改）。仅限支持的设备；超出设备范围的数值不会写入 |
-| `tdpConfirmedBoard` / `tdpConfirmedWatts` | `null` / `0` | 当你同意使用超出厂商上限的 TDP 时由 DockSense 写入：所在的设备和确认过的最高数值。更高的数值，或同一数值换到另一台设备上，在“模式配置”中确认之前不会写入 |
+| `tdpConfirmedBoard` / `tdpConfirmedWatts` | `null` / `0` | 当你同意使用超出厂商上限的 TDP 时由 DockSense 写入：确认时的设备型号和确认过的最高数值，对所有模式配置有效。更高的数值，或者换到另一型号上的任何超限数值，在“模式配置”中确认之前不会写入。复制到同一型号的另一台设备时，这份确认会一并带过去 |
 | `handheld` / `docked` / `egpu` → `programs` | `[]` | 要启动的程序：`path`、`arguments`、`when`（`Enter`、`EnterOrStartup` 或 `Leave`）、`hidden`、`runAsAdministrator`、`enabled` |
 | `detection.settleSeconds` | `5` | 新模式需要保持多久才会生效 |
 | `detection.dockedRequiresAcPower` | `false` | 仅在接通电源时才把外接显示器计入底座模式 |
@@ -232,7 +232,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 每个模式都可以强制设定自己的处理器功耗上限（TDP），不管 Armoury Crate 设成什么：例如掌机模式设 15 W 以延长续航，接外接显卡时关闭开关。
 
-- **需要什么**：[PawnIO](https://pawnio.eu/) 驱动（需要你自己安装，DockSense 不附带也不安装任何驱动）、管理员帐户，并且 DockSense 要安装在 Program Files 下它自己的文件夹中。请在管理员批准下把它复制过去（要复制而不是移动，这样文件才会获得该文件夹的权限），从托盘退出旧的那一份，再启动新的。
+- **需要什么**：[PawnIO](https://pawnio.eu/) 驱动（需要你自己安装，DockSense 不附带也不安装任何驱动）、管理员帐户，并且 DockSense 要安装在 Program Files 下它自己的文件夹中。请在管理员批准下把它复制过去（要复制而不是移动，这样文件才会获得该文件夹的权限），从托盘退出旧的那一份，再启动新的。如果之前开启了**开机自启**，请在新的那一份里重新开启（**设置 → 开机自启**）：登录启动项仍然指向旧的那一份。
 - **为什么需要驱动**：在 ROG Xbox Ally X 上，固件会接受通过 ASUS 自家接口写入的功耗上限，然后直接无视。所以 DockSense 把上限直接发给处理器，做法和 RyzenAdj、Universal x86 Tuning Utility、G-Helper、Handheld Companion 一样，而这需要驱动。PawnIO 带有签名，并且只运行其作者签名的模块；DockSense 内置的是 PawnIO 项目原样的 AMD 模块。
 - **为什么需要管理员批准**：PawnIO 只接受管理员调用。第一次选择数值时，Windows 会询问一次，然后 DockSense 注册一个以管理员权限设置 TDP 的任务（任务计划程序中的 `DockSense-TDP-<你的用户 ID>`）；DockSense 本身仍以普通权限运行。这个任务只接受一个瓦数，并且自己按设备范围检查。文件夹的要求也来自这里：任务运行的是 `DockSense.exe`，如果它所在的文件夹任何程序都能写入，这个文件就可能被替换。**设置 → TDP 辅助任务 → 移除**可以删掉这个任务。
 - **写入的内容**：DockSense 为持续、中期和短时三个上限请求同一个数值。它是上限而不是目标：这些上限生效期间，空闲或负载较轻时处理器的功耗会更低；而在厂商软件把它们改回去之后的几秒内（见*保持生效*），功耗可能更高。范围从厂商规定的下限（Ally 系列为 7 W）到固件自身使用的最高短时上限（ROG Xbox Ally X 为 55 W，旧型号使用电池时更低）。

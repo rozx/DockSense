@@ -345,14 +345,15 @@
   <data name="Tdp_MaxBySource" xml:space="preserve"><value>{0} W plugged in, {1} W on battery</value></data>
   <data name="Tdp_Warning" xml:space="preserve"><value>{0} W is above the manufacturer's maximum of {1}. This can overheat the device, wear out the battery and damage the hardware. Once the device is hot, its firmware may still pull the power back to its own limit.</value></data>
   <data name="Tdp_WarningTitle" xml:space="preserve"><value>Go above the manufacturer's maximum?</value></data>
-  <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W is more than the manufacturer allows for this device ({1}). Running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it. You do this at your own risk.</value></data>
+  <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W is more than the manufacturer allows for this device ({1}). Running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it. You do this at your own risk. Your answer covers this value and lower ones in every mode's profile.</value></data>
   <data name="Tdp_WarningConfirm" xml:space="preserve"><value>Set anyway</value></data>
   <data name="Tdp_SetupTitle" xml:space="preserve"><value>Allow DockSense to set the TDP?</value></data>
   <data name="Tdp_SetupMessage" xml:space="preserve"><value>Setting the TDP needs administrator rights. Windows asks for your approval once. DockSense then registers a task that sets the TDP when a mode begins, without further prompts, while DockSense itself keeps running without administrator rights. You can remove the task under Settings.</value></data>
   <data name="Tdp_SetupConfirm" xml:space="preserve"><value>Continue</value></data>
   <data name="Tdp_NoteDriverMissing" xml:space="preserve"><value>Not applied: the PawnIO driver is not installed.</value></data>
   <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>Not applied: DockSense needs a protected installation for this. Copy it into a new folder under Program Files (copy, don't move: a moved file keeps its old permissions), quit DockSense from the tray, then start the copy in Program Files.</value></data>
-  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>Not applied: {0} W is above the manufacturer's maximum and has not been confirmed on this device. Set the value again to confirm it.</value></data>
+  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>Not applied: {0} W is above the manufacturer's maximum and has not been confirmed on this device.</value></data>
+  <data name="Tdp_Confirm" xml:space="preserve"><value>Confirm</value></data>
   <data name="Tdp_NoteHelperMissing" xml:space="preserve"><value>Not applied: administrator approval is missing.</value></data>
   <data name="Tdp_GetDriver" xml:space="preserve"><value>Get PawnIO</value></data>
   <data name="Tdp_SetUp" xml:space="preserve"><value>Set up</value></data>

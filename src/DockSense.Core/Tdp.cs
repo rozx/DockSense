@@ -296,10 +296,15 @@ public static class TdpHelperTask
     /// </summary>
     public static int ExitCodeForSent(int watts) => SentBase + watts;
 
-    /// <summary>The outcome an exit code of the helper stands for; anything it does not use is unconfirmed.</summary>
-    public static TdpWriteOutcome OutcomeOf(int exitCode) => exitCode switch
+    /// <summary>
+    /// The outcome an exit code of the helper stands for, after it was asked for <paramref name="requestedWatts"/>.
+    /// The helper only ever clamps downwards, so it cannot have sent more than it was asked for; such a code, like
+    /// any other it does not use, is unconfirmed.
+    /// </summary>
+    public static TdpWriteOutcome OutcomeOf(int exitCode, int requestedWatts) => exitCode switch
     {
-        >= SentBase and <= SentBase + 999 => new TdpWriteOutcome(TdpWriteResult.Ok, exitCode - SentBase),
+        > SentBase when exitCode - SentBase <= requestedWatts => new TdpWriteOutcome(TdpWriteResult.Ok, exitCode - SentBase),
+        >= SentBase => new TdpWriteOutcome(TdpWriteResult.Unconfirmed),
         (int)TdpWriteResult.Ok => new TdpWriteOutcome(TdpWriteResult.Unconfirmed), // "done" without saying what was sent
         _ when Enum.IsDefined(typeof(TdpWriteResult), exitCode) => new TdpWriteOutcome((TdpWriteResult)exitCode),
         _ => new TdpWriteOutcome(TdpWriteResult.Unconfirmed),

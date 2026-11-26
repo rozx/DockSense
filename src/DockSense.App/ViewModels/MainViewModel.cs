@@ -513,7 +513,7 @@ public sealed partial class MainViewModel : ObservableObject
                 })
                     : unconfirmed ? Loc.F("Tdp_NoteUnconfirmed", config.TdpWatts)
                     : string.Empty;
-                profile.TdpNoteAction = !blocked ? string.Empty : tdpReadiness switch
+                profile.TdpNoteAction = !blocked ? (unconfirmed ? Loc.T("Tdp_Confirm") : string.Empty) : tdpReadiness switch
                 {
                     TdpReadiness.DriverMissing => Loc.T("Tdp_GetDriver"),
                     TdpReadiness.HelperMissing => Loc.T("Tdp_SetUp"),
@@ -590,15 +590,16 @@ public sealed partial class MainViewModel : ObservableObject
             // That includes choosing the same value again after the note under the setting asked for it.
             // What was agreed to is kept with the settings, per board: a number in a profile says nothing about
             // that, it may have come from another device.
+            var agreed = false;
             if (!device.IsConfirmed(value, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts))
             {
-                if (!await Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", value, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm")))
+                if (!await ConfirmAboveMaximumAsync(device, value))
                 {
                     SetTdpSelection(profile, previous);
                     return;
                 }
 
-                _service.UpdateConfig(c => c with { TdpConfirmedBoard = device.Board, TdpConfirmedWatts = value }, reapply: false);
+                agreed = true;
             }
 
             // The driver may have been installed since this was last looked at. Nothing is sent from here: the
@@ -611,6 +612,13 @@ public sealed partial class MainViewModel : ObservableObject
                 SetTdpSelection(profile, previous);
                 return;
             }
+
+            // Kept only now, with the value it was given for: backing out of the helper setup takes the
+            // agreement back as well.
+            if (agreed)
+            {
+                SaveTdpConfirmation(device, value, apply: false); // The profile saved below applies it.
+            }
         }
 
         // The window may have been refreshed from the saved settings while a dialog was open.
@@ -618,8 +626,19 @@ public sealed partial class MainViewModel : ObservableObject
         SaveProfile(profile);
     }
 
-    /// <summary>The button next to a profile's "not applied" note: get the driver, or set up the helper.</summary>
-    internal async Task ResolveTdpNote()
+    /// <summary>Asks whether <paramref name="watts"/>, above the manufacturer's maximum, is really wanted.</summary>
+    private static Task<bool> ConfirmAboveMaximumAsync(TdpDevice device, int watts) =>
+        Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", watts, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm"));
+
+    /// <summary>Records the agreement to <paramref name="watts"/> and lower values, in every profile, on this model.</summary>
+    private void SaveTdpConfirmation(TdpDevice device, int watts, bool apply) =>
+        _service.UpdateConfig(c => c with { TdpConfirmedBoard = device.Board, TdpConfirmedWatts = watts }, reapply: apply);
+
+    /// <summary>
+    /// The button next to a profile's "not applied" note: get the driver, set up the helper, or confirm a saved
+    /// value above the manufacturer's maximum.
+    /// </summary>
+    internal async Task ResolveTdpNote(ModeProfileViewModel profile)
     {
         // Look again first: the note may be about something the user has put right meanwhile (the driver
         // installed after following the link). Then the note goes away, or its button offers the next step.
@@ -634,6 +653,21 @@ public sealed partial class MainViewModel : ObservableObject
                 if (await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
                 {
                     await _service.SetUpTdpHelperAsync();
+                }
+
+                break;
+
+            case TdpReadiness.Ready:
+                // The saved value is what the slider shows already, so choosing it again changes nothing: the
+                // question is asked from here. Answered for what is saved now, not for what was on screen.
+                if (_service.TdpDevice is { } device
+                    && _service.Config.ProfileFor(profile.Mode).TdpWatts is { } saved
+                    && device.Offers(saved)
+                    && !device.IsConfirmed(saved, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts)
+                    && await ConfirmAboveMaximumAsync(device, saved)
+                    && _service.Config.ProfileFor(profile.Mode).TdpWatts == saved)
+                {
+                    SaveTdpConfirmation(device, saved, apply: true);
                 }
 
                 break;
@@ -1163,7 +1197,7 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     public bool TdpWarningVisible => TdpWarning.Length > 0;
 
     [RelayCommand]
-    private Task ResolveTdpNote() => owner.ResolveTdpNote();
+    private Task ResolveTdpNote() => owner.ResolveTdpNote(this);
 
     /// <summary>The live switch needs a target (desktop or FSE) and the Windows API.</summary>
     public bool FseLiveEnabled => FseLiveSupported && SelectedFse != FseStartup.Unchanged;
