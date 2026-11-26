@@ -1634,38 +1634,46 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>Registers the elevated helper task (Windows asks for approval).</summary>
     /// <param name="apply">Also send the wanted TDP afterwards (see <see cref="RefreshTdpReadiness"/>).</param>
-    public async Task<bool> SetUpTdpHelperAsync(bool apply = true)
+    public async Task<TdpSetupOutcome> SetUpTdpHelperAsync(bool apply = true)
     {
-        // One setup at a time, whoever asks: the profiles stay editable while it runs, and a second one would be
-        // a second approval prompt for the same task. A setup that finished since the caller last looked counts.
-        bool done;
+        // One setup at a time, whoever asks: a second one would be a second approval prompt for the same task.
+        // A setup that finished since the caller last looked counts.
+        TdpSetupOutcome outcome;
         if (_tdpSetup is { IsCompleted: false } running)
         {
-            done = await running;
+            outcome = await running ? TdpSetupOutcome.Done : TdpSetupOutcome.NotDone;
         }
         else
         {
             // Looked at afresh, and Windows is asked only when the task is what is missing: without the driver
             // the task would change nothing, and a copy in an unprotected folder is not to be elevated at all.
             InvalidateTdpReadiness();
-            done = TdpReadiness switch
+            switch (TdpReadiness)
             {
-                TdpReadiness.Ready => true,
-                TdpReadiness.HelperMissing => await (_tdpSetup = RunTdpSetupAsync()),
-                _ => false,
-            };
+                case TdpReadiness.Ready:
+                    outcome = TdpSetupOutcome.Done;
+                    break;
 
-            // Whatever the fresh look found, the window shows it: a note that still offered the setup now names
-            // what is really in the way.
-            RaiseStatusChanged();
+                case TdpReadiness.HelperMissing:
+                    // Tells the window itself when it is through, whichever way it ended.
+                    outcome = await (_tdpSetup = RunTdpSetupAsync()) ? TdpSetupOutcome.Done : TdpSetupOutcome.NotDone;
+                    break;
+
+                default:
+                    // Nothing was started. The window shows what the fresh look found: a note that still
+                    // offered the setup now names what is really in the way.
+                    outcome = TdpSetupOutcome.Blocked;
+                    RaiseStatusChanged();
+                    break;
+            }
         }
 
-        if (done && apply)
+        if (outcome == TdpSetupOutcome.Done && apply)
         {
             RefreshTdpReadiness();
         }
 
-        return done;
+        return outcome;
     }
 
     private async Task<bool> RunTdpSetupAsync()

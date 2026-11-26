@@ -630,24 +630,26 @@ public sealed partial class MainViewModel : ObservableObject
                 if (_service.TdpReadiness == TdpReadiness.HelperMissing)
                 {
                     LockTdpRows();
-                    var ready = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
-                        && await _service.SetUpTdpHelperAsync(apply: false);
+                    var setup = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
+                        ? await _service.SetUpTdpHelperAsync(apply: false)
+                        : TdpSetupOutcome.NotDone;
                     if (profile.TdpEdit != edit)
                     {
                         return;
                     }
 
-                    // Not set up because something else turned out to be missing (the driver was removed, the
-                    // folder is no longer protected): the value is saved like any other that cannot be applied
-                    // yet, and the note under it says what is in the way. Declined or failed: the old choice.
-                    if (!ready && _service.TdpReadiness is not (TdpReadiness.DriverMissing or TdpReadiness.UnprotectedFolder))
+                    // Declined, here or at Windows' prompt, or failed: the old choice, whatever else has changed
+                    // meanwhile. Only when Windows was never asked, because something else turned out to be
+                    // missing (the driver was removed, the folder is no longer protected), is the value saved
+                    // like any other that cannot be applied yet, with the note that says what is in the way.
+                    if (setup == TdpSetupOutcome.NotDone)
                     {
                         SetTdpSelection(profile, previous);
                         return;
                     }
                 }
 
-                // Kept only now, with the value it was given for: backing out of the helper setup takes the
+                // Kept only now, with the value it was given for: declining the helper setup takes the
                 // agreement back as well.
                 if (agreed)
                 {

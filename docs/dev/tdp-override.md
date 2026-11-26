@@ -110,9 +110,12 @@ helper. Typed text has to be one plain number, with a unit after it at most.
   profile (the dialog says so). The answer is kept with the settings, per board model (`tdpConfirmedBoard` /
   `tdpConfirmedWatts`). Only the last board is remembered (its key in `TdpDevice.Known`, so RC73XA and RC74XA
   count as two); while it matches, a new answer can raise the value but not lower it. If the edit also prompts
-  for the helper setup,
-  the answer is saved only after that setup succeeds. A higher value asks again. A value above the maximum that was not confirmed for this model, for example one that arrived with a
-  settings file from another model, is not sent: `TdpPlanner.Plan` treats it as no value, a warning says so,
+  for the helper setup, the answer is saved with the value only when that setup succeeds, or when Windows was
+  never asked because a fresh look found something else missing (`TdpSetupOutcome.Blocked`: the value is then
+  saved like any other that cannot be applied yet). A declined or failed setup saves neither. From the first
+  question until the choice is saved or dropped, the TDP rows of all profiles are locked, so there is one
+  choice on its way at a time. A higher value asks again. A value above the maximum that was not confirmed for
+  this model, for example one that arrived with a settings file from another model, is not sent: `TdpPlanner.Plan` treats it as no value, a warning says so,
   and the note under the setting has a Confirm button (choosing the same value again changes nothing, so the
   slider cannot ask). The manufacturer's maximum belongs to the model, so the agreement does too: a settings
   file copied to another unit of the same model carries it along.

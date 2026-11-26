@@ -7,6 +7,19 @@ using DockSense.Core;
 namespace DockSense.App.Platform;
 
 /// <summary>How setting up or removing the helper task ended.</summary>
+/// <summary>How a request to set up the helper task ended (<c>DockSenseService.SetUpTdpHelperAsync</c>).</summary>
+public enum TdpSetupOutcome
+{
+    /// <summary>The task is registered and ready.</summary>
+    Done,
+
+    /// <summary>Windows was asked, and the approval was declined or the registration failed.</summary>
+    NotDone,
+
+    /// <summary>Windows was not asked: a fresh look found something else missing (the driver, a protected folder).</summary>
+    Blocked,
+}
+
 internal enum TdpSetupResult
 {
     Done,
