@@ -136,8 +136,9 @@ public enum TdpWriteResult
     Busy = 9,
 
     /// <summary>
-    /// The SMU took one limit and then refused another: the processor is left with a mix of the new value and
-    /// the old ones, which is neither what was asked for nor what the vendor software set.
+    /// The SMU took one limit and then refused another, or a limit was sent and no answer came back: the
+    /// processor may be left with a mix of the new value and the old ones, which is neither what was asked for
+    /// nor what the vendor software set.
     /// </summary>
     PartlyApplied = 10,
 

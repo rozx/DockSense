@@ -138,12 +138,17 @@ internal static class TdpWriter
             var applied = 0;
             foreach (var command in new[] { commands.Sustained, commands.Fast, commands.Slow })
             {
-                if (Send(driver, commands.Mailbox, command, milliwatts).Status != AmdSmuPowerCommands.Ok)
+                var status = Send(driver, commands.Mailbox, command, milliwatts).Status;
+                if (status == AmdSmuPowerCommands.Ok)
                 {
-                    return applied == 0 ? TdpWriteResult.Rejected : TdpWriteResult.PartlyApplied;
+                    applied++;
+                    continue;
                 }
 
-                applied++;
+                // Only an answer from the SMU that refuses the first limit means nothing was changed. After an
+                // earlier limit went in, or without any confirmed answer (status 0: the command may have been
+                // taken and its reply lost), a limit may be in force.
+                return applied == 0 && status != 0 ? TdpWriteResult.Rejected : TdpWriteResult.PartlyApplied;
             }
 
             return TdpWriteResult.Ok;
