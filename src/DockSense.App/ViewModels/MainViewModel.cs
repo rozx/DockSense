@@ -58,6 +58,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool IgpuOfferVisible { get; set; }
     [ObservableProperty] public partial string IgpuOfferTitle { get; set; } = string.Empty;
     [ObservableProperty] public partial string IgpuOfferMessage { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IgpuOfferChangeVisible { get; set; }
     [ObservableProperty] public partial string PowerText { get; set; } = string.Empty;
     [ObservableProperty] public partial string PauseButtonText { get; set; } = string.Empty;
     [ObservableProperty] public partial InfoBarSeverity ThrottleSeverity { get; set; }
@@ -134,7 +135,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task Restart()
     {
-        if (await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(), Loc.T("Restart_Confirm")))
+        if (await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(storesFirst: false), Loc.T("Restart_Confirm")))
         {
             RestartWindows();
         }
@@ -150,22 +151,42 @@ public sealed partial class MainViewModel : ObservableObject
         return SystemPower.Restart();
     }
 
-    /// <summary>The restart confirmation, with a reminder while an eGPU is connected: some PCs do not start with one attached.</summary>
-    private string RestartMessage() => _service.EgpuConnected
-        ? $"{Loc.T("Restart_Message")}\n\n{Loc.T("Restart_EgpuHint")}"
-        : Loc.T("Restart_Message");
+    /// <summary>
+    /// The restart confirmation, with a reminder while an eGPU is connected (some PCs do not start with one
+    /// attached) and, when a size is stored through the AMD driver first, the note that this is experimental.
+    /// </summary>
+    private string RestartMessage(bool storesFirst)
+    {
+        var message = Loc.T("Restart_Message");
+        if (storesFirst && _service.IgpuMemoryViaAmdDriver)
+        {
+            message += $"\n\n{Loc.T("Restart_AmdHint")}";
+        }
 
-    /// <summary>The Status card's "Change": stores the size the current mode asks for; the restart comes later.</summary>
+        return _service.EgpuConnected ? $"{message}\n\n{Loc.T("Restart_EgpuHint")}" : message;
+    }
+
+    /// <summary>
+    /// The Status card's "Change": stores the size the current mode asks for; the restart comes later. Through the
+    /// AMD driver there is no "later" to promise, so that goes the way of "Change and restart".
+    /// </summary>
     [RelayCommand]
-    private Task ChangeIgpuMemory() =>
-        _service.IgpuMemoryOffer is { } offer ? AcceptIgpuOfferAsync(offer, restart: false) : Task.CompletedTask;
+    private Task ChangeIgpuMemory()
+    {
+        if (_service.IgpuMemoryOffer is not { } offer)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _service.IgpuMemoryViaAmdDriver ? ChangeIgpuMemoryAndRestart() : AcceptIgpuOfferAsync(offer, restart: false);
+    }
 
     /// <summary>The Status card's "Change and restart": asks first, as every restart from the window does.</summary>
     [RelayCommand]
     private async Task ChangeIgpuMemoryAndRestart()
     {
         if (_service.IgpuMemoryOffer is { } offer
-            && await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(), Loc.T("Restart_Confirm")))
+            && await Dialogs.ConfirmAsync(Loc.T("Restart_Title"), RestartMessage(storesFirst: true), Loc.T("Restart_Confirm")))
         {
             await AcceptIgpuOfferAsync(offer, restart: true);
         }
@@ -210,6 +231,11 @@ public sealed partial class MainViewModel : ObservableObject
         {
             // The message says to plug in while the PC restarts, which is exactly what some PCs cannot take.
             message += $"\n\n{Loc.T("RestartFor_EgpuHint")}";
+        }
+
+        if (_service.IgpuMemoryViaAmdDriver)
+        {
+            message += $"\n\n{Loc.T("Restart_AmdHint")}";
         }
 
         if (!await Dialogs.ConfirmAsync(Loc.F("RestartFor_Title", name), message, Loc.T("Restart_Confirm"))
@@ -332,7 +358,11 @@ public sealed partial class MainViewModel : ObservableObject
         var offer = _service.IgpuMemoryOffer;
         IgpuOfferVisible = offer is not null;
         IgpuOfferTitle = offer is null ? string.Empty : Loc.F("Dash_IgpuOfferTitle", DockSenseService.FormatMemory(offer.MemoryMb));
-        IgpuOfferMessage = offer is null ? string.Empty : Loc.F("Dash_IgpuOfferMessage", DockSenseService.ModeName(offer.Mode));
+        var viaAmdDriver = _service.IgpuMemoryViaAmdDriver;
+        IgpuOfferMessage = offer is null
+            ? string.Empty
+            : Loc.F(viaAmdDriver ? "Dash_IgpuOfferMessageAmd" : "Dash_IgpuOfferMessage", DockSenseService.ModeName(offer.Mode));
+        IgpuOfferChangeVisible = !viaAmdDriver;
 
         var gameMode = _service.GameMode;
         if (gameMode is null || !gameMode.GameModeEnabled || gameMode.Overrides.Count == 0)
@@ -405,7 +435,10 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             profile.SelectedIgpu = config.IgpuMemoryMb ?? ModeProfileViewModel.IgpuUnchanged;
-            profile.IgpuAsk = config.IgpuMemoryApply == IgpuMemoryApply.Ask;
+            // Through the AMD driver every change asks first, whatever the profile says.
+            profile.IgpuExperimental = _service.IgpuMemoryViaAmdDriver;
+            profile.IgpuAsk = profile.IgpuExperimental || config.IgpuMemoryApply == IgpuMemoryApply.Ask;
+            profile.IgpuDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuDescAmd" : "Prof_IgpuDesc");
 
             if (!profile.WhenOptions.SequenceEqual(whenOptions))
             {
@@ -639,7 +672,9 @@ public sealed partial class MainViewModel : ObservableObject
             Fse = profile.SelectedFse,
             FseApplyImmediately = profile.FseLive,
             IgpuMemoryMb = profile.SelectedIgpu == ModeProfileViewModel.IgpuUnchanged ? null : profile.SelectedIgpu,
-            IgpuMemoryApply = profile.IgpuAsk ? IgpuMemoryApply.Ask : IgpuMemoryApply.Automatic,
+            // The switch is locked on while the size goes through the AMD driver: keep what the profile said.
+            IgpuMemoryApply = profile.IgpuExperimental ? _service.Config.ProfileFor(profile.Mode).IgpuMemoryApply
+                : profile.IgpuAsk ? IgpuMemoryApply.Ask : IgpuMemoryApply.Automatic,
             Programs = profile.Programs.Select(p => p.ToModel()).ToList(),
         };
 
@@ -879,13 +914,19 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     public partial int SelectedIgpu { get; set; } = IgpuUnchanged;
 
     [ObservableProperty] public partial bool IgpuAsk { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IgpuAskEnabled))]
+    public partial bool IgpuExperimental { get; set; }
+
+    [ObservableProperty] public partial string IgpuDescription { get; set; } = string.Empty;
     [ObservableProperty] public partial IReadOnlyList<Option<ProgramTrigger>> WhenOptions { get; set; } = [];
 
     /// <summary>"Don't change" in the iGPU memory list.</summary>
     public const int IgpuUnchanged = -1;
 
     /// <summary>Asking first needs a size to ask about.</summary>
-    public bool IgpuAskEnabled => SelectedIgpu != IgpuUnchanged;
+    public bool IgpuAskEnabled => SelectedIgpu != IgpuUnchanged && !IgpuExperimental;
 
     /// <summary>The live switch needs a target (desktop or FSE) and the Windows API.</summary>
     public bool FseLiveEnabled => FseLiveSupported && SelectedFse != FseStartup.Unchanged;

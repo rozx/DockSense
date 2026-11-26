@@ -51,6 +51,7 @@ public sealed class DockSenseService : IDisposable
     // After a restart the user asked for to get a mode's iGPU memory size: how long that mode may take to show up
     // before the mode the PC came back in gets its own size again. Long enough to connect an eGPU after signing in.
     private static readonly TimeSpan AwaitedModeWait = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan AmdDriverRetry = TimeSpan.FromSeconds(30);
 
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -69,6 +70,9 @@ public sealed class DockSenseService : IDisposable
     private readonly DispatcherTimer _igpuWaitTimer = new() { Interval = AwaitedModeWait };
     private DockMode? _igpuAwaitedMode;
     private IgpuMemoryOffer? _igpuAsked;
+    private bool _amdDriverReadPending;
+    private bool _resumedInSameMode;
+    private bool _disposed;
 
     public DockSenseService(ConfigStore configStore)
     {
@@ -120,6 +124,13 @@ public sealed class DockSenseService : IDisposable
     /// <summary>The firmware's iGPU memory options, or null when the device does not offer the setting.</summary>
     public IgpuMemoryOptions? IgpuMemory { get; private set; }
 
+    /// <summary>
+    /// True when the iGPU memory is set through the AMD graphics driver (Variable Graphics Memory) because the
+    /// device has no ASUS firmware interface. Experimental, and the driver may restart the PC by itself when a size
+    /// is stored: every change needs the user's go-ahead for a restart.
+    /// </summary>
+    public bool IgpuMemoryViaAmdDriver { get; private set; }
+
     /// <summary>iGPU memory in effect during this Windows session, in MB (0 = Auto); null if unknown.</summary>
     public int? IgpuMemoryEffectiveMb => IgpuMemory is { } options && _igpuBoot is { } boot ? options.ToMb(boot.EffectiveRaw) : null;
 
@@ -134,7 +145,7 @@ public sealed class DockSenseService : IDisposable
     /// </summary>
     public IgpuMemoryOffer? IgpuMemoryOffer =>
         !Paused && _igpuAwaitedMode is null && IgpuMemory is { } options
-        && IgpuMemoryPlanner.Decide(Config.ProfileFor(Mode), options, _igpuBoot?.EffectiveRaw) is { Step: IgpuMemoryStep.Ask } decision
+        && IgpuMemoryPlanner.Decide(Config.ProfileFor(Mode), options, _igpuBoot?.EffectiveRaw, IgpuMemoryViaAmdDriver) is { Step: IgpuMemoryStep.Ask } decision
             ? new IgpuMemoryOffer(Mode, decision.MemoryMb)
             : null;
 
@@ -188,6 +199,7 @@ public sealed class DockSenseService : IDisposable
         {
             // The plan state saved by the previous instance (owned or handed over) carries on as it was.
             _lastApplied = mode;
+            _resumedInSameMode = true;
             Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
         }
         else if (Paused)
@@ -352,6 +364,7 @@ public sealed class DockSenseService : IDisposable
         _rescanTimer.Stop();
         _settleTimer.Stop();
         _igpuWaitTimer.Stop();
+        _disposed = true;
     }
 
     public static string ModeName(DockMode mode) => Loc.T($"Mode_{mode}");
@@ -614,26 +627,116 @@ public sealed class DockSenseService : IDisposable
 
     private void InitializeIgpuMemory()
     {
-        IgpuMemory = SafeReadIgpuMemory();
-        if (IgpuMemory is not { } options)
+        if (!AmdAdlx.Simulated && SafeReadIgpuMemory() is { } options)
         {
-            return;
+            AdoptIgpuMemory(options);
         }
+        else
+        {
+            // No ASUS firmware interface. The AMD driver may offer the setting instead; it is asked in the
+            // background, because its answer can take a while and must not hold up the start.
+            _amdDriverReadPending = true;
+            _ = ReadAmdDriverMemoryAsync();
+        }
+    }
 
-        // The value stored in the firmware when this boot session is first seen is the one in effect now.
+    private void AdoptIgpuMemory(IgpuMemoryOptions options)
+    {
+        // The value stored when this boot session is first seen is the one in effect now.
         var boot = CurrentBoot();
-        var saved = StateStore.LoadIgpuMemory();
+        var saved = AmdAdlx.Simulated ? null : StateStore.LoadIgpuMemory(); // a simulation leaves the real state alone
         if (saved?.Boot is { } savedBoot && savedBoot.IsSameBoot(boot))
         {
             _igpuBoot = saved;
+            if (IgpuMemoryViaAmdDriver && saved.StoredRaw is { } stored)
+            {
+                options = options with { CurrentRaw = stored }; // stored by DockSense earlier in this boot session
+            }
         }
         else
         {
             _igpuBoot = new IgpuMemoryBootState(boot, options.CurrentRaw);
-            StateStore.SaveIgpuMemory(_igpuBoot);
+            if (!AmdAdlx.Simulated)
+            {
+                StateStore.SaveIgpuMemory(_igpuBoot);
+            }
         }
 
-        Log.Info($"iGPU memory: {options.ToMb(_igpuBoot.EffectiveRaw)} MB in effect, {options.ToMb(options.CurrentRaw)} MB stored in the firmware.");
+        IgpuMemory = options;
+        Log.Info($"iGPU memory: {options.ToMb(_igpuBoot.EffectiveRaw)} MB in effect, {options.ToMb(options.CurrentRaw)} MB stored {(IgpuMemoryViaAmdDriver ? "by the AMD driver" : "in the firmware")}.");
+    }
+
+    /// <summary>
+    /// Asks the AMD driver for Variable Graphics Memory once the Windows shell is up (right after sign-in the
+    /// driver's services may not answer yet), with one more try a little later. When the driver offers sizes, the
+    /// iGPU memory setting appears and the current mode's size is offered, as it would have been at the start.
+    /// </summary>
+    private async Task ReadAmdDriverMemoryAsync()
+    {
+        try
+        {
+            await Task.Delay(SignInSession.ShellWait);
+            for (var attempt = 1; attempt <= 2 && !_disposed; attempt++)
+            {
+                var note = string.Empty;
+                var report = await Task.Run(() => AmdAdlx.ReadVariableGraphicsMemory(out note));
+                if (_disposed || note == AmdAdlx.NoDriver)
+                {
+                    return;
+                }
+
+                if (report is not null)
+                {
+                    AdoptAmdDriverMemory(report);
+                    return;
+                }
+
+                Log.Info($"AMD graphics memory could not be read (try {attempt}): {note}.");
+                if (attempt == 1)
+                {
+                    await Task.Delay(AmdDriverRetry);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log.Error("Reading the AMD graphics memory failed", ex);
+        }
+        finally
+        {
+            _amdDriverReadPending = false;
+        }
+    }
+
+    private void AdoptAmdDriverMemory(AdlxMemoryReport report)
+    {
+        if (!report.Supported)
+        {
+            Log.Info($"iGPU memory: not adjustable on this device (no ASUS firmware interface; the AMD driver, ADLX {report.AdlxVersion}, does not offer Variable Graphics Memory).");
+            return;
+        }
+
+        Log.Info($"AMD Variable Graphics Memory (ADLX {report.AdlxVersion}): current {report.Current?.ToString() ?? "-"}; default {report.Default?.ToString() ?? "-"}; options: {string.Join(" | ", report.Options)}");
+        if (report.ToIgpuMemoryOptions() is not { } options)
+        {
+            Log.Warn("The AMD driver offers Variable Graphics Memory, but no sizes DockSense can use.");
+            return;
+        }
+
+        IgpuMemoryViaAmdDriver = true;
+        AdoptIgpuMemory(options);
+        Log.Info("iGPU memory is set through the AMD driver on this device. This is experimental.");
+
+        // What the start skipped while the driver had not answered yet. After an update nothing is applied again
+        // while the mode is still the same; the Status page shows an open question all the same.
+        _amdDriverReadPending = false;
+        BeginAwaitedModeWait(Mode);
+        if (!Paused && !_resumedInSameMode)
+        {
+            ApplyIgpuMemory(Mode, Config.ProfileFor(Mode), ApplyReason.Startup);
+        }
+
+        RaiseStatusChanged();
     }
 
     /// <summary>
@@ -645,6 +748,11 @@ public sealed class DockSenseService : IDisposable
     /// </summary>
     private void BeginAwaitedModeWait(DockMode mode)
     {
+        if (_amdDriverReadPending)
+        {
+            return; // Asked again once the AMD driver has told what it offers.
+        }
+
         if (StateStore.LoadIgpuRestartTarget() is not { } target)
         {
             return;
@@ -723,7 +831,7 @@ public sealed class DockSenseService : IDisposable
             return;
         }
 
-        var decision = IgpuMemoryPlanner.Decide(profile, IgpuMemory, _igpuBoot?.EffectiveRaw);
+        var decision = IgpuMemoryPlanner.Decide(profile, IgpuMemory, _igpuBoot?.EffectiveRaw, IgpuMemoryViaAmdDriver);
         if (decision.Step == IgpuMemoryStep.Store)
         {
             if (StoreIgpuMemory(mode.ToString(), target, decision.Raw) && IgpuMemoryPendingMb is not null)
@@ -757,7 +865,7 @@ public sealed class DockSenseService : IDisposable
         }
 
         IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
-        var decision = IgpuMemoryPlanner.Decide(Config.ProfileFor(offer.Mode), IgpuMemory, _igpuBoot?.EffectiveRaw);
+        var decision = IgpuMemoryPlanner.Decide(Config.ProfileFor(offer.Mode), IgpuMemory, _igpuBoot?.EffectiveRaw, IgpuMemoryViaAmdDriver);
         var stored = decision.Step == IgpuMemoryStep.None
             ? IgpuMemory.RawFor(offer.MemoryMb) == IgpuMemory.CurrentRaw // another tool stored it in the meantime
             : StoreIgpuMemory($"{offer.Mode} (agreed)", offer.MemoryMb, decision.Raw);
@@ -855,6 +963,11 @@ public sealed class DockSenseService : IDisposable
     /// <summary>Writes a raw value the firmware lists. <paramref name="context"/> says in the log who asked.</summary>
     private bool StoreIgpuMemory(string context, int megabytes, uint raw)
     {
+        if (IgpuMemoryViaAmdDriver)
+        {
+            return StoreIgpuMemoryThroughAmdDriver(context, megabytes, raw);
+        }
+
         try
         {
             if (!AsusAcpi.WriteIgpuMemory(raw))
@@ -871,6 +984,33 @@ public sealed class DockSenseService : IDisposable
 
         IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory! with { CurrentRaw = raw };
         Log.Info($"{context}: iGPU memory set to {megabytes} MB; it applies after a restart.");
+        AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(megabytes)));
+        return true;
+    }
+
+    /// <summary>
+    /// Experimental. The AMD driver may restart the PC by itself when it stores a size, in which case this call
+    /// does not come back: every caller has the user's go-ahead for a restart.
+    /// </summary>
+    private bool StoreIgpuMemoryThroughAmdDriver(string context, int megabytes, uint raw)
+    {
+        Log.Info($"{context}: asking the AMD driver to store iGPU memory {megabytes} MB. The driver may restart the PC by itself.");
+        if (!AmdAdlx.SetVariableGraphicsMemory(megabytes, out var note))
+        {
+            Log.Warn($"{context}: the AMD driver did not store iGPU memory {megabytes} MB: {note}.");
+            AddActivity(Loc.F("Act_IgpuAmdFailed", note));
+            return false;
+        }
+
+        // The driver is not known to report a size that waits for a restart, so remember it here.
+        IgpuMemory = IgpuMemory! with { CurrentRaw = raw };
+        if (_igpuBoot is { } boot)
+        {
+            _igpuBoot = boot with { StoredRaw = raw };
+            StateStore.SaveIgpuMemory(_igpuBoot);
+        }
+
+        Log.Info($"{context}: the AMD driver stored iGPU memory {megabytes} MB and has not restarted the PC by itself.");
         AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(megabytes)));
         return true;
     }
@@ -893,8 +1033,17 @@ public sealed class DockSenseService : IDisposable
         return new BootSession(bootId, DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64));
     }
 
-    private static IgpuMemoryOptions? SafeReadIgpuMemory()
+    /// <summary>
+    /// The firmware's current answer. For the AMD driver it is what DockSense already knows: asking the driver
+    /// takes too long for the UI thread, and DockSense keeps track of what it stored itself.
+    /// </summary>
+    private IgpuMemoryOptions? SafeReadIgpuMemory()
     {
+        if (IgpuMemoryViaAmdDriver)
+        {
+            return IgpuMemory;
+        }
+
         try
         {
             return AsusAcpi.ReadIgpuMemory();

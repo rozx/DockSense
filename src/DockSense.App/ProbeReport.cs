@@ -190,8 +190,11 @@ internal static class ProbeReport
             Line(text, 0, "iGPU memory reply", HardwareDiagnostics.Hex(reply.AsSpan(0, 48)));
         }
 
-        // Read only, for devices without the ASUS interface: DockSense does not set it this way (yet).
+        // What DockSense falls back on where the ASUS interface is missing (experimental). Reading changes nothing.
         var adlx = AmdAdlx.ReadVariableGraphicsMemory(out var adlxNote);
+        var viaAsus = reply is not null && IgpuMemoryOptions.Parse(reply) is not null;
+        var viaAmdDriver = !viaAsus && adlx?.ToIgpuMemoryOptions() is not null;
+        Line(text, 0, "iGPU memory set by", viaAsus ? "the ASUS firmware interface" : viaAmdDriver ? "the AMD driver (experimental)" : "nothing");
         if (adlx is null)
         {
             Line(text, 0, "AMD graphics memory", $"not read ({adlxNote})");

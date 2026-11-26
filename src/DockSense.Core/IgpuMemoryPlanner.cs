@@ -27,7 +27,11 @@ public static class IgpuMemoryPlanner
     /// <param name="profile">The profile of the mode that is active.</param>
     /// <param name="firmware">The sizes the firmware offers and the one it has stored.</param>
     /// <param name="effectiveRaw">The raw firmware value in effect during this Windows session, when known.</param>
-    public static IgpuMemoryDecision Decide(ModeProfile profile, IgpuMemoryOptions firmware, uint? effectiveRaw)
+    /// <param name="alwaysAsk">
+    /// Never store without asking, whatever the profile says and even to put the size in effect back: for a way of
+    /// storing that may restart the PC by itself (AMD's graphics driver).
+    /// </param>
+    public static IgpuMemoryDecision Decide(ModeProfile profile, IgpuMemoryOptions firmware, uint? effectiveRaw, bool alwaysAsk = false)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(firmware);
@@ -41,7 +45,7 @@ public static class IgpuMemoryPlanner
 
         // Putting back the size that is in effect only withdraws a change that was waiting for a restart. No
         // restart follows from it, so there is nothing to agree to.
-        var ask = profile.IgpuMemoryApply == IgpuMemoryApply.Ask && raw != effectiveRaw;
+        var ask = alwaysAsk || (profile.IgpuMemoryApply == IgpuMemoryApply.Ask && raw != effectiveRaw);
         return new IgpuMemoryDecision(ask ? IgpuMemoryStep.Ask : IgpuMemoryStep.Store, megabytes, raw);
     }
 }

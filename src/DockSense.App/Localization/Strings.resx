@@ -325,4 +325,11 @@
   <data name="Restart_EgpuHint" xml:space="preserve"><value>An eGPU is connected. If your PC does not start with it attached, unplug it as the PC restarts and reconnect it after you sign in.</value></data>
   <data name="RestartFor_EgpuHint" xml:space="preserve"><value>If your PC does not start with the eGPU attached, connect it after you sign in instead.</value></data>
   <data name="Act_IgpuAwaiting" xml:space="preserve"><value>Restarted for {0} mode, which has not started yet. The iGPU memory stays as it is for a few minutes.</value></data>
+  <!-- iGPU memory through the AMD graphics driver (Variable Graphics Memory): experimental -->
+  <data name="Prof_IgpuDescAmd" xml:space="preserve"><value>Memory reserved for the built-in GPU, set through the AMD graphics driver. Experimental: the driver may restart the PC as soon as a size is stored, so DockSense always asks first and offers the change only together with a restart. Problems and success reports are welcome on GitHub.</value></data>
+  <data name="Prof_IgpuExperimentalReport" xml:space="preserve"><value>Experimental: report an issue on GitHub</value></data>
+  <data name="Dash_IgpuOfferMessageAmd" xml:space="preserve"><value>{0} mode asks for it. Experimental: the AMD graphics driver stores it and may restart the PC right away, so save your work first. Please report problems on GitHub.</value></data>
+  <data name="Toast_IgpuAskMessageAmd" xml:space="preserve"><value>{0} mode asks for it. Experimental: the AMD graphics driver may restart the PC right away. Save your work first.</value></data>
+  <data name="Restart_AmdHint" xml:space="preserve"><value>Experimental: the iGPU memory is stored through the AMD graphics driver, which may restart the PC by itself. If anything goes wrong, please report it on GitHub (About &gt; Report an issue).</value></data>
+  <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>The AMD graphics driver did not store the iGPU memory ({0}). This feature is experimental: please report it on GitHub.</value></data>
 </root>

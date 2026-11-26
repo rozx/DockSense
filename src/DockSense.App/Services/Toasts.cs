@@ -113,7 +113,11 @@ public static class Toasts
     /// </summary>
     /// <param name="offer">The mode and the size.</param>
     /// <param name="egpuConnected">Adds the reminder for PCs that do not start with an eGPU attached.</param>
-    public static void ShowIgpuQuestion(IgpuMemoryOffer offer, bool egpuConnected)
+    /// <param name="viaAmdDriver">
+    /// The size goes through the AMD driver (experimental), which may restart the PC by itself: the only choice
+    /// offered is the one that restarts.
+    /// </param>
+    public static void ShowIgpuQuestion(IgpuMemoryOffer offer, bool egpuConnected, bool viaAmdDriver)
     {
         ToastButton Button(string textKey, string action) => new ToastButton()
             .SetContent(Loc.T(textKey))
@@ -123,13 +127,18 @@ public static class Toasts
 
         var builder = new ToastContentBuilder()
             .AddText(Loc.F("Toast_IgpuAskTitle", DockSenseService.FormatMemory(offer.MemoryMb)))
-            .AddText(Loc.F("Toast_IgpuAskMessage", DockSenseService.ModeName(offer.Mode)));
+            .AddText(Loc.F(viaAmdDriver ? "Toast_IgpuAskMessageAmd" : "Toast_IgpuAskMessage", DockSenseService.ModeName(offer.Mode)));
         if (egpuConnected)
         {
             builder.AddText(Loc.T("Toast_EgpuHint"));
         }
 
-        builder.AddButton(Button("Igpu_Change", ChangeAction)).AddButton(Button("Igpu_ChangeRestart", ChangeRestartAction));
+        if (!viaAmdDriver)
+        {
+            builder.AddButton(Button("Igpu_Change", ChangeAction));
+        }
+
+        builder.AddButton(Button("Igpu_ChangeRestart", ChangeRestartAction));
         _restartToastMayExist = true;
         var request = ++_restartRequest;
         Show(builder, IconAssets.NameFor(offer.Mode), tag: RestartTag, stillWanted: () => request == _restartRequest);

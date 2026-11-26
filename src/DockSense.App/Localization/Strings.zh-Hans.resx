@@ -325,4 +325,11 @@
   <data name="Restart_EgpuHint" xml:space="preserve"><value>当前连接着外接显卡。如果你的电脑连接着它时无法启动，请在重启过程中拔下它，登录后再重新连接。</value></data>
   <data name="RestartFor_EgpuHint" xml:space="preserve"><value>如果你的电脑连接着外接显卡时无法启动，请改为登录后再连接。</value></data>
   <data name="Act_IgpuAwaiting" xml:space="preserve"><value>已为{0}模式重启，但该模式尚未开始。核显显存将在几分钟内保持不变。</value></data>
+  <!-- iGPU memory through the AMD graphics driver (Variable Graphics Memory): experimental -->
+  <data name="Prof_IgpuDescAmd" xml:space="preserve"><value>为内置显卡保留的内存，通过 AMD 显卡驱动设置。实验性功能：驱动可能在保存后立即重启电脑，因此 DockSense 总是先询问，并且只提供“更改并重启”。欢迎在 GitHub 上反馈问题或使用结果。</value></data>
+  <data name="Prof_IgpuExperimentalReport" xml:space="preserve"><value>实验性功能：在 GitHub 上反馈问题</value></data>
+  <data name="Dash_IgpuOfferMessageAmd" xml:space="preserve"><value>{0}模式需要这个大小。实验性功能：由 AMD 显卡驱动保存，驱动可能立即重启电脑，请先保存工作。如有问题，欢迎在 GitHub 上反馈。</value></data>
+  <data name="Toast_IgpuAskMessageAmd" xml:space="preserve"><value>{0}模式需要这个大小。实验性功能：AMD 显卡驱动可能立即重启电脑，请先保存工作。</value></data>
+  <data name="Restart_AmdHint" xml:space="preserve"><value>实验性功能：核显显存通过 AMD 显卡驱动保存，驱动可能自行重启电脑。如果出现问题，欢迎在 GitHub 上反馈（关于 &gt; 反馈问题）。</value></data>
+  <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>AMD 显卡驱动没有保存核显显存（{0}）。这是实验性功能，欢迎在 GitHub 上反馈。</value></data>
 </root>

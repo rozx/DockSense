@@ -59,4 +59,39 @@ public sealed class IgpuMemoryOptionsTests
         Assert.Equal([0, 4096, 8192], options.SizesMb);
         Assert.Equal(4096, options.ToMb(options.CurrentRaw));
     }
+
+    [Fact]
+    public void Driver_sizes_are_megabytes_without_auto()
+    {
+        // AMD Variable Graphics Memory: custom sizes from 0.5 to 16 GB, 8 GB stored.
+        var options = IgpuMemoryOptions.FromDriverSizes([2048, 512, 1024, 8192, 16384, 1024, 0], storedMb: 8192);
+
+        Assert.NotNull(options);
+        Assert.Equal([512, 1024, 2048, 8192, 16384], options.SizesMb);
+        Assert.Equal(8192, options.ToMb(options.CurrentRaw));
+        Assert.Equal(512u, options.RawFor(512));
+        Assert.Null(options.RawFor(0));
+        Assert.Equal(512u, options.RawToWrite(512));
+        Assert.Null(options.RawToWrite(8192));
+        Assert.Null(options.RawToWrite(3072));
+    }
+
+    [Fact]
+    public void Driver_sizes_keep_a_stored_size_that_is_not_on_offer()
+    {
+        // A preset of the driver (say "Medium", 3 GB) is stored, and only the custom sizes are offered.
+        var options = IgpuMemoryOptions.FromDriverSizes([512, 1024], storedMb: 3072);
+
+        Assert.NotNull(options);
+        Assert.Equal(3072, options.ToMb(options.CurrentRaw));
+        Assert.Equal(1024u, options.RawToWrite(1024));
+    }
+
+    [Fact]
+    public void Driver_sizes_need_a_size_on_offer_and_a_stored_size()
+    {
+        Assert.Null(IgpuMemoryOptions.FromDriverSizes([], storedMb: 512));
+        Assert.Null(IgpuMemoryOptions.FromDriverSizes([0, -1], storedMb: 512));
+        Assert.Null(IgpuMemoryOptions.FromDriverSizes([512, 1024], storedMb: null));
+    }
 }

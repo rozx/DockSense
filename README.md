@@ -34,7 +34,7 @@ DockSense runs quietly in your system tray, watching for external GPUs, external
 - 🔌 **Automatic mode detection.** Detects Handheld, Docked (external display) or eGPU (Thunderbolt / USB4 / OCuLink) with debouncing so plugging or unplugging a dock never causes flapping.
 - ⚡ **Power plans & built-in editor.** Applies a plan per mode, restores your previous plan on leave, and re-asserts your choice (with backoff) if vendor software such as Armoury Crate changes it back. Includes an eGPU-safe **DockSense Performance** plan and an editor for plugged-in/on-battery settings (including hidden High Performance-type plans).
 - 🎮 **Xbox full screen experience.** Sets the sign-in behavior per mode and can switch **immediately** when the mode changes, not only at the next sign-in.
-- 🧠 **iGPU memory** *(ASUS handhelds such as the ROG Xbox Ally X)*. Sets the firmware UMA frame buffer size per mode—for example 8 GB handheld and minimum with an eGPU—and offers **Restart for `<mode>`** in the tray menu so one restart is enough.
+- 🧠 **iGPU memory** *(ASUS handhelds such as the ROG Xbox Ally X; experimental on other AMD handhelds)*. Sets the firmware UMA frame buffer size per mode—for example 8 GB handheld and minimum with an eGPU—and offers **Restart for `<mode>`** in the tray menu so one restart is enough.
 - 🚀 **Run programs on mode changes.** Launches apps, scripts or URLs when a mode begins, ends, or starts up, with arguments, a hidden window or administrator rights.
 
 ### Built for daily use
@@ -43,7 +43,7 @@ DockSense runs quietly in your system tray, watching for external GPUs, external
 - 🔔 **Native notifications & 🩺 Diagnostics.** Toast alerts on mode changes and program launches, a live Game Mode throttle check on the Status page, and a one-click diagnostic report.
 - ⬆️ **Self-updating.** Daily GitHub release checks verified with SHA-256 checksums, with one-click or automatic next-start updates (can be turned off).
 - 🌐 **English & 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus the ASUS ACPI interface for optional iGPU memory. *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
+- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus, for the optional iGPU memory, the ASUS ACPI interface or the AMD driver's own API. *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
 
 ## How it works
 
@@ -151,7 +151,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 - **Mode profiles:** for each mode, pick:
   - the power plan: *Don't change* (your vendor software decides), *DockSense Performance* (the eGPU-safe plan), or any Windows plan, including hidden ones
   - the full screen experience at sign-in, and whether to **switch immediately** when entering the mode. For example, with Handheld set to the full screen experience and Docked set to the desktop, both switching immediately, docking leaves the full screen experience and undocking enters it again.
-  - the **iGPU memory** (on supported ASUS devices; applies after a restart), and whether DockSense should **ask before changing** it
+  - the **iGPU memory** (on supported ASUS devices, and experimentally on other AMD devices through the AMD graphics driver; applies after a restart), and whether DockSense should **ask before changing** it
   - **programs to run** when the mode begins or ends. **Test** starts one right away.
 - **Power plans:** create a plan from any existing one (High performance-based plans avoid the Game Mode throttle), edit its plugged-in and on-battery settings, rename or delete it.
 - **Detection:** settle time, "Docked only when plugged in", and per-adapter overrides (*Always / Never an eGPU*).
@@ -186,7 +186,10 @@ Settings are saved to `%APPDATA%\DockSense\config.json`, and the UI edits this f
 
 ## Supported hardware
 
-All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Only the optional **iGPU memory** setting is ASUS-specific (via the `ATKACPI` firmware interface).
+All core features—mode detection, power plans, the Game Mode eGPU throttle fix, Xbox full screen experience and program launching—use standard Windows APIs and work on any Windows handheld (such as ROG Ally / Ally X, Legion Go, MSI Claw, Ayaneo, GPD, OneXPlayer) or laptop. Only the optional **iGPU memory** setting depends on the device:
+
+- **ASUS** handhelds: through the `ATKACPI` firmware interface. Tested.
+- **Other AMD handhelds** whose Radeon driver offers *Variable Graphics Memory* (for example the MSI Claw A8): through the AMD driver. 🧪 **Experimental.** It was written from AMD's SDK and has not been run on such a device yet. The driver may restart the PC as soon as a size is stored, so DockSense always asks first and offers the change only together with a restart. If you try it, please [report how it went](https://github.com/rozx/DockSense/issues), problems and successes alike, with the diagnostic report attached.
 
 Tested so far:
 
@@ -212,6 +215,8 @@ The memory reserved for the built-in GPU (the UMA frame buffer) is set by the fi
 To skip the "unplug, wait, then restart" order, use the tray menu before you switch: **Restart for Handheld (8 GB)** (the entry names the mode and its size) stores that mode's size and restarts Windows after you confirm. Plug in or unplug the dock or eGPU while the PC restarts, and it comes up with the right memory already in effect. The entry only appears when another mode's size differs from the one in effect.
 
 If you would rather decide each time, turn on **Ask before changing the iGPU memory** in a mode's profile. When that mode starts, a notification asks first, with **Change** and **Change and restart**. Nothing is stored in the firmware until you pick one, and the Status page keeps the question open if you miss the notification.
+
+On devices without the ASUS interface, DockSense sets the size through the AMD graphics driver (Variable Graphics Memory) when the driver offers it. This is **experimental**: the driver may restart the PC by itself when a size is stored, so every change is asked first and comes as **Change and restart**. Please [report issues on GitHub](https://github.com/rozx/DockSense/issues).
 
 Some PCs do not start with an eGPU attached. On those, use **Restart for eGPU** while the eGPU is unplugged and connect it after you sign in. DockSense keeps the eGPU size for a few minutes after that restart instead of putting the handheld size back.
 </details>

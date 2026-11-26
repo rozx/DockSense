@@ -6,7 +6,11 @@ namespace DockSense.App;
 /// <summary>What the firmware's iGPU memory setting was when this Windows session started.</summary>
 /// <param name="Boot">The boot session this was recorded in.</param>
 /// <param name="EffectiveRaw">The raw firmware value in effect during this boot session.</param>
-internal sealed record IgpuMemoryBootState(BootSession Boot, uint EffectiveRaw);
+/// <param name="StoredRaw">
+/// The value DockSense stored through the AMD driver during this boot session, if any. The driver is not known to
+/// report a size that waits for a restart, so DockSense remembers its own.
+/// </param>
+internal sealed record IgpuMemoryBootState(BootSession Boot, uint EffectiveRaw, uint? StoredRaw = null);
 
 /// <summary>A downloaded and verified release, waiting to replace the running executable.</summary>
 /// <param name="Version">The release version, as in its tag (e.g. "0.3").</param>

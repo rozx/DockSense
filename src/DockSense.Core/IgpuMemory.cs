@@ -47,6 +47,20 @@ public sealed record IgpuMemoryOptions(int UnitMb, IReadOnlyList<uint> RawValues
     public uint? RawToWrite(int? targetMb) =>
         targetMb is { } mb && RawFor(mb) is { } raw && raw != CurrentRaw ? raw : null;
 
+    /// <summary>
+    /// The sizes a graphics driver offers, for devices whose firmware has no interface of its own (AMD's Variable
+    /// Graphics Memory). Raw values are megabytes then, and there is no Auto. Returns null when the driver offers
+    /// no usable size or does not tell the one it has stored.
+    /// </summary>
+    /// <param name="sizesMb">The sizes on offer, in MB. Sizes of 0 or less and repeats are dropped.</param>
+    /// <param name="storedMb">The size the driver has stored, in MB. It need not be one of the sizes on offer.</param>
+    public static IgpuMemoryOptions? FromDriverSizes(IEnumerable<int> sizesMb, int? storedMb)
+    {
+        ArgumentNullException.ThrowIfNull(sizesMb);
+        var sizes = sizesMb.Where(mb => mb > 0).Distinct().Order().Select(mb => (uint)mb).ToList();
+        return sizes.Count > 0 && storedMb is >= 0 and var stored ? new IgpuMemoryOptions(1, sizes, (uint)stored) : null;
+    }
+
     /// <summary>Decodes a DSTS reply. Returns null when the device is not supported or the reply is malformed.</summary>
     public static IgpuMemoryOptions? Parse(ReadOnlySpan<byte> reply)
     {

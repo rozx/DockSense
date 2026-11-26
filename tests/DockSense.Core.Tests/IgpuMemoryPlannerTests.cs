@@ -63,6 +63,24 @@ public sealed class IgpuMemoryPlannerTests
         Assert.Equal(IgpuMemoryStep.Ask, decision.Step);
     }
 
+    [Theory]
+    [InlineData(IgpuMemoryApply.Automatic)]
+    [InlineData(IgpuMemoryApply.Ask)]
+    public void Always_ask_never_stores_by_itself(IgpuMemoryApply apply)
+    {
+        // The AMD driver may restart the PC when a size is stored: not without a go-ahead, not even to put the
+        // size in effect back.
+        Assert.Equal(
+            new IgpuMemoryDecision(IgpuMemoryStep.Ask, 512, 1),
+            IgpuMemoryPlanner.Decide(Profile(512, apply), Firmware(currentRaw: 16), effectiveRaw: 16, alwaysAsk: true));
+        Assert.Equal(
+            IgpuMemoryStep.Ask,
+            IgpuMemoryPlanner.Decide(Profile(8192, apply), Firmware(currentRaw: 1), effectiveRaw: 16, alwaysAsk: true).Step);
+        Assert.Equal(
+            IgpuMemoryStep.None,
+            IgpuMemoryPlanner.Decide(Profile(512, apply), Firmware(currentRaw: 1), effectiveRaw: 16, alwaysAsk: true).Step);
+    }
+
     [Fact]
     public void Auto_is_a_size_like_any_other()
     {

@@ -100,7 +100,8 @@
                     <ui:Button
                         AutomationProperties.Name="{loc:T Igpu_Change}"
                         Command="{Binding ChangeIgpuMemoryCommand}"
-                        Content="{loc:T Igpu_Change}" />
+                        Content="{loc:T Igpu_Change}"
+                        Visibility="{Binding IgpuOfferChangeVisible, Converter={StaticResource BoolToVisibility}}" />
                     <ui:Button
                         Margin="8,0,0,0"
                         AutomationProperties.Name="{loc:T Igpu_ChangeRestart}"

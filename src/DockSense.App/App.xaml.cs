@@ -96,9 +96,10 @@ public partial class App : Application
     /// <summary>A button of the notification that asks before the iGPU memory size is stored.</summary>
     private void AnswerIgpuQuestionFromToast(IgpuMemoryOffer offer, bool restart)
     {
-        if (Service.IgpuMemoryOffer != offer)
+        if (Service.IgpuMemoryOffer != offer || (Service.IgpuMemoryViaAmdDriver && !restart))
         {
-            // An old notification: the mode or its profile changed since, or the size is stored already.
+            // An old notification: the mode or its profile changed since, or the size is stored already. Through
+            // the AMD driver there is no storing without a restart, whatever button an old notification had.
             ShowMainWindow();
             return;
         }
@@ -213,7 +214,7 @@ public partial class App : Application
         };
 
         // Not tied to the mode change notifications: a profile set to ask first stores nothing until it is answered.
-        Service.IgpuMemoryAsked += offer => Toasts.ShowIgpuQuestion(offer, Service.EgpuConnected);
+        Service.IgpuMemoryAsked += offer => Toasts.ShowIgpuQuestion(offer, Service.EgpuConnected, Service.IgpuMemoryViaAmdDriver);
         Service.Warning += message =>
         {
             if (Service.Config.Ui.NotifyOnWarnings)
