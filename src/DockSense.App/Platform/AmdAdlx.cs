@@ -55,8 +55,10 @@ internal static class AmdAdlx
     private const string Library = "amdadlx64.dll";
     private static readonly TimeSpan ReadPatience = TimeSpan.FromSeconds(15);
 
-    // The driver may show a prompt of its own or start a restart: give it time before calling it a failure.
-    private static readonly TimeSpan WritePatience = TimeSpan.FromSeconds(30);
+    // How long the caller, which is the UI thread, waits for the driver's answer to a store request. Kept short:
+    // a request that takes longer (the driver may show a prompt of its own) is not lost, its outcome is picked up
+    // when it comes (see SetVariableGraphicsMemory's "late").
+    private static readonly TimeSpan WritePatience = TimeSpan.FromSeconds(10);
 
     // Slots 0 to 2 of every interface but IADLXSystem are Acquire, Release and QueryInterface.
     private const int Release = 1;
