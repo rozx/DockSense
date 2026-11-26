@@ -583,10 +583,11 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        // While the helper is being set up, no TDP choice is taken: the rows are locked, and one that still gets
-        // here (typed just before) is put back. Otherwise two choices could be on their way at once, each with
-        // its own questions, and the older one could be sent or saved after the newer.
-        if (_tdpSetupRunning)
+        // While a question about the TDP is open or the helper is being set up, no other TDP choice is taken:
+        // the rows are locked, and one that still gets here (a slider moved by keyboard a moment before) is put
+        // back, so that what the row shows is what is saved. Otherwise two choices could be on their way at
+        // once, each with its own questions, and the older one could be sent or saved after the newer.
+        if (_tdpAsking)
         {
             SetTdpSelection(profile, previous);
             return;
@@ -597,53 +598,65 @@ public sealed partial class MainViewModel : ObservableObject
         var edit = ++profile.TdpEdit;
         if (value != ModeProfileViewModel.TdpUnchanged && device.Offers(value))
         {
-            // The question names the watts, so the answer covers that value and anything lower. Going higher
-            // asks again, and so does a value kept from another device, which nobody confirmed for this one.
-            // That includes choosing the same value again after the note under the setting asked for it.
-            // What was agreed to is kept with the settings, per board: a number in a profile says nothing about
-            // that, it may have come from another device.
-            var agreed = false;
-            if (!device.IsConfirmed(value, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts))
+            try
             {
-                var yes = await ConfirmAboveMaximumAsync(device, value);
-                if (profile.TdpEdit != edit)
+                // The question names the watts, so the answer covers that value and anything lower. Going
+                // higher asks again, and so does a value kept from another device, which nobody confirmed for
+                // this one. What was agreed to is kept with the settings, per board: a number in a profile says
+                // nothing about that, it may have come from another device.
+                var agreed = false;
+                if (!device.IsConfirmed(value, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts))
                 {
-                    return;
+                    LockTdpRows();
+                    var yes = await ConfirmAboveMaximumAsync(device, value);
+                    if (profile.TdpEdit != edit)
+                    {
+                        return;
+                    }
+
+                    if (!yes)
+                    {
+                        SetTdpSelection(profile, previous);
+                        return;
+                    }
+
+                    agreed = true;
                 }
 
-                if (!yes)
+                // The driver may have been installed since this was last looked at. Nothing is sent from here:
+                // the value being replaced must not go out, and the new one is applied when the profile is
+                // saved below.
+                _service.RefreshTdpReadiness(apply: false);
+                if (_service.TdpReadiness == TdpReadiness.HelperMissing)
                 {
-                    SetTdpSelection(profile, previous);
-                    return;
+                    LockTdpRows();
+                    var ready = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
+                        && await _service.SetUpTdpHelperAsync(apply: false);
+                    if (profile.TdpEdit != edit)
+                    {
+                        return;
+                    }
+
+                    // Not set up because something else turned out to be missing (the driver was removed, the
+                    // folder is no longer protected): the value is saved like any other that cannot be applied
+                    // yet, and the note under it says what is in the way. Declined or failed: the old choice.
+                    if (!ready && _service.TdpReadiness is not (TdpReadiness.DriverMissing or TdpReadiness.UnprotectedFolder))
+                    {
+                        SetTdpSelection(profile, previous);
+                        return;
+                    }
                 }
 
-                agreed = true;
+                // Kept only now, with the value it was given for: backing out of the helper setup takes the
+                // agreement back as well.
+                if (agreed)
+                {
+                    SaveTdpConfirmation(device, value, apply: false); // The profile saved below applies it.
+                }
             }
-
-            // The driver may have been installed since this was last looked at. Nothing is sent from here: the
-            // value being replaced must not go out, and the new one is applied when the profile is saved below.
-            _service.RefreshTdpReadiness(apply: false);
-            if (_service.TdpReadiness == TdpReadiness.HelperMissing)
+            finally
             {
-                var ready = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
-                    && await SetUpTdpHelperLockedAsync(apply: false);
-                if (profile.TdpEdit != edit)
-                {
-                    return;
-                }
-
-                if (!ready)
-                {
-                    SetTdpSelection(profile, previous);
-                    return;
-                }
-            }
-
-            // Kept only now, with the value it was given for: backing out of the helper setup takes the
-            // agreement back as well.
-            if (agreed)
-            {
-                SaveTdpConfirmation(device, value, apply: false); // The profile saved below applies it.
+                UnlockTdpRows();
             }
         }
 
@@ -652,32 +665,28 @@ public sealed partial class MainViewModel : ObservableObject
         SaveProfile(profile);
     }
 
-    /// <summary>True while the helper is being set up from this window (<see cref="SetUpTdpHelperLockedAsync"/>).</summary>
-    private bool _tdpSetupRunning;
+    /// <summary>True from the first question about a TDP choice until it is saved or dropped (<see cref="LockTdpRows"/>).</summary>
+    private bool _tdpAsking;
 
     /// <summary>
-    /// Sets up the helper (Windows asks for approval) with the TDP rows of all profiles locked meanwhile, so that
-    /// no second choice, question or setup can start before this one is through.
+    /// Locks the TDP rows of all profiles: from the first question of a choice until that choice is through, no
+    /// second choice, question or helper setup can start.
     /// </summary>
-    private async Task<bool> SetUpTdpHelperLockedAsync(bool apply)
+    private void LockTdpRows()
     {
-        _tdpSetupRunning = true;
+        _tdpAsking = true;
         foreach (var profile in Profiles)
         {
             profile.TdpEditable = false;
         }
+    }
 
-        try
+    private void UnlockTdpRows()
+    {
+        _tdpAsking = false;
+        foreach (var profile in Profiles)
         {
-            return await _service.SetUpTdpHelperAsync(apply);
-        }
-        finally
-        {
-            _tdpSetupRunning = false;
-            foreach (var profile in Profiles)
-            {
-                profile.TdpEditable = true;
-            }
+            profile.TdpEditable = true;
         }
     }
 
@@ -700,8 +709,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             TdpConfirmedBoard = device.Board,
 
-            // Never lowered for the same model: dialogs overlap (the helper setup takes a while, and the other
-            // profiles stay editable meanwhile), and an older answer must not take back a newer, higher one.
+            // Never lowered for the same model: an answer must not take back a higher one given before.
             TdpConfirmedWatts = string.Equals(c.TdpConfirmedBoard, device.Board, StringComparison.OrdinalIgnoreCase)
                 ? Math.Max(c.TdpConfirmedWatts, watts)
                 : watts,
@@ -713,37 +721,54 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     internal async Task ResolveTdpNote(ModeProfileViewModel profile)
     {
+        if (_tdpAsking)
+        {
+            return; // A choice is being asked about or set up already; its questions cover this.
+        }
+
         // Look again first: the note may be about something the user has put right meanwhile (the driver
         // installed after following the link). Then the note goes away, or its button offers the next step.
         _service.RefreshTdpReadiness();
-        switch (_service.TdpReadiness)
+        if (_service.TdpReadiness == TdpReadiness.DriverMissing)
         {
-            case TdpReadiness.DriverMissing:
-                Open(TdpHelper.PawnIoUrl);
-                break;
+            Open(TdpHelper.PawnIoUrl);
+            return;
+        }
 
-            case TdpReadiness.HelperMissing:
-                if (!_tdpSetupRunning && await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
-                {
-                    await SetUpTdpHelperLockedAsync(apply: true);
-                }
+        // Locked before the first question, like a choice: a slider change still on its way must not ask the
+        // same thing a second time.
+        LockTdpRows();
+        try
+        {
+            switch (_service.TdpReadiness)
+            {
+                case TdpReadiness.HelperMissing:
+                    if (await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
+                    {
+                        await _service.SetUpTdpHelperAsync();
+                    }
 
-                break;
+                    break;
 
-            case TdpReadiness.Ready:
-                // The saved value is what the slider shows already, so choosing it again changes nothing: the
-                // question is asked from here. Answered for what is saved now, not for what was on screen.
-                if (_service.TdpDevice is { } device
-                    && _service.Config.ProfileFor(profile.Mode).TdpWatts is { } saved
-                    && device.Offers(saved)
-                    && !device.IsConfirmed(saved, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts)
-                    && await ConfirmAboveMaximumAsync(device, saved)
-                    && _service.Config.ProfileFor(profile.Mode).TdpWatts == saved)
-                {
-                    SaveTdpConfirmation(device, saved, apply: true);
-                }
+                case TdpReadiness.Ready:
+                    // The saved value is what the slider shows already, so choosing it again changes nothing:
+                    // the question is asked from here. Answered for what is saved now, not for what was on screen.
+                    if (_service.TdpDevice is { } device
+                        && _service.Config.ProfileFor(profile.Mode).TdpWatts is { } saved
+                        && device.Offers(saved)
+                        && !device.IsConfirmed(saved, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts)
+                        && await ConfirmAboveMaximumAsync(device, saved)
+                        && _service.Config.ProfileFor(profile.Mode).TdpWatts == saved)
+                    {
+                        SaveTdpConfirmation(device, saved, apply: true);
+                    }
 
-                break;
+                    break;
+            }
+        }
+        finally
+        {
+            UnlockTdpRows();
         }
     }
 

@@ -1654,6 +1654,10 @@ public sealed class DockSenseService : IDisposable
                 TdpReadiness.HelperMissing => await (_tdpSetup = RunTdpSetupAsync()),
                 _ => false,
             };
+
+            // Whatever the fresh look found, the window shows it: a note that still offered the setup now names
+            // what is really in the way.
+            RaiseStatusChanged();
         }
 
         if (done && apply)
