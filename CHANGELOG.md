@@ -2,6 +2,28 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-11-26
+
+Each mode can now enforce its own processor power limit (TDP) on the ROG Ally family, and DockSense can ask before it changes the iGPU memory. The TDP override is the first DockSense feature that needs a driver and an administrator approval. It is optional, and everything else still runs without either.
+
+### Added
+
+- **TDP override per mode** (Mode profiles; ROG Ally, ROG Ally X and ROG Xbox Ally X). Switch it on in a mode's profile, then drag the slider or type the watts. DockSense enforces that processor power limit while the mode is active, whatever Armoury Crate is set to: for example 15 W as a handheld for battery life, and switched off with an eGPU.
+  - **What it needs.** The [PawnIO](https://pawnio.eu/) driver, which you install yourself (DockSense does not ship or install a driver), an administrator account, and DockSense in a folder of its own under Program Files. The first value you choose asks Windows for administrator approval once and registers a task that sets the TDP (`DockSense-TDP-<your user ID>` in Task Scheduler). DockSense itself keeps running without administrator rights. The [README's FAQ](README.md#faq) explains why it is built this way and how to move DockSense into Program Files.
+  - **The range** runs from the manufacturer's minimum (7 W) up to the highest short-burst limit the firmware itself uses (55 W on the ROG Xbox Ally X). Above the manufacturer's maximum (35 W there) DockSense asks first and keeps a warning under the setting: running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it.
+  - **It stays in force.** Armoury Crate's own limits come back when you plug in or unplug the charger, after sleep, and when you switch modes in Armoury Crate. DockSense sends its value again a few seconds after each of these.
+  - **It is handed back.** When a mode with the override switched off begins, DockSense re-sends the performance mode Armoury Crate has selected (Silent, Performance or Turbo), and the firmware goes back to that mode's own limits. A restart of the PC also clears every limit.
+  - The Status page shows the TDP in force. **Settings → TDP helper → Remove** takes the administrator task away again. Do that before you move or delete DockSense.
+  - **What was measured.** On the ROG Xbox Ally X only, plugged in at an eGPU: 20 W and 25 W each held flat under an all-core load. A 45 W setting ran at 44 W for about a minute, then the firmware pulled the processor back to 35 W once it was hot, the same as Armoury Crate's Turbo does, so values above 35 W may gain little on this device. Battery power, sleep, and the ROG Ally and ROG Ally X have not been tested. If you try them, please [open an issue](https://github.com/rozx/DockSense/issues) with the diagnostic report, whether it worked or not.
+- **Ask before changing the iGPU memory** (Mode profiles). With the switch on, entering the mode stores nothing in the firmware. A notification asks first, with **Change** and **Change and restart**, and the Status page keeps the question open if you miss it. The default stays as before: the size is stored as soon as the mode starts.
+- **iGPU memory on other AMD handhelds (experimental).** On a device without the ASUS firmware interface whose Radeon driver offers *Variable Graphics Memory*, such as the MSI Claw A8, the iGPU memory setting now appears and is stored through the AMD graphics driver. This was written from AMD's SDK and has not run on such a device yet. The driver may restart the PC as soon as a size is stored, so on these devices DockSense always asks first and offers the change only together with a restart. Please [report how it went](https://github.com/rozx/DockSense/issues), problems and successes alike.
+- New keys in `config.json`, per mode: `tdpWatts` (`null` = don't change) and `igpuMemoryApply` (`Automatic`, the default, or `Ask`). `tdpConfirmedBoard` and `tdpConfirmedWatts` record your agreement to a TDP above the manufacturer's maximum.
+
+### Changed
+
+- **Restarting with an eGPU connected.** Some PCs do not start with an eGPU attached. While one is connected, the restart dialogs and notifications now add a sentence about unplugging it as the PC restarts, and **Restart for eGPU** suggests connecting it after you sign in. After such a restart DockSense keeps the size of the mode you restarted for, for up to five minutes, while the PC is still in another mode, instead of storing the old mode's size again and asking for another restart.
+- **The diagnostic report covers much more:** the device and its firmware, the driver and memory of each graphics adapter and how it is connected, which adapter drives each display, the Windows power mode, the iGPU memory options as the firmware reports them, the AMD driver's Variable Graphics Memory state, the TDP override, the vendor interfaces and vendor software found, and your DockSense settings. It still leaves out your user name, the computer name and the programs your profiles start. Each part is read on its own, so one that fails on new hardware does not lose the rest.
+
 ## [0.3.4] - 2026-11-23
 
 DockSense takes touch input a different way, and the early full screen experience setting from 0.3.3 no longer waits on Windows before it is written. Both changes are aimed at problems seen on the Ally X, and neither is confirmed as a fix yet.
@@ -114,6 +136,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.4.0]: https://github.com/rozx/DockSense/releases/tag/v0.4.0
 [0.3.4]: https://github.com/rozx/DockSense/releases/tag/v0.3.4
 [0.3.3]: https://github.com/rozx/DockSense/releases/tag/v0.3.3
 [0.3.2]: https://github.com/rozx/DockSense/releases/tag/v0.3.2

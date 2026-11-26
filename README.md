@@ -58,7 +58,7 @@ flowchart LR
     G --> W["Settle<br/>(default 5 s)"]
     D --> W
     H --> W
-    W --> A["Apply profile<br/>power plan · full screen experience<br/>iGPU memory · programs"]
+    W --> A["Apply profile<br/>power plan · full screen experience<br/>iGPU memory · TDP · programs"]
     A --> N["Notification"]
 ```
 
@@ -110,7 +110,7 @@ The overrides are only provisioned for *Balanced*-type plans, and `powercfg` can
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/profiles.png" alt="Mode profiles" /><p align="center"><b>Mode profiles</b>: power plan, full screen experience, iGPU memory and programs per mode</p></td>
+    <td width="50%"><img src="docs/images/profiles.png" alt="Mode profiles" /><p align="center"><b>Mode profiles</b>: power plan, full screen experience, iGPU memory, TDP and programs per mode</p></td>
     <td width="50%"><img src="docs/images/plans.png" alt="Power plans" /><p align="center"><b>Power plans</b>: create, edit and delete plans</p></td>
   </tr>
   <tr>

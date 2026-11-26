@@ -58,7 +58,7 @@ flowchart LR
     G --> W["等待稳定<br/>（默认 5 秒）"]
     D --> W
     H --> W
-    W --> A["应用配置<br/>电源计划 · 全屏体验<br/>核显显存 · 运行程序"]
+    W --> A["应用配置<br/>电源计划 · 全屏体验<br/>核显显存 · TDP · 运行程序"]
     A --> N["通知"]
 ```
 
@@ -110,7 +110,7 @@ Windows **游戏模式**里有一套隐藏的处理器电源配置 `GameMode`，
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/profiles.zh-CN.png" alt="模式配置" /><p align="center"><b>模式配置</b>：每个模式的电源计划、全屏体验、核显显存和程序</p></td>
+    <td width="50%"><img src="docs/images/profiles.zh-CN.png" alt="模式配置" /><p align="center"><b>模式配置</b>：每个模式的电源计划、全屏体验、核显显存、TDP 和程序</p></td>
     <td width="50%"><img src="docs/images/plans.zh-CN.png" alt="电源计划" /><p align="center"><b>电源计划</b>：新建、编辑和删除计划</p></td>
   </tr>
   <tr>
