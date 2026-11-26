@@ -103,6 +103,21 @@ public sealed class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void Asking_before_the_igpu_memory_is_stored_round_trips_and_is_off_in_older_configs()
+    {
+        var store = new ConfigStore(ConfigPath);
+        store.Save(new DockSenseConfig { Egpu = new ModeProfile { IgpuMemoryMb = 512, IgpuMemoryApply = IgpuMemoryApply.Ask } });
+
+        Assert.Contains("\"igpuMemoryApply\": \"Ask\"", File.ReadAllText(ConfigPath));
+        Assert.Equal(IgpuMemoryApply.Ask, store.Load().Egpu.IgpuMemoryApply);
+
+        // A config from before the setting existed keeps storing the size without asking.
+        File.WriteAllText(ConfigPath, """{ "egpu": { "igpuMemoryMb": 512 } }""");
+
+        Assert.Equal(new ModeProfile { IgpuMemoryMb = 512, IgpuMemoryApply = IgpuMemoryApply.Automatic }, store.Load().Egpu);
+    }
+
+    [Fact]
     public void Json_is_human_readable()
     {
         new ConfigStore(ConfigPath).Save(new DockSenseConfig());

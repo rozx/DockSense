@@ -90,13 +90,31 @@ public partial class App : Application
             return;
         }
 
-        SystemPower.Restart();
+        ViewModel.RestartWindows();
     }
 
-    /// <summary>The restart notification promises a change that a restart no longer brings: take it away.</summary>
+    /// <summary>A button of the notification that asks before the iGPU memory size is stored.</summary>
+    private void AnswerIgpuQuestionFromToast(IgpuMemoryOffer offer, bool restart)
+    {
+        if (Service.IgpuMemoryOffer != offer || (Service.IgpuMemoryViaAmdDriver && !restart))
+        {
+            // An old notification: the mode or its profile changed since, or the size is stored already. Through
+            // the AMD driver there is no storing without a restart, whatever button an old notification had.
+            ShowMainWindow();
+            return;
+        }
+
+        // The button is the go-ahead, also for the restart: no dialog on top of it.
+        _ = ViewModel.AcceptIgpuOfferAsync(offer, restart);
+    }
+
+    /// <summary>
+    /// The notification promises a change that a restart no longer brings, or asks about a size that is no longer
+    /// on offer: take it away.
+    /// </summary>
     private static void ClearStaleRestartToast()
     {
-        if (Service.IgpuMemoryPendingMb is null)
+        if (Service.IgpuMemoryPendingMb is null && Service.IgpuMemoryOffer is null)
         {
             Toasts.ClearRestartNeeded();
         }
@@ -156,7 +174,10 @@ public partial class App : Application
         Service = new DockSenseService(store);
 
         // Subscribe before starting: the startup apply can already store a new iGPU memory size or hit a problem.
-        Toasts.Initialize(onOpen: () => Dispatcher.BeginInvoke(ShowMainWindow), onRestart: () => Dispatcher.BeginInvoke(RestartFromToast));
+        Toasts.Initialize(
+            onOpen: () => Dispatcher.BeginInvoke(ShowMainWindow),
+            onRestart: () => Dispatcher.BeginInvoke(RestartFromToast),
+            onIgpuAnswer: (offer, restart) => Dispatcher.BeginInvoke(() => AnswerIgpuQuestionFromToast(offer, restart)));
         var showWindowAtStart = e.Args.Contains(ShowArgument, StringComparer.OrdinalIgnoreCase);
         var startedWithWindows = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
         var resumeFrom = ResumedMode(e.Args);
@@ -183,9 +204,17 @@ public partial class App : Application
         {
             if (Service.Config.Ui.NotifyOnModeChange)
             {
-                Toasts.ShowRestartNeeded(megabytes);
+                Toasts.ShowRestartNeeded(megabytes, Service.EgpuConnected);
+            }
+            else if (Service.IgpuMemoryOffer is null)
+            {
+                // The question this answers must not stay up with its buttons.
+                Toasts.ClearRestartNeeded();
             }
         };
+
+        // Not tied to the mode change notifications: a profile set to ask first stores nothing until it is answered.
+        Service.IgpuMemoryAsked += offer => Toasts.ShowIgpuQuestion(offer, Service.EgpuConnected, Service.IgpuMemoryViaAmdDriver);
         Service.Warning += message =>
         {
             if (Service.Config.Ui.NotifyOnWarnings)

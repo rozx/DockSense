@@ -91,6 +91,32 @@ Details and raw data: `docs/game-mode-throttle.md`.
   Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
   Changes apply only after a **restart**. The legacy `0x000600C1` (APU_MEM) is unsupported here and has unsafe raw values;
   never write it. Only write raw values the firmware lists. Source: G-Helper `AsusACPI.cs`.
+  - **AMD Variable Graphics Memory through ADLX** (issue #10, for devices without ATKACPI such as the MSI Claw A8):
+    `Platform/AmdAdlx` (`amdadlx64.dll` from System32, `ADLXInitializeWithIncompatibleDriver`, `IADLXSystem3`
+    slot 6, vtable slots from the SDK's C headers; every use starts and ends ADLX on a thread of its own). On the
+    Ally X (driver 32.0.32015.7029, ADLX 1.5.0.124, read while at the eGPU on 2026-11-26) the chain works up to
+    `IsSupported`, which answers **false**: this driver does not offer VGM, so ADLX is no fallback for ASUS devices
+    and **reading the option list and the write (`SetOption`, slot 7) have never run on real hardware**. The user
+    chose on 2026-11-26 to ship the write blind as an **experimental** feature, said so in the UI and READMEs with
+    an invitation to report issues on GitHub; keep that label until a report confirms it. AMD's docs and sample
+    say `SetOption` restarts the PC by itself, Claw Control's code assumes it does not, and whether it needs admin
+    is unknown. Hence the rules for this path (`DockSenseService.IgpuMemoryViaAmdDriver`): used only where the
+    ASUS interface is absent; read in the background after the shell wait, never on the start path; every write
+    needs the user's go-ahead for a restart (`IgpuMemoryPlanner` `alwaysAsk`, only **Change and restart** is
+    offered); the size DockSense stored is remembered per boot (`IgpuMemoryBootState.StoredRaw`) because the
+    driver is not known to report a pending size; the log says whether `SetOption` came back. Only the driver's
+    custom sizes are offered (no Auto). The user does not want to ask the reporter to run probe builds.
+    A store has three outcomes: stored, refused, or **no answer within 10 s** (the wait is on the UI thread).
+    Without an answer nothing prepared for the restart is taken back, DockSense does not restart the PC, and
+    nothing else is stored or prepared until the driver answers (`_amdStoreUnanswered`); the outcome is picked up
+    then (`FollowLateAmdStoreAsync`: stored means the restart toast, refused means the restart target and the
+    sign-in setting go back). A read gives up after 15 s and is tried once more 30 s later. Only one ADLX session
+    runs at a time: while a call that timed out is still inside the library, further calls fail at once. A driver
+    preset that comes to the size a profile asks for does not count as that size stored
+    (`IgpuMemoryOptions.CurrentIsFixed`). State: `igpu-memory.json` (the size in effect in this boot session and
+    what DockSense stored through the driver), `igpu-restart.json` (see `AwaitedMode`).
+    Debug builds: `DOCKSENSE_SIMULATE_AMD_VGM=1` simulates such a driver (reads a made-up list, storing always
+    fails, the real state file is left alone) to look at the flow on other hardware.
 - **Plan enumeration**: `PowerEnumerate` skips hidden High Performance-type plans (High performance, Power saver,
   Ultimate) on Modern Standby. `HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes` lists them all and is
   readable without admin, but it also holds the power mode overlays (`961cc777`, `3af9b8d9`, `ded574b5`), which are not plans.
@@ -105,7 +131,16 @@ Details and raw data: `docs/game-mode-throttle.md`.
     sign-in), `ProgramPlanner` (which programs run on enter/leave/startup), `PowerSettingCatalog` (the editable plan settings and
     well-known plan GUIDs), `IgpuMemoryOptions` (decodes the ATKACPI reply), `IgpuRestartPlanner` (the other modes
     whose iGPU memory size differs from the one in effect: the tray offers "Restart for `<mode>`" for them, which
-    stores that size and the mode's FSE sign-in setting first so one restart is enough)
+    stores that size and the mode's FSE sign-in setting first so one restart is enough; `AwaitedMode`: after a
+    restart the user started from DockSense for a mode's size, the PC may come back up in another mode because the
+    eGPU gets connected only after sign-in, and then that mode's size stays for up to 5 minutes instead of being
+    written back at once; the record of that restart, `igpu-restart.json` in `%LOCALAPPDATA%\DockSense`, is written
+    before the size is stored, carries the time it was asked for and, once the wait runs, the time the wait ends,
+    so a restart of DockSense does not end the wait; a boot counts as coming from the restart when it began
+    within 2 hours of it, without counting boots, because a restart can pass through several),
+    `IgpuMemoryPlanner` (per profile `igpuMemoryApply`: `Automatic` stores the size when the mode starts, `Ask`
+    only offers it; with `Ask`, putting back the size in effect is stored without asking, except on the AMD
+    driver path, where `alwaysAsk` makes every store ask)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
   - `StartupEntry`: whether the Run entry really starts this copy (on / off / disabled by Windows / another copy,
@@ -127,9 +162,19 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.
-    Restarting Windows is always the user's click (`Platform/SystemPower`): the Status card, the tray's "Restart for
-    `<mode>`" (both confirm in a dialog) and the "Restart now" button on the iGPU memory toast. Windows starts
-    DockSense for a click on an old toast, so that button restarts only while a size is still pending.
+    Restarting Windows is always the user's click (`Platform/SystemPower`). With a confirmation dialog: the Status
+    card's **Restart now** and **Change and restart**, and the tray's "Restart for `<mode>`". Without one, because
+    the button is the go-ahead: **Restart now** on the restart toast and **Change and restart** on the question
+    toast. Windows starts DockSense for a click on an old toast, so a toast button acts only while what it
+    offered still stands (a size still pending, the same offer still open).
+    iGPU memory "ask first" (issue #10): the question is a toast with **Change** / **Change and restart** (same tag
+    as the restart toast, so one replaces the other) plus a Status card; its buttons act only while
+    `IgpuMemoryOffer` is still the offer the toast was shown for. It is shown even when mode change notifications
+    are off. Automatic stays the default on ASUS (the user's decision, 2026-11-26). While an eGPU is connected the
+    restart dialogs (the tray's "Restart for `<mode>`" included) and toasts add a neutral sentence for PCs that do
+    not start with one attached (an MSI Claw A8 with an AOOSTAR AG02 hangs at boot); "Restart for eGPU" without an
+    eGPU connected says to connect it after sign-in instead (`RestartFor_EgpuHint`). Never tell everyone to
+    unplug, the Ally X boots fine at the XG Mobile.
   - `Services/`: `Appearance` (minimal zinc palette with a monochrome accent; it overrides WPF-UI brush keys in
     Application.Resources and follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications),
     `TrayIconService` (H.NotifyIcon), `IconAssets`.
@@ -179,7 +224,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
       Test with two single-file publishes of different `-p:Version` (see the release workflow's publish command).
       The real UAC path can only be exercised from 0.3 on, because the download must know `--install-update`.
 - No admin rights are needed, with one exception: updating a copy in a protected folder (the user's own install is
-  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update.
+  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update. Unknown for one path: whether the AMD
+  driver accepts an iGPU memory change from a standard user (the experimental ADLX route). DockSense has no
+  elevation for it; a refusal is reported and nothing changes.
 - `tests/DockSense.Core.Tests` (xUnit).
 - `tools/DockSense.IconGen`: the pixel-art icons are text grids in `Sprites.cs`. Running the tool regenerates
   `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.
@@ -233,3 +280,12 @@ Details and raw data: `docs/game-mode-throttle.md`.
   `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`.
 - Read-only hardware check: `src\DockSense.App\bin\Debug\net10.0-windows\DockSense.exe --probe <file>` writes a report
   (adapters, displays, resolved mode, plans, FSE, GameMode overrides) and changes nothing.
+  The report is also how other hardware gets understood without asking reporters to run special builds (the
+  user's wish, 2026-11-26), so it is deliberately broad: device/board/BIOS, installed vs visible memory, per
+  adapter the driver, dedicated memory (for the iGPU: the UMA size in effect) and the chain of devices it is
+  connected through with each one's removal policy and container flag, display modes and the adapter driving
+  each, the raw ATKACPI reply, ADLX Variable Graphics Memory, vendor ACPI devices, vendor services and running
+  vendor programs (`Platform/HardwareDiagnostics`), and the DockSense settings without program paths. When a new
+  device raises a question the report cannot answer, add the missing fact to the report. Each part is read on
+  its own, so one failing part does not lose the rest. Keep user and computer names and the system serial
+  number out of it; the profile folder is replaced by `%USERPROFILE%`.

@@ -118,11 +118,23 @@ internal static class NativeMethods
         public uint flags;
     }
 
-    /// <summary>Only the size matters: DockSense never reads mode data. sizeof(DISPLAYCONFIG_MODE_INFO) == 64.</summary>
-    [StructLayout(LayoutKind.Sequential, Size = 64)]
+    public const uint DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE = 1;
+
+    /// <summary>
+    /// sizeof(DISPLAYCONFIG_MODE_INFO) == 64. Detection never reads mode data; the diagnostic report reads the
+    /// desktop size of a source mode, the first two fields of the union at offset 16.
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit, Size = 64)]
     public struct DISPLAYCONFIG_MODE_INFO
     {
+        [FieldOffset(0)]
         public uint infoType;
+
+        [FieldOffset(16)]
+        public uint sourceWidth;
+
+        [FieldOffset(20)]
+        public uint sourceHeight;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -165,6 +177,20 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME requestPacket);
+
+    public const uint DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME = 4;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DISPLAYCONFIG_ADAPTER_NAME
+    {
+        public DISPLAYCONFIG_DEVICE_INFO_HEADER header;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string adapterDevicePath;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_ADAPTER_NAME requestPacket);
 
     // ---------------------------------------------------------------- Power schemes (powrprof)
 

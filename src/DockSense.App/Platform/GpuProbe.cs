@@ -60,7 +60,7 @@ internal static class GpuProbe
         }
     }
 
-    private static byte[]? ReadRaw(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
+    internal static byte[]? ReadRaw(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
     {
         SetupDiGetDevicePropertyW(set, ref data, ref key, out _, null, 0, out var size, 0);
         if (size == 0)
@@ -72,20 +72,20 @@ internal static class GpuProbe
         return SetupDiGetDevicePropertyW(set, ref data, ref key, out _, buffer, size, out _, 0) ? buffer : null;
     }
 
-    private static string? ReadString(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
+    internal static string? ReadString(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
     {
         var raw = ReadRaw(set, ref data, key);
         return raw is null ? null : Encoding.Unicode.GetString(raw).TrimEnd('\0');
     }
 
-    private static uint? ReadUInt32(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
+    internal static uint? ReadUInt32(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
     {
         var raw = ReadRaw(set, ref data, key);
         return raw is { Length: >= 4 } ? BitConverter.ToUInt32(raw, 0) : null;
     }
 
     /// <summary>DEVPROP_TYPE_BOOLEAN is one byte: 0xFF (DEVPROP_TRUE) or 0x00.</summary>
-    private static bool? ReadBoolean(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
+    internal static bool? ReadBoolean(IntPtr set, ref SP_DEVINFO_DATA data, DEVPROPKEY key)
     {
         var raw = ReadRaw(set, ref data, key);
         return raw is { Length: >= 1 } ? raw[0] != 0 : null;

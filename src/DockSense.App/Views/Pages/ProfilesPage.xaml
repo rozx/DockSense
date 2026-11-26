@@ -109,7 +109,17 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,24,0">
                                     <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_Igpu}" />
-                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_IgpuDesc}" FontSize="12" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding IgpuDescription}" FontSize="12" TextWrapping="Wrap" />
+
+                                    <!-- Through the AMD driver (no ASUS firmware interface): experimental -->
+                                    <ui:HyperlinkButton
+                                        Margin="-4,2,0,0"
+                                        Padding="4,2"
+                                        Content="{loc:T Prof_IgpuExperimentalReport}"
+                                        FontSize="12"
+                                        Icon="{ui:SymbolIcon Open24}"
+                                        NavigateUri="https://github.com/rozx/DockSense/issues"
+                                        Visibility="{Binding IgpuExperimental, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                                 <ComboBox
                                     Grid.Column="1"
@@ -120,6 +130,24 @@
                                     ItemsSource="{Binding IgpuOptions}"
                                     SelectedValue="{Binding SelectedIgpu}"
                                     SelectedValuePath="Value" />
+                            </Grid>
+
+                            <!-- Ask before the iGPU memory size is stored -->
+                            <Grid Style="{StaticResource SettingRow}" Visibility="{Binding IgpuAvailable, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,24,0">
+                                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_IgpuAsk}" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding IgpuAskDescription}" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ui:ToggleSwitch
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:T Prof_IgpuAsk}"
+                                    IsChecked="{Binding IgpuAsk}"
+                                    IsEnabled="{Binding IgpuAskEnabled}" />
                             </Grid>
 
                             <!-- Programs -->

@@ -126,7 +126,7 @@
   <data name="About_Issue" xml:space="preserve"><value>反馈问题</value></data>
   <data name="About_Analysis" xml:space="preserve"><value>阅读游戏模式降频分析</value></data>
   <data name="About_Diagnostics" xml:space="preserve"><value>诊断</value></data>
-  <data name="About_DiagnosticsDesc" xml:space="preserve"><value>只读报告，包含显卡、显示器、电源计划和游戏模式覆盖参数。反馈问题时请附上。</value></data>
+  <data name="About_DiagnosticsDesc" xml:space="preserve"><value>只读报告：设备信息（厂商、型号、主板、BIOS）、显卡和显示器、电源计划和游戏模式覆盖项、厂商服务和正在运行的厂商程序，以及你的 DockSense 设置。不包含用户名和计算机名。反馈问题时请附上。</value></data>
   <data name="About_CopyReport" xml:space="preserve"><value>复制诊断报告</value></data>
   <data name="About_Copied" xml:space="preserve"><value>已复制到剪贴板</value></data>
   <data name="About_License" xml:space="preserve"><value>DockSense 是自由软件，以 GNU 通用公共许可证 v3.0 协议发布。</value></data>
@@ -311,4 +311,27 @@
   <data name="RestartFor_Title" xml:space="preserve"><value>重启到{0}模式？</value></data>
   <data name="RestartFor_Message" xml:space="preserve"><value>DockSense 会先按{0}模式把核显显存设为 {1}，然后 Windows 立即重启。请在重启过程中插上或拔下底座 / 外接显卡。请先保存工作，有未保存内容的应用仍可以阻止重启。</value></data>
   <data name="Act_IgpuRestartFailed" xml:space="preserve"><value>无法为{0}模式设置核显显存，电脑没有重启。</value></data>
+  <!-- iGPU memory: ask before storing, the reminder for PCs that do not start with an eGPU attached, and waiting for the mode restarted for -->
+  <data name="Prof_IgpuAsk" xml:space="preserve"><value>更改核显显存前先询问</value></data>
+  <data name="Prof_IgpuAskDesc" xml:space="preserve"><value>进入此模式时通过通知询问。在你确认之前不会写入固件。</value></data>
+  <data name="Igpu_Change" xml:space="preserve"><value>更改</value></data>
+  <data name="Igpu_ChangeRestart" xml:space="preserve"><value>更改并重启</value></data>
+  <data name="Dash_IgpuOfferTitle" xml:space="preserve"><value>将核显显存改为 {0}？</value></data>
+  <data name="Dash_IgpuOfferMessage" xml:space="preserve"><value>{0}模式需要这个大小。在你确认之前不会写入固件，重启后生效。</value></data>
+  <data name="Toast_IgpuAskTitle" xml:space="preserve"><value>将核显显存改为 {0}？</value></data>
+  <data name="Toast_IgpuAskMessage" xml:space="preserve"><value>{0}模式需要这个大小，重启后生效。</value></data>
+  <data name="Act_IgpuStoreFailed" xml:space="preserve"><value>无法设置核显显存（{0}），未做任何更改。</value></data>
+  <data name="Toast_EgpuHint" xml:space="preserve"><value>如果你的电脑连接着外接显卡时无法启动，请在重启过程中拔下它。</value></data>
+  <data name="Restart_EgpuHint" xml:space="preserve"><value>当前连接着外接显卡。如果你的电脑连接着它时无法启动，请在重启过程中拔下它，登录后再重新连接。</value></data>
+  <data name="RestartFor_EgpuHint" xml:space="preserve"><value>如果你的电脑连接着外接显卡时无法启动，请改为登录后再连接。</value></data>
+  <data name="Act_IgpuAwaiting" xml:space="preserve"><value>已为{0}模式重启，但该模式尚未开始。核显显存将在几分钟内保持不变。</value></data>
+  <!-- iGPU memory through the AMD graphics driver (Variable Graphics Memory): experimental -->
+  <data name="Prof_IgpuDescAmd" xml:space="preserve"><value>为内置显卡保留的内存，通过 AMD 显卡驱动设置。实验性功能：驱动可能在保存后立即重启电脑，因此 DockSense 总是先询问，并且只提供“更改并重启”。欢迎在 GitHub 上反馈问题或使用结果。</value></data>
+  <data name="Prof_IgpuExperimentalReport" xml:space="preserve"><value>实验性功能：在 GitHub 上反馈问题</value></data>
+  <data name="Dash_IgpuOfferMessageAmd" xml:space="preserve"><value>{0}模式需要这个大小。实验性功能：由 AMD 显卡驱动保存，驱动可能立即重启电脑，请先保存工作。如有问题，欢迎在 GitHub 上反馈。</value></data>
+  <data name="Toast_IgpuAskMessageAmd" xml:space="preserve"><value>{0}模式需要这个大小。实验性功能：AMD 显卡驱动可能立即重启电脑，请先保存工作。</value></data>
+  <data name="Restart_AmdHint" xml:space="preserve"><value>实验性功能：核显显存通过 AMD 显卡驱动保存，驱动可能自行重启电脑。如果出现问题，欢迎在 GitHub 上反馈（关于 &gt; 反馈问题）。</value></data>
+  <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>AMD 显卡驱动没有保存核显显存（{0}）。这是实验性功能，欢迎在 GitHub 上反馈。</value></data>
+  <data name="Act_IgpuAmdNoAnswer" xml:space="preserve"><value>AMD 显卡驱动尚未响应，因此还不知道核显显存是否已保存。DockSense 没有重启电脑，结果出来后会再通知你。这是实验性功能，欢迎在 GitHub 上反馈。</value></data>
+  <data name="Prof_IgpuAskDescAmd" xml:space="preserve"><value>此设备上始终开启：AMD 显卡驱动可能在保存后立即重启电脑，因此在你同意重启之前不会保存任何设置。</value></data>
 </root>
