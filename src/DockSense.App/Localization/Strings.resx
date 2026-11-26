@@ -343,6 +343,7 @@
   <data name="Tdp_WattsUnconfirmed" xml:space="preserve"><value>{0} W (unconfirmed)</value></data>
   <data name="Tdp_NotOffered" xml:space="preserve"><value>{0} W (not offered)</value></data>
   <data name="Tdp_MaxBySource" xml:space="preserve"><value>{0} W plugged in, {1} W on battery</value></data>
+  <data name="Tdp_MaxOnBattery" xml:space="preserve"><value>{0} W on battery</value></data>
   <data name="Tdp_Warning" xml:space="preserve"><value>{0} W is above the manufacturer's maximum of {1}. This can overheat the device, wear out the battery and damage the hardware. Once the device is hot, its firmware may still pull the power back to its own limit.</value></data>
   <data name="Tdp_WarningTitle" xml:space="preserve"><value>Go above the manufacturer's maximum?</value></data>
   <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W is more than the manufacturer allows for this device ({1}). Running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it. You do this at your own risk. Once saved, your answer covers this value and lower ones in every mode's profile. It is kept with your settings, also when they are copied to another device of exactly this model.</value></data>

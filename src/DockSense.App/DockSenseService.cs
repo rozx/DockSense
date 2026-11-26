@@ -103,6 +103,9 @@ public sealed class DockSenseService : IDisposable
     /// <summary>The TDP was handed back, but its record could not be deleted yet (see <see cref="RetireTdpRecord"/>).</summary>
     private bool _tdpRecordToRetire;
 
+    /// <summary>The helper setup that is running, if any (see <see cref="SetUpTdpHelperAsync"/>).</summary>
+    private Task<bool>? _tdpSetup;
+
     /// <summary>The mode and value last warned about as "above the maximum and not confirmed on this device".</summary>
     private (DockMode Mode, int Watts)? _tdpUnconfirmedWarned;
 
@@ -1633,17 +1636,35 @@ public sealed class DockSenseService : IDisposable
     /// <param name="apply">Also send the wanted TDP afterwards (see <see cref="RefreshTdpReadiness"/>).</param>
     public async Task<bool> SetUpTdpHelperAsync(bool apply = true)
     {
+        // One setup at a time, whoever asks: the profiles stay editable while it runs, and a second one would be
+        // a second approval prompt for the same task. A setup that finished since the caller last looked counts.
+        bool done;
+        if (_tdpSetup is { IsCompleted: false } running)
+        {
+            done = await running;
+        }
+        else
+        {
+            InvalidateTdpReadiness();
+            done = TdpReadiness == TdpReadiness.Ready || await (_tdpSetup = RunTdpSetupAsync());
+        }
+
+        if (done && apply)
+        {
+            RefreshTdpReadiness();
+        }
+
+        return done;
+    }
+
+    private async Task<bool> RunTdpSetupAsync()
+    {
         var result = await Task.Run(TdpHelper.Install);
         InvalidateTdpReadiness();
         if (result == TdpSetupResult.Done)
         {
             AddActivity(Loc.T("Act_TdpHelperInstalled"));
             _tdpWarned = null;
-            if (apply)
-            {
-                _tdpReason = "helper set up";
-                _ = WriteTdpAsync();
-            }
         }
         else if (result == TdpSetupResult.Failed)
         {

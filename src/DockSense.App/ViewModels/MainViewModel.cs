@@ -520,7 +520,7 @@ public sealed partial class MainViewModel : ObservableObject
                     _ => string.Empty,
                 };
                 profile.TdpWarning = config.TdpWatts is { } watts && tdpDevice.Offers(watts) && tdpDevice.ExceedsManufacturerMax(watts)
-                    ? Loc.F("Tdp_Warning", watts, ManufacturerMaxText(tdpDevice))
+                    ? Loc.F("Tdp_Warning", watts, ExceededMaxText(tdpDevice, watts))
                     : string.Empty;
             }
 
@@ -620,6 +620,13 @@ public sealed partial class MainViewModel : ObservableObject
                     && await _service.SetUpTdpHelperAsync(apply: false);
                 if (profile.TdpEdit != edit)
                 {
+                    // Nothing of this choice is kept, but the helper it set up is there now: the value the
+                    // active profile has saved may have been waiting for exactly that.
+                    if (ready)
+                    {
+                        _service.RefreshTdpReadiness();
+                    }
+
                     return;
                 }
 
@@ -645,7 +652,16 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Asks whether <paramref name="watts"/>, above the manufacturer's maximum, is really wanted.</summary>
     private static Task<bool> ConfirmAboveMaximumAsync(TdpDevice device, int watts) =>
-        Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", watts, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm"));
+        Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", watts, ExceededMaxText(device, watts)), Loc.T("Tdp_WarningConfirm"));
+
+    /// <summary>
+    /// The maximum that <paramref name="watts"/> is above: the one on battery alone where the value is within the
+    /// plugged-in one ("25 W on battery"), otherwise as <see cref="ManufacturerMaxText"/>.
+    /// </summary>
+    private static string ExceededMaxText(TdpDevice device, int watts) =>
+        watts <= device.PluggedIn.Max && watts > device.OnBattery.Max
+            ? Loc.F("Tdp_MaxOnBattery", device.OnBattery.Max)
+            : ManufacturerMaxText(device);
 
     /// <summary>Records the agreement to <paramref name="watts"/> and lower values, in every profile, on this model.</summary>
     private void SaveTdpConfirmation(TdpDevice device, int watts, bool apply) =>

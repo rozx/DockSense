@@ -343,6 +343,7 @@
   <data name="Tdp_WattsUnconfirmed" xml:space="preserve"><value>{0} W（未确认）</value></data>
   <data name="Tdp_NotOffered" xml:space="preserve"><value>{0} W（不支持）</value></data>
   <data name="Tdp_MaxBySource" xml:space="preserve"><value>接通电源时 {0} W、使用电池时 {1} W</value></data>
+  <data name="Tdp_MaxOnBattery" xml:space="preserve"><value>使用电池时 {0} W</value></data>
   <data name="Tdp_Warning" xml:space="preserve"><value>{0} W 超出了厂商规定的上限（{1}）。这可能导致设备过热、电池损耗加快，甚至损坏硬件。设备变热后，固件仍可能把功耗拉回它自己的上限。</value></data>
   <data name="Tdp_WarningTitle" xml:space="preserve"><value>要超出厂商规定的上限吗？</value></data>
   <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W 超出了厂商为此设备规定的上限（{1}）。超出上限运行可能导致设备过热、电池损耗加快，甚至损坏硬件，而且可能不在保修范围内。风险由你自行承担。保存之后，你的确认适用于所有模式配置中的这个数值及更低的数值，并随设置一起保存；把设置复制到型号完全相同的另一台设备时也会带过去。</value></data>
