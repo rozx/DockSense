@@ -104,16 +104,6 @@ internal static class TdpHelper
 
     private const AccessControlSections AccessSections = AccessControlSections.Access | AccessControlSections.Owner;
 
-    // The generic bits can stand in for the specific ones in an entry that was never mapped.
-    private const FileSystemRights GenericWrite = (FileSystemRights)0x40000000;
-    private const FileSystemRights GenericAll = (FileSystemRights)0x10000000;
-
-    private const FileSystemRights ChangeContents =
-        FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete | GenericWrite | GenericAll;
-
-    private const FileSystemRights TakeControl =
-        FileSystemRights.DeleteSubdirectoriesAndFiles | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | GenericAll;
-
     private static LocationAccess ReadAccess(FileSystemSecurity security)
     {
         var owner = security.GetOwner(typeof(SecurityIdentifier))?.Value ?? string.Empty;
@@ -126,9 +116,7 @@ internal static class TdpHelper
                 continue;
             }
 
-            var rights = ((rule.FileSystemRights & ChangeContents) != 0 ? LocationRights.ChangeContents : LocationRights.None)
-                | ((rule.FileSystemRights & TakeControl) != 0 ? LocationRights.TakeControl : LocationRights.None);
-            grants.Add(new LocationGrant(rule.IdentityReference.Value, rights));
+            grants.Add(new LocationGrant(rule.IdentityReference.Value, ElevatedLocation.RightsFrom((int)rule.FileSystemRights)));
         }
 
         return new LocationAccess(owner, grants);

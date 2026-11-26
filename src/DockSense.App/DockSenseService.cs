@@ -95,6 +95,7 @@ public sealed class DockSenseService : IDisposable
     private TdpReadiness? _tdpReadiness;
     private bool? _tdpHelperInstalled;
     private int _tdpBusyRetries;
+    private bool _tdpHandBackPending;
 
     public DockSenseService(ConfigStore configStore)
     {
@@ -1380,7 +1381,7 @@ public sealed class DockSenseService : IDisposable
             do
             {
                 _tdpWriteAgain = false;
-                if (Paused || _tdpWanted is not { } watts || TdpDevice is not { } device)
+                if (Paused || _tdpHandBackPending || _tdpWanted is not { } watts || TdpDevice is not { } device)
                 {
                     break;
                 }
@@ -1393,11 +1394,14 @@ public sealed class DockSenseService : IDisposable
             }
             while (_tdpWriteAgain);
 
-            // The mode moved on to one without an override while a value was on its way.
-            if (_tdpWanted is null && _tdpState is not null && !Paused)
+            // The mode moved on to one without an override while a value was on its way, or the helper task was
+            // removed meanwhile: either way that value is not to stay.
+            if ((_tdpWanted is null || _tdpHandBackPending) && _tdpState is not null && !Paused)
             {
                 HandBackTdp();
             }
+
+            _tdpHandBackPending = false;
         }
         finally
         {
@@ -1551,7 +1555,14 @@ public sealed class DockSenseService : IDisposable
         if (result == TdpSetupResult.Done)
         {
             AddActivity(Loc.T("Act_TdpHelperRemoved"));
-            if (_tdpState is not null && !_tdpWriting)
+            _tdpTimer.Stop();
+            if (_tdpWriting)
+            {
+                // A value is on its way through the task that was just removed: give the TDP back once that
+                // write has returned, whichever way it ended.
+                _tdpHandBackPending = true;
+            }
+            else if (_tdpState is not null)
             {
                 HandBackTdp();
             }

@@ -36,7 +36,8 @@ PawnIO refuses callers without administrator rights (opening it fails with error
   put its own code in its place and get administrator rights without a prompt.
   - The check reads the permissions (`TdpHelper.LocationIsProtected`, decided by `Core/ElevatedLocation`): the
     file and its folder must be owned by, and writable only for, administrators, SYSTEM or TrustedInstaller, and
-    no folder above may let anyone else delete or rename what is inside, change permissions or take ownership.
+    no folder above may let anyone else delete or rename it or what is inside it, change permissions or take
+    ownership (a folder that can be renamed can have another one put in its place).
     Creating new folders further up does not count: Windows lets everyone do that at the root of a drive.
   - It runs twice: before DockSense asks for approval, and again in the elevated `--install-tdp-helper` itself,
     because that command can be started by anyone. A write test would not do there: elevated, it always succeeds.
@@ -52,7 +53,8 @@ PawnIO refuses callers without administrator rights (opening it fails with error
 - `tdp.json` remembers the value in force for this boot. A restart of the PC clears every limit.
 - A mode without an override then gets the TDP handed back: DockSense re-sends the performance mode Armoury Crate
   has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. If that
-  fails, the value stays on record, so Status keeps showing it and the next apply tries again.
+  fails, the value stays on record, so Status keeps showing it and the next apply tries again. Removing the
+  helper task hands back as well; when a write is still on its way, once that write has returned.
 - What an override needs (the driver, the task) is looked at again whenever the user acts on it, so installing
   PawnIO while DockSense is open is noticed without a restart.
 

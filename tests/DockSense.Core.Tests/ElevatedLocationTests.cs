@@ -68,6 +68,32 @@ public sealed class ElevatedLocationTests
         Assert.False(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [above, DriveRoot]));
     }
 
+    [Theory]
+    [InlineData(0x10000)] // DELETE: enough to rename the folder and put another one in its place
+    [InlineData(0x40)]    // delete what is inside
+    [InlineData(0x40000)] // change the permissions
+    [InlineData(0x80000)] // take ownership
+    public void A_folder_above_that_the_user_may_delete_or_take_over_is_not(int accessMask)
+    {
+        var above = ProgramFiles with { Grants = [.. ProgramFiles.Grants, new(Users, ElevatedLocation.RightsFrom(accessMask))] };
+
+        Assert.False(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [above, DriveRoot]));
+    }
+
+    [Theory]
+    [InlineData(0x1200A9, LocationRights.None)]                                         // read and execute
+    [InlineData(0x2, LocationRights.ChangeContents)]                                    // write data / create files
+    [InlineData(0x4, LocationRights.ChangeContents)]                                    // append / create folders
+    [InlineData(0x10000, LocationRights.TakeControl)]                                   // delete
+    [InlineData(0x1301BF, LocationRights.ChangeContents | LocationRights.TakeControl)]  // modify
+    [InlineData(0x1F01FF, LocationRights.ChangeContents | LocationRights.TakeControl)]  // full control
+    [InlineData(0x10000000, LocationRights.ChangeContents | LocationRights.TakeControl)] // generic all
+    [InlineData(0x40000000, LocationRights.ChangeContents)]                             // generic write
+    public void An_access_mask_is_read_for_what_it_lets_someone_do(int accessMask, LocationRights expected)
+    {
+        Assert.Equal(expected, ElevatedLocation.RightsFrom(accessMask));
+    }
+
     [Fact]
     public void Creating_new_folders_further_up_does_not_matter()
     {

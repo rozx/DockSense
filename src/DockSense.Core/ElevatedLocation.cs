@@ -6,10 +6,13 @@ public enum LocationRights
 {
     None = 0,
 
-    /// <summary>Write, create or delete: change the file, or what is in the folder.</summary>
+    /// <summary>Write to the file, or create files and folders in the folder.</summary>
     ChangeContents = 1,
 
-    /// <summary>Delete or rename what is inside, change the permissions or take ownership.</summary>
+    /// <summary>
+    /// Delete or rename the object itself or what is inside it, change the permissions or take ownership: enough
+    /// to put something else in its place.
+    /// </summary>
     TakeControl = 2,
 }
 
@@ -31,6 +34,26 @@ public static class ElevatedLocation
     private const string Administrators = "S-1-5-32-544";
     private const string TrustedInstaller = "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
 
+    // File system access mask bits (FILE_WRITE_DATA / FILE_ADD_FILE, FILE_APPEND_DATA / FILE_ADD_SUBDIRECTORY,
+    // FILE_DELETE_CHILD, DELETE, WRITE_DAC, WRITE_OWNER, and the generic bits an unmapped entry can carry).
+    private const int WriteData = 0x2;
+    private const int AppendData = 0x4;
+    private const int DeleteChild = 0x40;
+    private const int Delete = 0x10000;
+    private const int WriteDac = 0x40000;
+    private const int WriteOwner = 0x80000;
+    private const int GenericAll = 0x10000000;
+    private const int GenericWrite = 0x40000000;
+
+    /// <summary>
+    /// What a file system access mask allows, in the terms that matter here. Deleting an object also allows
+    /// renaming it, which is all it takes to put another folder in the place of one further up the path, so it
+    /// counts as taking control, not as changing contents.
+    /// </summary>
+    public static LocationRights RightsFrom(int accessMask) =>
+        ((accessMask & (WriteData | AppendData | GenericWrite | GenericAll)) != 0 ? LocationRights.ChangeContents : LocationRights.None)
+        | ((accessMask & (Delete | DeleteChild | WriteDac | WriteOwner | GenericAll)) != 0 ? LocationRights.TakeControl : LocationRights.None);
+
     /// <summary>True for the accounts that have administrator rights anyway.</summary>
     public static bool IsTrusted(string sid) =>
         string.Equals(sid, System, StringComparison.OrdinalIgnoreCase)
@@ -43,8 +66,9 @@ public static class ElevatedLocation
     /// <param name="file">The executable.</param>
     /// <param name="folder">The folder it is in. Creating a file there counts too: a library put next to the
     /// executable can be loaded by it.</param>
-    /// <param name="ancestors">Every folder above, up to the drive. There only taking control counts: Windows
-    /// lets everyone create new folders at the root of a drive, which does not touch the folders already there.</param>
+    /// <param name="ancestors">Every folder above, up to the drive. There only taking control counts, which
+    /// includes deleting or renaming that folder itself: Windows lets everyone create new folders at the root of
+    /// a drive, which does not touch the folders already there.</param>
     public static bool IsProtected(LocationAccess file, LocationAccess folder, IEnumerable<LocationAccess> ancestors)
     {
         ArgumentNullException.ThrowIfNull(file);
