@@ -6,7 +6,13 @@ using static DockSense.App.Platform.NativeMethods;
 namespace DockSense.App.Platform;
 
 /// <summary>Raw facts about one active display target, kept for diagnostics.</summary>
-internal sealed record DisplayDetails(string Id, string Name, uint OutputTechnology, DisplayKind Kind);
+/// <param name="Width">Desktop width in pixels, 0 when unknown.</param>
+/// <param name="Height">Desktop height in pixels, 0 when unknown.</param>
+/// <param name="RefreshHz">Refresh rate, 0 when unknown.</param>
+/// <param name="AdapterInstanceId">Device instance ID of the display adapter that drives it, empty when unknown.</param>
+internal sealed record DisplayDetails(
+    string Id, string Name, uint OutputTechnology, DisplayKind Kind,
+    uint Width = 0, uint Height = 0, double RefreshHz = 0, string AdapterInstanceId = "");
 
 /// <summary>Enumerates active displays through the Windows display configuration API.</summary>
 internal static class DisplayProbe
@@ -18,7 +24,8 @@ internal static class DisplayProbe
             .Select(d => new DisplayInfo(d.Id, d.Kind == DisplayKind.Internal, d.Name))
             .ToList();
 
-    public static IReadOnlyList<DisplayDetails> GetActiveDisplayDetails()
+    /// <param name="withAdapters">Also ask which adapter drives each display. Only the diagnostic report wants that.</param>
+    public static IReadOnlyList<DisplayDetails> GetActiveDisplayDetails(bool withAdapters = false)
     {
         // The topology can change between the size query and the actual query; retry in that case.
         for (var attempt = 0; attempt < 5; attempt++)
@@ -50,13 +57,46 @@ internal static class DisplayProbe
                 var id = string.IsNullOrEmpty(devicePath)
                     ? $"{target.adapterId.HighPart:X8}{target.adapterId.LowPart:X8}:{target.id}"
                     : devicePath;
-                result.Add(new DisplayDetails(id, name, target.outputTechnology, HardwareClassifier.ClassifyDisplay(target.outputTechnology)));
+                var modeIndex = paths[i].sourceInfo.modeInfoIdx;
+                var mode = modeIndex < modeCount && modes[modeIndex].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE ? modes[modeIndex] : default;
+                var refresh = target.refreshRate.Denominator == 0 ? 0 : (double)target.refreshRate.Numerator / target.refreshRate.Denominator;
+                result.Add(new DisplayDetails(
+                    id, name, target.outputTechnology, HardwareClassifier.ClassifyDisplay(target.outputTechnology),
+                    mode.sourceWidth, mode.sourceHeight, refresh, withAdapters ? GetAdapterInstanceId(target.adapterId) : string.Empty));
             }
 
             return result;
         }
 
         throw new InvalidOperationException("Display topology kept changing while it was being read.");
+    }
+
+    /// <summary>
+    /// The adapter's device instance ID, from its interface path
+    /// (<c>\\?\PCI#VEN_10DE&amp;DEV_2C18...#96E6...#{interface class}</c>). Empty when Windows does not tell.
+    /// </summary>
+    private static string GetAdapterInstanceId(LUID adapterId)
+    {
+        var request = new DISPLAYCONFIG_ADAPTER_NAME
+        {
+            header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+            {
+                type = DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME,
+                size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>(),
+                adapterId = adapterId,
+            },
+            adapterDevicePath = string.Empty,
+        };
+
+        if (DisplayConfigGetDeviceInfo(ref request) != ERROR_SUCCESS || string.IsNullOrEmpty(request.adapterDevicePath))
+        {
+            return string.Empty;
+        }
+
+        var path = request.adapterDevicePath;
+        var start = path.StartsWith(@"\\?\", StringComparison.Ordinal) ? 4 : 0;
+        var end = path.LastIndexOf("#{", StringComparison.Ordinal);
+        return (end > start ? path[start..end] : path[start..]).Replace('#', '\\');
     }
 
     private static (string Name, string DevicePath) GetTargetName(LUID adapterId, uint targetId)

@@ -280,7 +280,7 @@ The builds are not code-signed yet, so the checksum shows that the download is t
 <details>
 <summary><b>Something switched the wrong way. How do I debug it?</b></summary>
 
-Open **Settings → Open log**. Every decision is logged with the hardware snapshot behind it. Running `DockSense.exe --probe report.txt` writes a read-only diagnostic report.
+Open **Settings → Open log**. Every decision is logged with the hardware snapshot behind it. Running `DockSense.exe --probe report.txt` writes a read-only diagnostic report: the device and its firmware, how each graphics adapter is connected, the displays, power plans, the vendor interfaces and vendor software found, and your DockSense settings. It leaves out your user name, the computer name and the programs your profiles start.
 </details>
 
 ## Building from source

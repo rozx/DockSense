@@ -251,3 +251,12 @@ Details and raw data: `docs/game-mode-throttle.md`.
   `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')`.
 - Read-only hardware check: `src\DockSense.App\bin\Debug\net10.0-windows\DockSense.exe --probe <file>` writes a report
   (adapters, displays, resolved mode, plans, FSE, GameMode overrides) and changes nothing.
+  The report is also how other hardware gets understood without asking reporters to run special builds (the
+  user's wish, 2026-11-26), so it is deliberately broad: device/board/BIOS, installed vs visible memory, per
+  adapter the driver, dedicated memory (for the iGPU: the UMA size in effect) and the chain of devices it is
+  connected through with each one's removal policy and container flag, display modes and the adapter driving
+  each, the raw ATKACPI reply, ADLX Variable Graphics Memory, vendor ACPI devices, vendor services and running
+  vendor programs (`Platform/HardwareDiagnostics`), and the DockSense settings without program paths. When a new
+  device raises a question the report cannot answer, add the missing fact to the report. Each part is read on
+  its own, so one failing part does not lose the rest. Keep user and computer names and the system serial
+  number out of it; the profile folder is replaced by `%USERPROFILE%`.

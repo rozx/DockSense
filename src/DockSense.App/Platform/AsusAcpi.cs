@@ -23,16 +23,26 @@ internal static class AsusAcpi
     private const uint OPEN_EXISTING = 3;
 
     /// <summary>The iGPU memory options, or null when this device does not offer the setting.</summary>
-    public static IgpuMemoryOptions? ReadIgpuMemory()
-    {
-        if (!IsAmdCpu())
-        {
-            return null; // Intel ASUS laptops use a different mechanism.
-        }
+    public static IgpuMemoryOptions? ReadIgpuMemory() =>
+        QueryIgpuMemory(out _) is { } reply ? IgpuMemoryOptions.Parse(reply) : null;
 
+    /// <summary>
+    /// The firmware's raw reply to the iGPU memory query (64 bytes), or null with the reason in
+    /// <paramref name="why"/>. The diagnostic report shows it, so that a layout DockSense does not know yet can be
+    /// worked out from a report.
+    /// </summary>
+    public static byte[]? QueryIgpuMemory(out string why)
+    {
         using var device = Open();
         if (device is null)
         {
+            why = "no ASUS ATK ACPI device";
+            return null;
+        }
+
+        if (!IsAmdCpu())
+        {
+            why = "ASUS ATK ACPI device present, not an AMD processor"; // Intel ASUS laptops use a different mechanism.
             return null;
         }
 
@@ -41,7 +51,14 @@ internal static class AsusAcpi
         BitConverter.GetBytes(12u).CopyTo(input, 4);
         BitConverter.GetBytes(VramMemory).CopyTo(input, 8);
         var output = new byte[64];
-        return Control(device, input, output) ? IgpuMemoryOptions.Parse(output) : null;
+        if (!Control(device, input, output))
+        {
+            why = $"ASUS ATK ACPI device present, the query failed (error {Marshal.GetLastWin32Error()})";
+            return null;
+        }
+
+        why = string.Empty;
+        return output;
     }
 
     /// <summary>
