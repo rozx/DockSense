@@ -156,6 +156,18 @@ public sealed class TdpTests
     }
 
     [Fact]
+    public void A_task_changed_to_run_without_the_highest_privileges_is_not_the_helper()
+    {
+        var xml = TdpHelperTask.BuildXml(@"C:\Program Files\DockSense\DockSense.exe", "S-1-5-21-1-2-3-1001");
+
+        Assert.True(TdpHelperTask.RunsElevated(xml));
+        Assert.False(TdpHelperTask.RunsElevated(xml.Replace("HighestAvailable", "LeastPrivilege")));
+        Assert.False(TdpHelperTask.RunsElevated(xml.Replace("<RunLevel>HighestAvailable</RunLevel>", string.Empty)));
+        Assert.False(TdpHelperTask.RunsElevated("not xml"));
+        Assert.False(TdpHelperTask.RunsElevated(null));
+    }
+
+    [Fact]
     public void Only_the_user_named_in_it_may_start_the_task_and_only_administrators_may_change_it()
     {
         Assert.Equal("D:P(A;;FA;;;BA)(A;;FA;;;SY)(A;;GRGX;;;S-1-5-21-1-2-3-1001)", TdpHelperTask.SecurityDescriptorFor("S-1-5-21-1-2-3-1001"));
@@ -171,6 +183,37 @@ public sealed class TdpTests
     public void A_profile_sets_its_value_or_gives_control_back(int? watts, bool limitInForce, TdpAction expected)
     {
         Assert.Equal(expected, TdpPlanner.Plan(new ModeProfile { TdpWatts = watts }, AllyX, limitInForce));
+    }
+
+    [Theory]
+    [InlineData(45, false, TdpAction.Set)]     // above the battery ceiling of 35 W: still set, and clamped when it is sent
+    [InlineData(53, false, TdpAction.Set)]
+    [InlineData(54, true, TdpAction.HandBack)] // above the highest ceiling
+    [InlineData(3, true, TdpAction.HandBack)]  // below the minimum
+    [InlineData(3, false, TdpAction.None)]
+    public void On_the_older_models_the_plan_does_not_depend_on_the_power_source(int watts, bool limitInForce, TdpAction expected)
+    {
+        Assert.Equal(expected, TdpPlanner.Plan(new ModeProfile { TdpWatts = watts }, Ally, limitInForce));
+    }
+
+    [Theory]
+    [InlineData(53, true, 53)]
+    [InlineData(54, true, 53)]
+    [InlineData(35, false, 35)]
+    [InlineData(36, false, 35)]
+    public void The_older_models_stop_at_their_ceiling_for_the_power_source(int watts, bool onAc, int sent)
+    {
+        Assert.Equal(sent, Ally.Clamp(watts, onAc));
+    }
+
+    [Theory]
+    [InlineData(55, true, 55)]
+    [InlineData(56, true, 55)]
+    [InlineData(55, false, 55)]
+    [InlineData(6, false, 7)]
+    public void The_xbox_ally_x_stops_at_55_watts_on_either_power_source(int watts, bool onAc, int sent)
+    {
+        Assert.Equal(sent, AllyX.Clamp(watts, onAc));
     }
 
     [Fact]

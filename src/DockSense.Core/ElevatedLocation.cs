@@ -66,9 +66,19 @@ public static class ElevatedLocation
     /// <param name="file">The executable.</param>
     /// <param name="folder">The folder it is in. Creating a file there counts too: a library put next to the
     /// executable can be loaded by it.</param>
-    /// <param name="ancestors">Every folder above, up to the drive. There only taking control counts, which
-    /// includes deleting or renaming that folder itself: Windows lets everyone create new folders at the root of
-    /// a drive, which does not touch the folders already there.</param>
+    /// <param name="ancestors">
+    /// Every folder above, nearest first, up to the drive.
+    /// <para>
+    /// The folder directly above must not let anyone else create folders either: the task keeps the path, and
+    /// once the installation is moved or removed, whoever can create a folder there could bring that path back
+    /// with a file of their own. Directly under Program Files is fine; directly under the root of a drive,
+    /// where Windows lets everyone create folders, is not.
+    /// </para>
+    /// <para>
+    /// Further up only taking control counts, which includes deleting or renaming that folder itself. Creating
+    /// new folders there does not touch the ones already in the path.
+    /// </para>
+    /// </param>
     public static bool IsProtected(LocationAccess file, LocationAccess folder, IEnumerable<LocationAccess> ancestors)
     {
         ArgumentNullException.ThrowIfNull(file);
@@ -76,7 +86,9 @@ public static class ElevatedLocation
         ArgumentNullException.ThrowIfNull(ancestors);
 
         const LocationRights any = LocationRights.ChangeContents | LocationRights.TakeControl;
-        return Holds(file, any) && Holds(folder, any) && ancestors.All(a => Holds(a, LocationRights.TakeControl));
+        return Holds(file, any)
+            && Holds(folder, any)
+            && ancestors.Select((access, index) => Holds(access, index == 0 ? any : LocationRights.TakeControl)).All(holds => holds);
     }
 
     /// <summary>The owner can always change the permissions, so an owner that is not trusted fails by itself.</summary>

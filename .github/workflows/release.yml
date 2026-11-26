@@ -65,6 +65,9 @@ jobs:
               -p:EnableCompressionInSingleFile=true -p:DebugType=none `
               -p:Version=$env:VERSION -o "publish/$rid"
             Copy-Item LICENSE "publish/$rid/"
+            # The executable embeds the PawnIO AMD module (LGPL-2.1): its license and where its source is go along.
+            Copy-Item src/DockSense.App/Assets/PawnIO/COPYING "publish/$rid/THIRD-PARTY-PawnIO-COPYING.txt"
+            Copy-Item src/DockSense.App/Assets/PawnIO/README.md "publish/$rid/THIRD-PARTY-PawnIO.md"
             Compress-Archive -Path "publish/$rid/*" -DestinationPath "DockSense-$env:VERSION-$rid.zip"
           }
 

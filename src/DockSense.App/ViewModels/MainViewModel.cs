@@ -384,7 +384,9 @@ public sealed partial class MainViewModel : ObservableObject
         };
         PowerText = Loc.T(snapshot?.OnAcPower == false ? "Power_Battery" : "Power_Ac");
         TdpVisible = _service.TdpInForceWatts is not null;
-        TdpText = _service.TdpInForceWatts is { } tdp ? Loc.F("Tdp_Watts", tdp) : string.Empty;
+        TdpText = _service.TdpInForceWatts is { } tdp
+            ? Loc.F(_service.TdpInForceUnconfirmed ? "Tdp_WattsUnconfirmed" : "Tdp_Watts", tdp)
+            : string.Empty;
 
         IgpuAvailable = _service.IgpuMemory is not null;
         var effective = _service.IgpuMemoryEffectiveMb;
@@ -493,9 +495,10 @@ public sealed partial class MainViewModel : ObservableObject
                     profile.TdpOptions = tdpOptions;
                 }
 
-                // Switched off, the slider keeps the last value; never used before, it starts at the manufacturer's
-                // maximum, which is what the vendor software's fastest mode sustains.
-                profile.TdpWatts = config.TdpWatts ?? (tdpDevice.Offers(profile.TdpWatts) ? profile.TdpWatts : tdpDevice.PluggedIn.Max);
+                // Switched off, the slider keeps the last value; never used before, it starts at the highest value
+                // the manufacturer allows on either power source, so that switching the override on never asks
+                // about going above the maximum before a value was even chosen.
+                profile.TdpWatts = config.TdpWatts ?? (tdpDevice.Offers(profile.TdpWatts) ? profile.TdpWatts : tdpDevice.WarnAboveWatts);
                 profile.TdpDescription = Loc.F("Prof_TdpDesc", tdpDevice.MinWatts, ManufacturerMaxText(tdpDevice));
 
                 // What keeps the value from being applied, with the way out where there is one.
@@ -578,19 +581,24 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (value != ModeProfileViewModel.TdpUnchanged && device.Offers(value))
         {
-            var wasAbove = previous != ModeProfileViewModel.TdpUnchanged && device.ExceedsManufacturerMax(previous);
-            if (device.ExceedsManufacturerMax(value) && !wasAbove
+            // The question names the watts, so the answer covers that value and anything lower. Going higher
+            // asks again, and so does a value kept from another device, which nobody confirmed for this one.
+            var confirmedUpTo = previous != ModeProfileViewModel.TdpUnchanged && device.Offers(previous) && device.ExceedsManufacturerMax(previous)
+                ? previous
+                : device.WarnAboveWatts;
+            if (value > confirmedUpTo
                 && !await Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", value, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm")))
             {
                 SetTdpSelection(profile, previous);
                 return;
             }
 
-            // The driver may have been installed since this was last looked at.
-            _service.RefreshTdpReadiness();
+            // The driver may have been installed since this was last looked at. Nothing is sent from here: the
+            // value being replaced must not go out, and the new one is applied when the profile is saved below.
+            _service.RefreshTdpReadiness(apply: false);
             if (_service.TdpReadiness == TdpReadiness.HelperMissing
                 && !(await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
-                    && await _service.SetUpTdpHelperAsync()))
+                    && await _service.SetUpTdpHelperAsync(apply: false)))
             {
                 SetTdpSelection(profile, previous);
                 return;

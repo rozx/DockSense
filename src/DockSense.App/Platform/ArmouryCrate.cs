@@ -53,7 +53,8 @@ internal static class ArmouryCrate
 
     private sealed class Watcher : IDisposable
     {
-        private readonly RegistryKey _key;
+        private RegistryKey _key;
+        private bool _warned;
         private readonly Action _changed;
         private readonly AutoResetEvent _signal = new(false);
         private readonly RegisteredWaitHandle _wait;
@@ -100,8 +101,43 @@ internal static class ArmouryCrate
             _changed();
         }
 
-        private void Arm() =>
-            _ = RegNotifyChangeKeyValue(_key.Handle, true, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC, _signal.SafeWaitHandle, true);
+        /// <summary>
+        /// Asks for the next notification. When that fails, the key that is held open is most likely gone (a
+        /// repair or reinstall of Armoury Crate deletes it and makes a new one), so the key is opened afresh once.
+        /// </summary>
+        private void Arm()
+        {
+            if (Register())
+            {
+                return;
+            }
+
+            try
+            {
+                if (Registry.LocalMachine.OpenSubKey(ThrottleKey) is { } fresh)
+                {
+                    _key.Dispose();
+                    _key = fresh;
+                    if (Register())
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                // Falls through to the warning.
+            }
+
+            if (!_warned)
+            {
+                _warned = true;
+                Log.Warn("Armoury Crate's settings can no longer be watched; the TDP is still sent again after power source and plan changes.");
+            }
+        }
+
+        private bool Register() =>
+            RegNotifyChangeKeyValue(_key.Handle, true, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC, _signal.SafeWaitHandle, true) == 0;
     }
 
     [DllImport("advapi32.dll")]

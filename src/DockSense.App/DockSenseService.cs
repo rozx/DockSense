@@ -97,6 +97,9 @@ public sealed class DockSenseService : IDisposable
     private int _tdpBusyRetries;
     private bool _tdpHandBackPending;
 
+    /// <summary>The last attempt to send the wanted TDP did not go through, so it is due again.</summary>
+    private bool _tdpStale;
+
     public DockSenseService(ConfigStore configStore)
     {
         _configStore = configStore;
@@ -190,12 +193,20 @@ public sealed class DockSenseService : IDisposable
     /// <summary>The TDP DockSense set and that is in force, in watts; null when the vendor software decides.</summary>
     public int? TdpInForceWatts => _tdpState?.Watts;
 
+    /// <summary>
+    /// True when <see cref="TdpInForceWatts"/> is a value that may be in force, not one that is known to be: the
+    /// helper did not confirm it, or only part of it went in and giving it back failed.
+    /// </summary>
+    public bool TdpInForceUnconfirmed => _tdpState?.Pending == true;
+
     /// <summary>What keeps a TDP override from being written, if anything. Read on demand and remembered.</summary>
     public TdpReadiness TdpReadiness => _tdpReadiness ??= TdpHelper.Readiness();
 
-    /// <summary>True while the elevated helper task is registered for this copy (whatever else may be missing).</summary>
-    public bool TdpHelperInstalled => TdpDevice is not null
-        && (TdpReadiness == TdpReadiness.Ready || (_tdpHelperInstalled ??= TdpHelper.IsInstalled));
+    /// <summary>
+    /// True while a helper task is registered under DockSense's name for this user, whatever it points at and
+    /// whether or not it is enabled: as long as it exists, Settings offers to remove it.
+    /// </summary>
+    public bool TdpHelperInstalled => TdpDevice is not null && (_tdpHelperInstalled ??= TdpHelper.TaskExists);
 
     /// <summary>True when config.json did not exist at startup (first run).</summary>
     public bool IsFirstRun { get; private set; }
@@ -240,10 +251,15 @@ public sealed class DockSenseService : IDisposable
             _resumedInSameMode = true;
             Log.Info($"Still {mode}: the profile stays as the previous instance applied it.");
 
-            // So does its TDP; this instance only needs to know the value to send it again after a reset.
-            _tdpWanted = TdpPlanner.Plan(Config.ProfileFor(mode), TdpDevice, _tdpState is not null) == TdpAction.Set
-                ? Config.ProfileFor(mode).TdpWatts
-                : null;
+            // So does its TDP; this instance only needs to know the value to send it again after a reset. What
+            // must not carry on is a limit this profile does not want (giving it back failed before, or the
+            // previous instance was closed mid-write): that is given back now.
+            var tdp = TdpPlanner.Plan(Config.ProfileFor(mode), TdpDevice, _tdpState is not null);
+            _tdpWanted = tdp == TdpAction.Set ? Config.ProfileFor(mode).TdpWatts : null;
+            if (tdp == TdpAction.HandBack && !Paused)
+            {
+                HandBackTdp();
+            }
         }
         else if (Paused)
         {
@@ -1239,7 +1255,7 @@ public sealed class DockSenseService : IDisposable
     }
 
     /// <summary>This boot: Windows' boot counter (readable without admin) plus the start time as a fallback.</summary>
-    private static BootSession CurrentBoot()
+    internal static BootSession CurrentBoot()
     {
         uint? bootId = null;
         try
@@ -1290,17 +1306,18 @@ public sealed class DockSenseService : IDisposable
         TdpDevice = TdpWriter.Device;
 
         // A limit set before a restart of the PC is gone; one set earlier in this boot is still DockSense's to
-        // give back.
+        // give back. A record left "on its way" stays marked: DockSense was closed before the outcome was known.
+        // A record without its boot (a damaged or hand-edited file) says nothing and is dropped.
         var saved = StateStore.LoadTdp();
-        _tdpState = saved is not null && saved.Boot.IsSameBoot(CurrentBoot()) ? saved with { Pending = false } : null;
-        if (saved is not null && (_tdpState is null || saved.Pending))
+        _tdpState = saved?.Boot is { } boot && boot.IsSameBoot(CurrentBoot()) ? saved : null;
+        if (saved is not null && _tdpState is null)
         {
-            // A record from before a restart of the PC goes; one left "on its way" becomes an ordinary one.
-            StateStore.SaveTdp(_tdpState);
+            StateStore.SaveTdp(null);
         }
 
         Log.Info($"TDP: {TdpDevice!.Board}, {TdpDevice.MinWatts}-{TdpDevice.CeilingWatts} W"
-            + (_tdpState is null ? string.Empty : $"; {_tdpState.Watts} W set by DockSense is in force"));
+            + (_tdpState is null ? string.Empty
+                : $"; {_tdpState.Watts} W set by DockSense is {(_tdpState.Pending ? "possibly " : string.Empty)}in force"));
     }
 
     private void ApplyTdp(DockMode mode, ModeProfile profile, ApplyReason reason)
@@ -1310,8 +1327,10 @@ public sealed class DockSenseService : IDisposable
             case TdpAction.Set:
                 // Every edit of a profile applies it again: no need to send a value that was sent already.
                 var unchanged = reason == ApplyReason.SettingsChanged
+                    && !_tdpStale
                     && _tdpWanted == profile.TdpWatts
-                    && _tdpState?.Watts == TdpDevice!.Clamp(profile.TdpWatts!.Value, SafeOnAcPower());
+                    && _tdpState is { Pending: false } state
+                    && state.Watts == TdpDevice!.Clamp(profile.TdpWatts!.Value, SafeOnAcPower());
                 _tdpWanted = profile.TdpWatts;
                 if (!unchanged)
                 {
@@ -1387,25 +1406,34 @@ public sealed class DockSenseService : IDisposable
                     break;
                 }
 
-                // The helper works this out by itself as well; this is for what DockSense shows and remembers.
-                var sent = device.Clamp(watts, SafeOnAcPower());
                 var reason = _tdpReason;
                 var result = TdpWriteResult.Failed;
                 if (TdpReadiness == TdpReadiness.Ready)
                 {
                     // On record before it is sent: should DockSense be closed while the helper runs, the next
                     // start still knows that a value may be in force and gives it back when no profile wants it.
-                    StateStore.SaveTdp(new TdpState(CurrentBoot(), sent, Pending: true));
-                    result = await Task.Run(() => TdpHelper.Write(watts));
+                    // Without that record nothing is sent.
+                    var announced = new TdpState(CurrentBoot(), device.Clamp(watts, SafeOnAcPower()), Pending: true);
+                    if (StateStore.SaveTdp(announced))
+                    {
+                        result = await Task.Run(() => TdpHelper.Write(watts));
+                    }
+                    else
+                    {
+                        Log.Warn("The TDP was not sent: its record could not be saved, and without one it could not be given back later.");
+                    }
                 }
 
-                OnTdpWritten(sent, result, reason);
+                // The helper clamps for the power source at the moment it sends. This is the same sum made right
+                // after it returned: DockSense's best knowledge of what went out, not a reading from the hardware.
+                OnTdpWritten(device.Clamp(watts, SafeOnAcPower()), result, reason);
             }
             while (_tdpWriteAgain);
 
-            // The mode moved on to one without an override while a value was on its way, or the helper task was
-            // removed meanwhile: either way that value is not to stay.
-            if ((_tdpWanted is null || _tdpHandBackPending) && _tdpState is not null && !Paused)
+            // That value is not to stay when the mode moved on to one without an override while it was on its way
+            // (unless switching is paused: then the profile waits), or when the helper task was removed meanwhile
+            // (the user asked for that, paused or not).
+            if (_tdpState is not null && (_tdpHandBackPending || (_tdpWanted is null && !Paused)))
             {
                 HandBackTdp();
             }
@@ -1423,7 +1451,7 @@ public sealed class DockSenseService : IDisposable
     {
         if (result == TdpWriteResult.Ok)
         {
-            if (_tdpState?.Watts != sent)
+            if (_tdpState is not { Pending: false } previous || previous.Watts != sent)
             {
                 AddActivity(Loc.F("Act_Tdp", sent));
             }
@@ -1433,54 +1461,36 @@ public sealed class DockSenseService : IDisposable
             StateStore.SaveTdp(_tdpState);
             _tdpWarned = null;
             _tdpBusyRetries = 0;
-
-        if (result == TdpWriteResult.Unconfirmed)
-        {
-            // The helper was started and may still set the value: it stays on record as possibly in force, so
-            // that a profile without an override gives it back.
-            _tdpState ??= new TdpState(CurrentBoot(), sent);
-        }
-
-        // Otherwise nothing was changed, and the record goes back to what it was before this attempt.
-        StateStore.SaveTdp(_tdpState);
-        if (result == TdpWriteResult.PartlyApplied)
-        {
-            // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the
-            // TDP back to the vendor software right away. If that fails too, the record makes a later apply retry.
-            _tdpState ??= new TdpState(CurrentBoot(), sent);
-            StateStore.SaveTdp(_tdpState);
-            HandBackTdp();
-        }
+            _tdpStale = false;
             return;
         }
+
+        // The wanted value is not known to be in force. What goes on record depends on whether anything may have
+        // changed: a write that may have gone in, wholly or in part, is recorded as possibly in force, so that it
+        // can be given back; after one that changed nothing, the record from before this attempt goes back.
+        _tdpStale = true;
+        if (result is TdpWriteResult.Unconfirmed or TdpWriteResult.PartlyApplied)
+        {
+            _tdpState = new TdpState(CurrentBoot(), sent, Pending: true);
+        }
+
+        StateStore.SaveTdp(_tdpState);
 
         // Another hardware tool had the SMU: nothing was set, and a moment later it is usually free again.
         if (result == TdpWriteResult.Busy && _tdpBusyRetries < MaxTdpBusyRetries)
         {
             _tdpBusyRetries++;
-            StateStore.SaveTdp(_tdpState); // Nothing was sent: back to the record from before this attempt.
             Log.Info($"The SMU was busy; sending {sent} W again shortly (attempt {_tdpBusyRetries} of {MaxTdpBusyRetries}).");
             QueueTdpReassert(reason);
             return;
         }
 
         _tdpBusyRetries = 0;
-
-        if (result == TdpWriteResult.Unconfirmed)
-        {
-            // The helper was started and may still set the value: it stays on record as possibly in force, so
-            // that a profile without an override gives it back.
-            _tdpState ??= new TdpState(CurrentBoot(), sent);
-        }
-
-        // Otherwise nothing was changed, and the record goes back to what it was before this attempt.
-        StateStore.SaveTdp(_tdpState);
         if (result == TdpWriteResult.PartlyApplied)
         {
-            // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the
-            // TDP back to the vendor software right away. If that fails too, the record makes a later apply retry.
-            _tdpState ??= new TdpState(CurrentBoot(), sent);
-            StateStore.SaveTdp(_tdpState);
+            // Some of the limits went in. That mix is neither what was asked for nor what the vendor software
+            // set, so the TDP goes back to the vendor software right away. If that fails too, the record makes a
+            // later apply try again.
             HandBackTdp();
         }
 
@@ -1548,12 +1558,17 @@ public sealed class DockSenseService : IDisposable
 
     /// <summary>
     /// Looks again at what a TDP override needs (the driver, the helper task), for when the user may just have
-    /// installed it, and sends the wanted value if nothing is in the way any more.
+    /// installed it.
     /// </summary>
-    public void RefreshTdpReadiness()
+    /// <param name="apply">
+    /// Also send the wanted value when nothing is in the way any more and it is not known to be in force. Not
+    /// while the user is choosing another value: that one is applied when it is saved.
+    /// </param>
+    public void RefreshTdpReadiness(bool apply = true)
     {
         InvalidateTdpReadiness();
-        if (TdpReadiness == TdpReadiness.Ready && _tdpWanted is not null && _tdpState?.Watts != _tdpWanted)
+        if (apply && TdpReadiness == TdpReadiness.Ready && _tdpWanted is { } wanted && TdpDevice is { } device
+            && (_tdpStale || _tdpState is not { Pending: false } state || state.Watts != device.Clamp(wanted, SafeOnAcPower())))
         {
             _tdpWarned = null;
             _tdpReason = "what was missing is there now";
@@ -1563,8 +1578,9 @@ public sealed class DockSenseService : IDisposable
         RaiseStatusChanged();
     }
 
-    /// <summary>Registers the elevated helper task (Windows asks for approval), then sends the wanted TDP.</summary>
-    public async Task<bool> SetUpTdpHelperAsync()
+    /// <summary>Registers the elevated helper task (Windows asks for approval).</summary>
+    /// <param name="apply">Also send the wanted TDP afterwards (see <see cref="RefreshTdpReadiness"/>).</param>
+    public async Task<bool> SetUpTdpHelperAsync(bool apply = true)
     {
         var result = await Task.Run(TdpHelper.Install);
         InvalidateTdpReadiness();
@@ -1572,8 +1588,11 @@ public sealed class DockSenseService : IDisposable
         {
             AddActivity(Loc.T("Act_TdpHelperInstalled"));
             _tdpWarned = null;
-            _tdpReason = "helper set up";
-            _ = WriteTdpAsync();
+            if (apply)
+            {
+                _tdpReason = "helper set up";
+                _ = WriteTdpAsync();
+            }
         }
         else if (result == TdpSetupResult.Failed)
         {
@@ -1591,8 +1610,8 @@ public sealed class DockSenseService : IDisposable
     }
 
     /// <summary>
-    /// Removes the helper task (Windows asks for approval). A TDP in force is given back first, because nothing
-    /// could change it afterwards.
+    /// Removes the helper task (Windows asks for approval). A TDP in force is given back, because nothing could
+    /// change it afterwards.
     /// </summary>
     public async Task<bool> RemoveTdpHelperAsync()
     {

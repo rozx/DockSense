@@ -117,7 +117,15 @@ public sealed partial class OptionSlider : UserControl
             AutomationProperties.SetName(_slider, name);
             AutomationProperties.SetName(_input, name);
         };
-        Unloaded += (_, _) => _commitTimer.Stop();
+        Unloaded += (_, _) =>
+        {
+            // Leaving the page within the moment a click or a key press waits to be passed on must not lose it:
+            // the slider would show one value and the profile keep another.
+            if (_commitTimer.IsEnabled)
+            {
+                Commit();
+            }
+        };
     }
 
     /// <summary>The options, in slider order (a list of <see cref="IOption"/>).</summary>
@@ -138,7 +146,9 @@ public sealed partial class OptionSlider : UserControl
 
     /// <summary>
     /// The option a typed text means, or -1: a label is that option, and a number is the option whose number is
-    /// closest. A Chinese input method types "。" for the decimal point.
+    /// closest. The whole text has to be one plain number, with a unit after it at most ("20", "20 W", "0.5 GB"):
+    /// "-20" or "20-30" mean nothing here, and must not turn into 20. A Chinese input method types "。" for the
+    /// decimal point.
     /// </summary>
     internal static int Resolve(IReadOnlyList<IOption> options, string text)
     {
@@ -157,7 +167,7 @@ public sealed partial class OptionSlider : UserControl
         }
 
         var match = NumberPattern().Match(typed.Replace('。', '.').Replace(',', '.'));
-        if (!match.Success || !double.TryParse(match.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+        if (!match.Success || !double.TryParse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
         {
             return -1;
         }
@@ -248,6 +258,6 @@ public sealed partial class OptionSlider : UserControl
         Commit();
     }
 
-    [GeneratedRegex(@"\d+(\.\d+)?")]
+    [GeneratedRegex(@"^(\d+(?:\.\d+)?)\s*\p{L}*$")]
     private static partial Regex NumberPattern();
 }

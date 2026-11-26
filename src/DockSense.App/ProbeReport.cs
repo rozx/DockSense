@@ -298,6 +298,15 @@ internal static class ProbeReport
         Line(text, 0, "PawnIO driver", PawnIo.IsInstalled ? $"installed{(PawnIo.InstalledVersion is { } version ? $" ({version})" : string.Empty)}" : "not installed");
         Line(text, 0, "TDP helper task", $"{TdpHelper.DescribeTask()}; install folder protected: {TdpHelper.LocationIsProtected}");
         Line(text, 0, "Armoury Crate mode", $"{ArmouryCrate.SelectedMode(DeviceProbe.OnAcPower)?.ToString() ?? "-"} (for the current power source)");
-        Line(text, 0, "TDP set by DockSense", StateStore.LoadTdp() is { } state ? $"{state.Watts} W" : "none");
+        // The record as it is on disk: the running DockSense may not have looked at it since the PC restarted,
+        // and a value can be on its way while this report is written.
+        Line(text, 0, "TDP set by DockSense", StateStore.LoadTdp() switch
+        {
+            null => "none",
+            { Boot: null } => "a record without its boot session (ignored)",
+            { } state when !state.Boot.IsSameBoot(DockSenseService.CurrentBoot()) => $"{state.Watts} W before the last restart of the PC (no longer in force)",
+            { Pending: true } state => $"{state.Watts} W, not confirmed (on its way, or its outcome stayed open)",
+            { } state => $"{state.Watts} W",
+        });
     }
 }

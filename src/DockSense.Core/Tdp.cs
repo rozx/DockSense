@@ -168,9 +168,10 @@ public enum TdpReadiness
 /// <param name="Boot">The boot session it was set in: a restart of the PC clears every limit.</param>
 /// <param name="Watts">The value last sent.</param>
 /// <param name="Pending">
-/// True in the file while the value is on its way and the outcome is not known yet. Found at the next start,
-/// DockSense was closed in that moment, and the value counts as in force: giving back a TDP that was never
-/// set does no harm, leaving one behind that nobody knows of does.
+/// True when the value may be in force without that being known: in the file while it is on its way, and after
+/// a write whose outcome stayed open (the helper did not report back, or only part of it went in). It still
+/// counts as in force: giving back a TDP that was never set does no harm, leaving one behind that nobody knows
+/// of does.
 /// </param>
 public sealed record TdpState(BootSession Boot, int Watts, bool Pending = false);
 
@@ -248,6 +249,28 @@ public static class TdpHelperTask
     /// <summary>True when the registered task is enabled and starts this executable as the helper.</summary>
     public static bool Starts(LogonTaskInfo? task, string executable) =>
         task is { Enabled: true } && LogonTaskDefinition.Starts(task, executable, Arguments);
+
+    /// <summary>
+    /// True when the task, as Task Scheduler XML, is set to run with the highest privileges. Without that the
+    /// helper could not open the driver, however complete the rest of the task is.
+    /// </summary>
+    public static bool RunsElevated(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return false;
+        }
+
+        try
+        {
+            var level = XDocument.Parse(xml).Root?.Element(Ns + "Principals")?.Element(Ns + "Principal")?.Element(Ns + "RunLevel")?.Value;
+            return string.Equals(level?.Trim(), "HighestAvailable", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>The watts from the helper's command line (<c>--set-tdp 20</c>), or null when it is anything else.</summary>
     public static int? ParseWatts(IReadOnlyList<string> args) =>

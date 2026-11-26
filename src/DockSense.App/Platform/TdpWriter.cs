@@ -125,7 +125,8 @@ internal static class TdpWriter
         try
         {
             // The test message sets nothing. A wrong answer means these are not the registers of this processor.
-            if (Send(driver, commands.Mailbox, AmdSmuPowerCommands.TestMessage, TestArgument) is not (AmdSmuPowerCommands.Ok, TestArgument + 1))
+            if (Send(driver, commands.Mailbox, AmdSmuPowerCommands.TestMessage, TestArgument)
+                is not { Submitted: true, Status: AmdSmuPowerCommands.Ok, Value: TestArgument + 1 })
             {
                 return TdpWriteResult.NoAnswer;
             }
@@ -138,17 +139,22 @@ internal static class TdpWriter
             var applied = 0;
             foreach (var command in new[] { commands.Sustained, commands.Fast, commands.Slow })
             {
-                var status = Send(driver, commands.Mailbox, command, milliwatts).Status;
-                if (status == AmdSmuPowerCommands.Ok)
+                var reply = Send(driver, commands.Mailbox, command, milliwatts);
+                if (reply is { Submitted: true, Status: AmdSmuPowerCommands.Ok })
                 {
                     applied++;
                     continue;
                 }
 
-                // Only an answer from the SMU that refuses the first limit means nothing was changed. After an
-                // earlier limit went in, or without any confirmed answer (status 0: the command may have been
-                // taken and its reply lost), a limit may be in force.
-                return applied == 0 && status != 0 ? TdpWriteResult.Rejected : TdpWriteResult.PartlyApplied;
+                // A limit may be in force when an earlier one went in, or when this one was handed to the SMU and
+                // no answer came back. Otherwise nothing was changed: the SMU refused the first limit, or the
+                // request never got as far as the SMU.
+                if (applied > 0 || (reply.Submitted && reply.Status == 0))
+                {
+                    return TdpWriteResult.PartlyApplied;
+                }
+
+                return reply.Submitted ? TdpWriteResult.Rejected : TdpWriteResult.Failed;
             }
 
             return TdpWriteResult.Ok;
@@ -159,13 +165,23 @@ internal static class TdpWriter
         }
     }
 
+    /// <summary>How one SMU request ended.</summary>
+    /// <param name="Submitted">
+    /// False when the request never got as far as the SMU (the mailbox was not idle, or the driver refused a
+    /// register write before the command), so nothing can have changed.
+    /// </param>
+    /// <param name="Status">The SMU's answer (1 = done; other values refuse); 0 when it was asked and no answer was read.</param>
+    /// <param name="Value">The first argument register after a request that was carried out.</param>
+    private readonly record struct SmuReply(bool Submitted, uint Status, uint Value);
+
     /// <summary>
-    /// One SMU request: wait until the mailbox is idle, clear the response, write the arguments, write the
-    /// command, wait for the response. Status 0 means the driver or the SMU did not answer.
+    /// One SMU request: wait until the mailbox is idle, write the arguments, clear the response, write the
+    /// command, wait for the response. The response is cleared only once the arguments are in place, so a failure
+    /// before the command leaves the mailbox idle, as it was found, for whoever uses it next.
     /// </summary>
-    private static (uint Status, uint Reply) Send(PawnIo driver, SmuMailbox mailbox, uint command, uint argument)
+    private static SmuReply Send(PawnIo driver, SmuMailbox mailbox, uint command, uint argument)
     {
-        if (!WaitForResponse(driver, mailbox.Response, out _) || !Write(driver, mailbox.Response, 0))
+        if (!WaitForResponse(driver, mailbox.Response, out _))
         {
             return default;
         }
@@ -178,12 +194,19 @@ internal static class TdpWriter
             }
         }
 
-        if (!Write(driver, mailbox.Message, command) || !WaitForResponse(driver, mailbox.Response, out var status))
+        if (!Write(driver, mailbox.Response, 0))
         {
             return default;
         }
 
-        return status == AmdSmuPowerCommands.Ok && Read(driver, mailbox.Arguments, out var reply) ? (status, reply) : (status, 0);
+        // From the command write on, the SMU may have taken the request even when nothing is heard back.
+        if (!Write(driver, mailbox.Message, command) || !WaitForResponse(driver, mailbox.Response, out var status))
+        {
+            return new SmuReply(Submitted: true, Status: 0, Value: 0);
+        }
+
+        var value = status == AmdSmuPowerCommands.Ok && Read(driver, mailbox.Arguments, out var read) ? read : 0;
+        return new SmuReply(Submitted: true, status, value);
     }
 
     private static bool WaitForResponse(PawnIo driver, uint register, out uint value)

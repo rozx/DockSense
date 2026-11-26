@@ -25,54 +25,102 @@ PawnIO refuses callers without administrator rights (opening it fails with error
 - `Platform/TdpHelper` registers a task without triggers, `DockSense-TDP-<SID>`: run level highest, and a security
   descriptor that lets the user read and run it but not change it. Registering takes one UAC prompt
   (`DockSense.exe --install-tdp-helper <SID>`); removing it another (`--remove-tdp-helper <SID>`, from Settings).
+  The task counts as ready only while it is enabled, starts this copy and is still set to run with the highest
+  privileges. Settings offers **Remove** for any task under that name, also a disabled or outdated one.
 - DockSense starts the task with the watts as its parameter (`$(Arg0)`). The task runs
   `DockSense.exe --set-tdp <watts>` (`Platform/TdpWriter`): it trusts nothing it is handed (a known board, a known
   processor, the value clamped to the device's range), shows no UI and writes no files. Its exit code
   (`TdpWriteResult`) is the result, read back from the task.
-- Before any limit is sent, the SMU's test message must answer correctly (argument plus one). A wrong answer
-  means these are not the registers of this processor, and nothing is set.
-- **The task runs this executable elevated, so it is only registered when nobody without administrator rights
-  can replace that file** (Debug builds skip the check). Never weaken this: from anywhere else a program could
-  put its own code in its place and get administrator rights without a prompt.
-  - The check reads the permissions (`TdpHelper.LocationIsProtected`, decided by `Core/ElevatedLocation`): the
-    file and its folder must be owned by, and writable only for, administrators, SYSTEM or TrustedInstaller, and
-    no folder above may let anyone else delete or rename it or what is inside it, change permissions or take
-    ownership (a folder that can be renamed can have another one put in its place).
-    Creating new folders further up does not count: Windows lets everyone do that at the root of a drive.
-  - It runs twice: before DockSense asks for approval, and again in the elevated `--install-tdp-helper` itself,
-    because that command can be started by anyone. A write test would not do there: elevated, it always succeeds.
-- The helper takes the mutex hardware tools share for SMU access (`Global\Access_PCI`). If another tool holds it
-  for more than 2 s, or the mutex cannot be opened at all, nothing is sent (`TdpWriteResult.Busy`) and DockSense tries again, up to three times.
-- Registering the task from an agent shell is blocked; the user does that step in the UI.
+- Neither elevated command writes to the log: it is in the user's folders.
+
+### Where the helper may run from
+
+**The task runs this executable elevated, so it is only registered when nobody without administrator rights can
+replace that file** (Debug builds skip the check; they are not distributed). Never weaken this.
+
+The check reads the permissions (`TdpHelper.LocationIsProtected`, decided by `Core/ElevatedLocation`, unit tested):
+
+- The file and its folder must be owned by, and changeable only for, administrators, SYSTEM or TrustedInstaller.
+- The folder directly above must not let anyone else create folders: the task keeps the path, so a path that
+  could be brought back after the installation is moved or removed is not acceptable. Directly under Program
+  Files passes; directly under the root of a drive does not.
+- No folder further up may let anyone else delete or rename it, change its permissions or take ownership.
+- The path must be a plain one on a fixed local drive, without a junction or link anywhere in it.
+
+It runs twice: before DockSense asks for approval, and again in the elevated `--install-tdp-helper` itself. A
+write test would not do there: elevated, it always succeeds.
+
+### What the helper sends
+
+- It takes the mutex hardware tools share for SMU access (`Global\Access_PCI`). If another tool holds it for more
+  than 2 s, or the mutex cannot be opened at all, nothing is sent (`TdpWriteResult.Busy`), and DockSense tries
+  again, up to three times.
+- The SMU's test message must answer correctly (argument plus one) before any limit is sent. A wrong answer means
+  these are not the registers of this processor, and nothing is set.
+- The value is clamped for the power source right before it is sent, after the wait for the mutex.
+- One request: wait until the mailbox is idle, write the arguments, clear the response, write the command, wait
+  for the response. The response is cleared only once the arguments are in place, so a failure before the
+  command leaves the mailbox as it was found.
+- The results tell apart what DockSense has to do afterwards: `Rejected` and `Failed` changed nothing;
+  `PartlyApplied` means a limit may be in force (an earlier one went in, or one was handed to the SMU and no
+  answer came back).
 
 ## Keeping it in force, and giving it back
 
 - `DockSenseService` sends the value when the mode's profile is applied, and again 3 s after anything that may
   have replaced it: a power source change, resume, a power plan change, Armoury Crate writing its throttle
-  settings (`Platform/ArmouryCrate` watches that registry key). One write runs at a time.
-- `tdp.json` remembers the value in force for this boot. A restart of the PC clears every limit. The record is
-  written before a value is sent, marked as on its way: if DockSense is closed while the helper runs, the next
-  start counts that value as in force and can give it back.
-- A mode without an override then gets the TDP handed back: DockSense re-sends the performance mode Armoury Crate
-  has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. If that
-  fails, the value stays on record, so Status keeps showing it and the next apply tries again. Removing the
-  helper task hands back as well; when a write is still on its way, once that write has returned.
-- If the helper was started but does not report back within 20 s (`TdpWriteResult.Unconfirmed`), it may still set
-  the value, so the value stays on record as possibly in force.
-- If the SMU takes one limit and then refuses another, or a limit is sent and no answer comes back
-  (`TdpWriteResult.PartlyApplied`), the mix is not left
-  behind: DockSense puts it on record and hands the TDP back at once.
+  settings (`Platform/ArmouryCrate` watches that registry key and reopens it if it is replaced). One write runs
+  at a time.
+- `tdp.json` remembers the value in force for this boot; a restart of the PC clears every limit. The record is
+  written before a value is sent, marked as pending, and nothing is sent when it cannot be written. If DockSense
+  is closed while the helper runs, the next start counts that value as possibly in force and can give it back.
+- A mode without an override gets the TDP handed back: DockSense re-sends the performance mode Armoury Crate has
+  selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. Only Silent,
+  Performance and Turbo can be re-sent; for anything else (Manual, Windows, no Armoury Crate) it is Turbo on AC
+  and Performance on battery, and the READMEs say so. If the hand-back fails, the value stays on record, Status
+  keeps showing it, and the next apply tries again, also at a start after an update.
+- Removing the helper task hands back as well, also while switching is paused; when a write is still on its way,
+  once that write has returned.
+- DockSense waits for the helper longer than the task may run (75 s against the task's limit of one minute), so
+  that giving up means the task is no longer there to set anything late. A helper that did not report back, or
+  ended with a code it does not use, is `TdpWriteResult.Unconfirmed`: the value stays on record as possibly in
+  force, and Status shows it as unconfirmed.
+- After `PartlyApplied` the mix is not left behind: DockSense puts it on record and hands the TDP back at once.
 - What an override needs (the driver, the task) is looked at again whenever the user acts on it, so installing
-  PawnIO while DockSense is open is noticed without a restart.
+  PawnIO while DockSense is open is noticed without a restart. A value whose last attempt failed is sent again
+  then.
 
 ## The Mode profiles row
 
 A switch (off = the vendor software decides) and, while it is on, `Views/OptionSlider`: a slider with an input
 box for the watts. It passes the choice on only when it is final (slider let go, 400 ms after a key or a click
-on the track, Enter or leaving the box), because a choice can open a dialog or start the helper.
+on the track, Enter or leaving the box, leaving the page), because a choice can open a dialog or start the
+helper. Typed text has to be one plain number, with a unit after it at most.
+
+- A profile that never had a value starts at the highest one the manufacturer allows on either power source, so
+  switching the override on never asks about exceeding the maximum.
+- The question about going above the maximum names the watts and covers that value and lower ones. Going higher
+  asks again, and so does a value kept from another device.
+- A value saved for another device stays in the settings, whatever this device supports.
 
 The user wants a slider plus an input box for the TDP, a dropdown for iGPU memory, and no "Don't change" entry
 mixed in with the watt values (2026-11-26).
+
+## Known limits
+
+Raised in review of PR #12 and not solved; decide before treating the feature as more than experimental.
+
+- **The helper trusts more than its own file.** The location check covers the executable and its path. The
+  release is a single-file build that unpacks native libraries into the user's temporary folder at start, and a
+  process started in the user's session inherits the user's environment. The helper path itself loads no
+  unpacked library, but nothing enforces that. A small separate helper with nothing but administrator-controlled
+  files behind it would be the robust form.
+- **The task stays when the installation goes.** Remove the helper under Settings before moving or deleting
+  DockSense; the uninstall steps in the READMEs say so.
+- **One record per user.** The limit applies to the whole PC, the record of it is in one user's profile. A second
+  user signing in during the same boot does not know of the first user's limit.
+- **What DockSense records is what it asked for**, clamped the way the helper clamps. It is not read back from
+  the hardware.
 
 ## Measurements
 

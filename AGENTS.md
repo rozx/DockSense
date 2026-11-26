@@ -37,7 +37,8 @@ build and start it again afterwards. More in `docs/dev/testing.md`.
   - Mode: `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld), `ModeStabilizer` (debounce).
   - Planners, one per thing a profile applies: `PowerPlanController`, `FsePlanner`, `IgpuMemoryPlanner`,
     `IgpuRestartPlanner`, `ProgramPlanner`, `TdpPlanner`. Also `PowerSettingCatalog`, `IgpuMemoryOptions` and
-    the rest of `Tdp.cs` (device limits, SMU commands, the helper task's definition).
+    the rest of `Tdp.cs` (device limits, SMU commands, the helper task's definition), and `ElevatedLocation`
+    (whether an executable sits where only administrators can replace it; the helper task depends on it).
   - Settings: `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`), `UiSettings`.
     `ModeProfile` has custom equality because of its `Programs` list.
   - Starting and updating: `StartupEntry`, `LogonTaskDefinition`, `Updates.cs`.
@@ -91,8 +92,8 @@ Each of these exists because something went wrong or would. The linked file has 
   Never tell everyone to unplug an eGPU before a restart. (`igpu-memory.md`)
 - **TDP:** the elevated helper task is only offered from a folder that needs admin to change, and the helper
   trusts nothing it is handed. Never send more than the firmware's own burst limit, keep the warning above the
-  manufacturer's maximum, and don't go after the limiter that pulls the Ally X back to 35 W: it is a thermal
-  protection. (`tdp-override.md`)
+  manufacturer's maximum, and don't go after the limiter that pulls the ROG Xbox Ally X (RC74XA, the one device
+  measured) back to 35 W: it is a thermal protection. (`tdp-override.md`)
 - **Live FSE switches and programs never run on "settings changed"** (`ApplyReason`): editing a profile must not
   yank the screen away or start things.
 - **Updates:** never replace the file of a running single-file DockSense, and never change the meaning of the

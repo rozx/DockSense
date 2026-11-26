@@ -89,11 +89,16 @@ internal static class LogonTaskRegistration
     }
 
     /// <summary>The root task folder (late-bound <c>ITaskFolder</c>), or null without Task Scheduler.</summary>
-    internal static dynamic? OpenRootFolder()
+    /// <param name="quiet">Do not write to the log (for callers that run elevated: the log is in the user's folders).</param>
+    internal static dynamic? OpenRootFolder(bool quiet = false)
     {
         if (Type.GetTypeFromProgID("Schedule.Service") is not { } type || Activator.CreateInstance(type) is not { } instance)
         {
-            Log.Warn("Task Scheduler is not available.");
+            if (!quiet)
+            {
+                Log.Warn("Task Scheduler is not available.");
+            }
+
             return null;
         }
 

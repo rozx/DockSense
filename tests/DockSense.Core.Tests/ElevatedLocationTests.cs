@@ -97,9 +97,19 @@ public sealed class ElevatedLocationTests
     [Fact]
     public void Creating_new_folders_further_up_does_not_matter()
     {
-        var above = ProgramFiles with { Grants = [.. ProgramFiles.Grants, new(Users, LocationRights.ChangeContents)] };
+        // The drive root lets everyone create folders, two levels above the installation: fine.
+        Assert.True(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [ProgramFiles, DriveRoot]));
+    }
 
-        Assert.True(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [above, DriveRoot]));
+    [Fact]
+    public void A_folder_directly_under_one_where_everyone_may_create_folders_is_not()
+    {
+        // C:\DockSense, with its own permissions in order: once it is moved or removed, anyone could create a
+        // folder of that name again, and the task still names the path.
+        Assert.False(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [DriveRoot]));
+
+        var above = ProgramFiles with { Grants = [.. ProgramFiles.Grants, new(Users, LocationRights.ChangeContents)] };
+        Assert.False(ElevatedLocation.IsProtected(InstalledFile, InstalledFolder, [above, DriveRoot]));
     }
 
     [Fact]

@@ -43,7 +43,12 @@ internal static class TdpHelper
     private const int TaskStillRunning = 0x41301;
 
     private static readonly TimeSpan SetupTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>Longer than the task's own execution limit of one minute (<see cref="TdpHelperTask.BuildXml"/>).</summary>
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(75);
+
+    private static readonly TimeSpan MinimumGap = TimeSpan.FromSeconds(2.5);
+    private static DateTime lastStartUtc = DateTime.MinValue;
 
     /// <summary>True on a device and processor DockSense can set the TDP of.</summary>
     public static bool IsSupported => TdpWriter.Device is not null && TdpWriter.Commands is not null;
@@ -85,17 +90,33 @@ internal static class TdpHelper
                     return false;
                 }
 
-                var ancestors = new List<LocationAccess>();
-                for (var above = folder.Parent; above is not null; above = above.Parent)
+                // Only a plain path on a fixed local drive can be judged by its permissions: the task stores the
+                // path as it is spelled, and a link anywhere in it could later lead somewhere else than the
+                // place whose permissions were read here.
+                if (new DriveInfo(file.FullName).DriveType != DriveType.Fixed || IsLink(file))
                 {
-                    ancestors.Add(ReadAccess(above.GetAccessControl(AccessSections)));
+                    return false;
+                }
+
+                var ancestors = new List<LocationAccess>();
+                for (var above = folder; above is not null; above = above.Parent)
+                {
+                    if (IsLink(above))
+                    {
+                        return false;
+                    }
+
+                    if (above != folder)
+                    {
+                        ancestors.Add(ReadAccess(above.GetAccessControl(AccessSections)));
+                    }
                 }
 
                 return ElevatedLocation.IsProtected(
                     ReadAccess(file.GetAccessControl(AccessSections)), ReadAccess(folder.GetAccessControl(AccessSections)), ancestors);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
-                or InvalidOperationException or IdentityNotMappedException)
+                or InvalidOperationException or IdentityNotMappedException or Win32Exception or ArgumentException)
             {
                 return false;
             }
@@ -103,6 +124,9 @@ internal static class TdpHelper
     }
 
     private const AccessControlSections AccessSections = AccessControlSections.Access | AccessControlSections.Owner;
+
+    /// <summary>True for a junction, a symbolic link or any other reparse point.</summary>
+    private static bool IsLink(FileSystemInfo entry) => entry.Attributes.HasFlag(FileAttributes.ReparsePoint);
 
     private static LocationAccess ReadAccess(FileSystemSecurity security)
     {
@@ -122,8 +146,16 @@ internal static class TdpHelper
         return new LocationAccess(owner, grants);
     }
 
-    /// <summary>True when the helper task is registered for this copy of DockSense.</summary>
-    public static bool IsInstalled => TdpHelperTask.Starts(ReadTask(), ExecutablePath);
+    /// <summary>
+    /// True when the helper task is registered for this copy of DockSense, enabled, and set to run with the
+    /// highest privileges. A task changed to run without them could not open the driver.
+    /// </summary>
+    public static bool IsInstalled => ReadTaskXml() is { } xml
+        && TdpHelperTask.RunsElevated(xml)
+        && TdpHelperTask.Starts(LogonTaskDefinition.Parse(xml), ExecutablePath);
+
+    /// <summary>True when a task with the helper's name exists for this user, whatever it does.</summary>
+    public static bool TaskExists => ReadTaskXml() is not null;
 
     /// <summary>What, if anything, keeps a TDP override from being written.</summary>
     public static TdpReadiness Readiness() =>
@@ -133,13 +165,22 @@ internal static class TdpHelper
         : TdpReadiness.Ready;
 
     /// <summary>For the diagnostic report.</summary>
-    public static string DescribeTask() => ReadTask() switch
+    public static string DescribeTask()
     {
-        null => "not registered",
-        { } task when !LogonTaskDefinition.Starts(task, ExecutablePath, TdpHelperTask.Arguments) => $"starts something else: {task.Command} {task.Arguments}",
-        { Enabled: false } => "registered, but disabled",
-        _ => "registered",
-    };
+        if (ReadTaskXml() is not { } xml)
+        {
+            return "not registered";
+        }
+
+        return LogonTaskDefinition.Parse(xml) switch
+        {
+            null => "registered, but not a task that starts a program",
+            { } task when !LogonTaskDefinition.Starts(task, ExecutablePath, TdpHelperTask.Arguments) => $"starts something else: {task.Command} {task.Arguments}",
+            { Enabled: false } => "registered, but disabled",
+            _ when !TdpHelperTask.RunsElevated(xml) => "registered, but not set to run with the highest privileges",
+            _ => "registered",
+        };
+    }
 
     /// <summary>Registers the helper task. Windows asks for administrator approval.</summary>
     public static TdpSetupResult Install() => RunElevated(InstallArgument, expectInstalled: true);
@@ -148,8 +189,9 @@ internal static class TdpHelper
     public static TdpSetupResult Remove() => RunElevated(RemoveArgument, expectInstalled: false);
 
     /// <summary>
-    /// Starts the helper task with <paramref name="watts"/> and waits for it. Blocks for up to
-    /// <see cref="WriteTimeout"/>; call it off the UI thread.
+    /// Starts the helper task with <paramref name="watts"/> and waits for it. Blocks until the task has ended
+    /// (normally well under a second, at most <see cref="WriteTimeout"/>); call it off the UI thread, one call
+    /// at a time.
     /// </summary>
     public static TdpWriteResult Write(int watts)
     {
@@ -162,10 +204,22 @@ internal static class TdpHelper
             }
 
             var name = TdpHelperTask.NameFor(sid);
+
+            // The task reports its last run to the second. Runs are kept that far apart, so that the result read
+            // below can only belong to this one and not to the run before it.
+            var sinceLast = DateTime.UtcNow - lastStartUtc;
+            if (sinceLast < MinimumGap)
+            {
+                Thread.Sleep(MinimumGap - sinceLast);
+            }
+
             var started = DateTime.Now;
+            lastStartUtc = DateTime.UtcNow;
             var instance = folder.GetTask(name).Run(watts.ToString(System.Globalization.CultureInfo.InvariantCulture));
             running = true;
 
+            // Waited for longer than the task may run (Task Scheduler ends it after a minute), so that giving up
+            // means it is no longer there to set anything late.
             var clock = Stopwatch.StartNew();
             while (clock.Elapsed < WriteTimeout && IsRunning(instance))
             {
@@ -177,16 +231,17 @@ internal static class TdpHelper
             {
                 var task = folder.GetTask(name); // A fresh object: an old one keeps what it read first.
                 var exitCode = (int)task.LastTaskResult;
-                if ((DateTime)task.LastRunTime >= started.AddSeconds(-2) && exitCode != TaskStillRunning)
+                if ((DateTime)task.LastRunTime >= started.AddSeconds(-1) && exitCode != TaskStillRunning)
                 {
-                    return Enum.IsDefined(typeof(TdpWriteResult), exitCode) ? (TdpWriteResult)exitCode : TdpWriteResult.Failed;
+                    // Any code the helper does not use means it did not end by itself (ended by Task Scheduler,
+                    // or crashed), possibly after a limit had gone in.
+                    return Enum.IsDefined(typeof(TdpWriteResult), exitCode) ? (TdpWriteResult)exitCode : TdpWriteResult.Unconfirmed;
                 }
 
                 Thread.Sleep(50);
             }
 
-            // Giving up on waiting does not stop the task: it may still set the value.
-            Log.Warn("The TDP helper task did not finish in time.");
+            Log.Warn("The TDP helper task did not report back.");
             return TdpWriteResult.Unconfirmed;
         }
         catch (FileNotFoundException)
@@ -214,7 +269,8 @@ internal static class TdpHelper
 
         try
         {
-            if (LogonTaskRegistration.OpenRootFolder() is not { } folder)
+            // Quiet: this runs elevated, and the log is in the user's folders.
+            if (LogonTaskRegistration.OpenRootFolder(quiet: true) is not { } folder)
             {
                 return 1;
             }
@@ -290,7 +346,8 @@ internal static class TdpHelper
                 return TdpSetupResult.Failed;
             }
 
-            if (process.ExitCode != 0 || IsInstalled != expectInstalled)
+            // Installed means this copy's task, ready to use; removed means no task under that name at all.
+            if (process.ExitCode != 0 || (expectInstalled ? !IsInstalled : TaskExists))
             {
                 Log.Warn($"The TDP helper setup ({argument}) failed with exit code {process.ExitCode}; task: {DescribeTask()}.");
                 return TdpSetupResult.Failed;
@@ -310,7 +367,8 @@ internal static class TdpHelper
         }
     }
 
-    private static LogonTaskInfo? ReadTask()
+    /// <summary>The registered helper task as Task Scheduler XML, or null when there is none.</summary>
+    private static string? ReadTaskXml()
     {
         try
         {
@@ -319,7 +377,7 @@ internal static class TdpHelper
                 return null;
             }
 
-            return LogonTaskDefinition.Parse((string)folder.GetTask(TdpHelperTask.NameFor(sid)).Xml);
+            return (string)folder.GetTask(TdpHelperTask.NameFor(sid)).Xml;
         }
         catch (FileNotFoundException)
         {

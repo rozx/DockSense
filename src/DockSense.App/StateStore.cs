@@ -65,21 +65,32 @@ internal static class StateStore
     /// <summary>The TDP DockSense set and that is still in force, if any (null also after "no longer ours").</summary>
     public static TdpState? LoadTdp() => Load<TdpState>(TdpFile);
 
-    public static void SaveTdp(TdpState? state)
+    /// <summary>
+    /// Saves the record (null removes it). Returns false when that did not work: the record is what lets a later
+    /// start give the TDP back, so the caller does not send a value it could not put on record. The file is
+    /// replaced in one step, so a crash cannot leave half a record.
+    /// </summary>
+    public static bool SaveTdp(TdpState? state)
     {
-        if (state is not null)
-        {
-            Save(TdpFile, state);
-            return;
-        }
-
+        var path = Path.Combine(Log.DataDirectory, TdpFile);
         try
         {
-            File.Delete(Path.Combine(Log.DataDirectory, TdpFile));
+            if (state is null)
+            {
+                File.Delete(path);
+                return true;
+            }
+
+            Directory.CreateDirectory(Log.DataDirectory);
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(state));
+            File.Move(temp, path, overwrite: true);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Log.Warn($"Could not delete {TdpFile}: {ex.Message}");
+            Log.Warn($"Could not save {TdpFile}: {ex.Message}");
+            return false;
         }
     }
 
