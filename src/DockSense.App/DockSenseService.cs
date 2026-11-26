@@ -1292,10 +1292,11 @@ public sealed class DockSenseService : IDisposable
         // A limit set before a restart of the PC is gone; one set earlier in this boot is still DockSense's to
         // give back.
         var saved = StateStore.LoadTdp();
-        _tdpState = saved is not null && saved.Boot.IsSameBoot(CurrentBoot()) ? saved : null;
-        if (saved is not null && _tdpState is null)
+        _tdpState = saved is not null && saved.Boot.IsSameBoot(CurrentBoot()) ? saved with { Pending = false } : null;
+        if (saved is not null && (_tdpState is null || saved.Pending))
         {
-            StateStore.SaveTdp(null);
+            // A record from before a restart of the PC goes; one left "on its way" becomes an ordinary one.
+            StateStore.SaveTdp(_tdpState);
         }
 
         Log.Info($"TDP: {TdpDevice!.Board}, {TdpDevice.MinWatts}-{TdpDevice.CeilingWatts} W"
@@ -1389,7 +1390,15 @@ public sealed class DockSenseService : IDisposable
                 // The helper works this out by itself as well; this is for what DockSense shows and remembers.
                 var sent = device.Clamp(watts, SafeOnAcPower());
                 var reason = _tdpReason;
-                var result = TdpReadiness == TdpReadiness.Ready ? await Task.Run(() => TdpHelper.Write(watts)) : TdpWriteResult.Failed;
+                var result = TdpWriteResult.Failed;
+                if (TdpReadiness == TdpReadiness.Ready)
+                {
+                    // On record before it is sent: should DockSense be closed while the helper runs, the next
+                    // start still knows that a value may be in force and gives it back when no profile wants it.
+                    StateStore.SaveTdp(new TdpState(CurrentBoot(), sent, Pending: true));
+                    result = await Task.Run(() => TdpHelper.Write(watts));
+                }
+
                 OnTdpWritten(sent, result, reason);
             }
             while (_tdpWriteAgain);
@@ -1424,6 +1433,9 @@ public sealed class DockSenseService : IDisposable
             StateStore.SaveTdp(_tdpState);
             _tdpWarned = null;
             _tdpBusyRetries = 0;
+
+        // Nothing was changed, so the record goes back to what it was before this attempt.
+        StateStore.SaveTdp(_tdpState);
         if (result == TdpWriteResult.PartlyApplied)
         {
             // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the
@@ -1439,12 +1451,16 @@ public sealed class DockSenseService : IDisposable
         if (result == TdpWriteResult.Busy && _tdpBusyRetries < MaxTdpBusyRetries)
         {
             _tdpBusyRetries++;
+            StateStore.SaveTdp(_tdpState); // Nothing was sent: back to the record from before this attempt.
             Log.Info($"The SMU was busy; sending {sent} W again shortly (attempt {_tdpBusyRetries} of {MaxTdpBusyRetries}).");
             QueueTdpReassert(reason);
             return;
         }
 
         _tdpBusyRetries = 0;
+
+        // Nothing was changed, so the record goes back to what it was before this attempt.
+        StateStore.SaveTdp(_tdpState);
         if (result == TdpWriteResult.PartlyApplied)
         {
             // Some of the limits went in. That mix must not stay behind untracked: put it on record and give the

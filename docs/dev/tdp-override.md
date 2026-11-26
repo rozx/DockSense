@@ -50,7 +50,9 @@ PawnIO refuses callers without administrator rights (opening it fails with error
 - `DockSenseService` sends the value when the mode's profile is applied, and again 3 s after anything that may
   have replaced it: a power source change, resume, a power plan change, Armoury Crate writing its throttle
   settings (`Platform/ArmouryCrate` watches that registry key). One write runs at a time.
-- `tdp.json` remembers the value in force for this boot. A restart of the PC clears every limit.
+- `tdp.json` remembers the value in force for this boot. A restart of the PC clears every limit. The record is
+  written before a value is sent, marked as on its way: if DockSense is closed while the helper runs, the next
+  start counts that value as in force and can give it back.
 - A mode without an override then gets the TDP handed back: DockSense re-sends the performance mode Armoury Crate
   has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. If that
   fails, the value stays on record, so Status keeps showing it and the next apply tries again. Removing the

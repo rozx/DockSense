@@ -160,7 +160,12 @@ public enum TdpReadiness
 /// <summary>What DockSense remembers about the TDP it set, across its own restarts.</summary>
 /// <param name="Boot">The boot session it was set in: a restart of the PC clears every limit.</param>
 /// <param name="Watts">The value last sent.</param>
-public sealed record TdpState(BootSession Boot, int Watts);
+/// <param name="Pending">
+/// True in the file while the value is on its way and the outcome is not known yet. Found at the next start,
+/// DockSense was closed in that moment, and the value counts as in force: giving back a TDP that was never
+/// set does no harm, leaving one behind that nobody knows of does.
+/// </param>
+public sealed record TdpState(BootSession Boot, int Watts, bool Pending = false);
 
 /// <summary>
 /// The elevated helper task: a Task Scheduler task without triggers that runs DockSense with the highest

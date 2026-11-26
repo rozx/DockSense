@@ -480,7 +480,11 @@ public sealed partial class MainViewModel : ObservableObject
             profile.IgpuDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuDescAmd" : "Prof_IgpuDesc");
             profile.IgpuAskDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuAskDescAmd" : "Prof_IgpuAskDesc");
 
+            // The saved value is taken over whether or not this device can use it: saving a profile writes
+            // back what is here, and a TDP set up for another device must not be lost by editing something else.
             profile.TdpAvailable = tdpDevice is not null;
+            profile.SelectedTdp = config.TdpWatts ?? ModeProfileViewModel.TdpUnchanged;
+            profile.TdpEnabled = config.TdpWatts is not null;
             if (tdpDevice is not null)
             {
                 var tdpOptions = BuildTdpOptions(tdpDevice, config.TdpWatts);
@@ -491,8 +495,6 @@ public sealed partial class MainViewModel : ObservableObject
 
                 // Switched off, the slider keeps the last value; never used before, it starts at the manufacturer's
                 // maximum, which is what the vendor software's fastest mode sustains.
-                profile.SelectedTdp = config.TdpWatts ?? ModeProfileViewModel.TdpUnchanged;
-                profile.TdpEnabled = config.TdpWatts is not null;
                 profile.TdpWatts = config.TdpWatts ?? (tdpDevice.Offers(profile.TdpWatts) ? profile.TdpWatts : tdpDevice.PluggedIn.Max);
                 profile.TdpDescription = Loc.F("Prof_TdpDesc", tdpDevice.MinWatts, ManufacturerMaxText(tdpDevice));
 
