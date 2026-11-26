@@ -34,6 +34,7 @@ internal static class StateStore
     private const string IgpuMemoryFile = "igpu-memory.json";
     private const string IgpuRestartFile = "igpu-restart.json";
     private const string UpdateFile = "update.json";
+    private const string TdpFile = "tdp.json";
 
     /// <summary>Which plan DockSense owns and what to restore.</summary>
     public static PowerPlanState? Load() => Load<PowerPlanState>(PowerPlanFile);
@@ -58,6 +59,38 @@ internal static class StateStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Warn($"Could not remove {IgpuRestartFile}: {ex.Message}");
+        }
+    }
+
+    /// <summary>The TDP DockSense set and that is still in force, if any (null also after "no longer ours").</summary>
+    public static TdpState? LoadTdp() => Load<TdpState>(TdpFile);
+
+    /// <summary>
+    /// Saves the record (null removes it). Returns false when that did not work: the record is what lets a later
+    /// start give the TDP back, so the caller does not send a value it could not put on record. The file is
+    /// replaced in one step, so a crash cannot leave half a record.
+    /// </summary>
+    public static bool SaveTdp(TdpState? state)
+    {
+        var path = Path.Combine(Log.DataDirectory, TdpFile);
+        try
+        {
+            if (state is null)
+            {
+                File.Delete(path);
+                return true;
+            }
+
+            Directory.CreateDirectory(Log.DataDirectory);
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(state));
+            File.Move(temp, path, overwrite: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Could not save {TdpFile}: {ex.Message}");
+            return false;
         }
     }
 

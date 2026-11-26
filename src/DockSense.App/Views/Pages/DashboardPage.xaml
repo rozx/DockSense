@@ -65,6 +65,10 @@
                             <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Igpu}" FontSize="12" />
                             <TextBlock Text="{Binding IgpuText}" FontWeight="SemiBold" Margin="0,2,0,0" />
                         </StackPanel>
+                        <StackPanel Margin="0,0,40,6" Visibility="{Binding TdpVisible, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Tdp}" FontSize="12" />
+                            <TextBlock Text="{Binding TdpText}" FontWeight="SemiBold" Margin="0,2,0,0" />
+                        </StackPanel>
                         <StackPanel Margin="0,0,40,6">
                             <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Dash_Power}" FontSize="12" />
                             <TextBlock Text="{Binding PowerText}" FontWeight="SemiBold" Margin="0,2,0,0" />

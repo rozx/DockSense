@@ -111,6 +111,13 @@ public sealed record ModeProfile
     /// <summary>Whether <see cref="IgpuMemoryMb"/> is stored as soon as the mode starts, or only after the user agreed.</summary>
     public IgpuMemoryApply IgpuMemoryApply { get; init; }
 
+    /// <summary>
+    /// The processor's power limit (TDP) in watts to enforce in this mode, overriding what the vendor software
+    /// set; null = don't change. Only on devices DockSense knows the limits of (see <see cref="TdpDevice"/>), and
+    /// it needs the PawnIO driver and DockSense's elevated helper task.
+    /// </summary>
+    public int? TdpWatts { get; init; }
+
     // Value equality for the program list too, so an unchanged profile compares equal after a JSON round trip.
     public bool Equals(ModeProfile? other) =>
         other is not null
@@ -119,7 +126,8 @@ public sealed record ModeProfile
         && FseApplyImmediately == other.FseApplyImmediately
         && IgpuMemoryMb == other.IgpuMemoryMb
         && IgpuMemoryApply == other.IgpuMemoryApply
+        && TdpWatts == other.TdpWatts
         && Programs.SequenceEqual(other.Programs);
 
-    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, IgpuMemoryApply, Programs.Count);
+    public override int GetHashCode() => HashCode.Combine(PowerPlan, Fse, FseApplyImmediately, IgpuMemoryMb, IgpuMemoryApply, TdpWatts, Programs.Count);
 }

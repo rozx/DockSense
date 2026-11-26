@@ -43,6 +43,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The signed AMD SMU module for the PawnIO driver (see Assets\PawnIO\README.md), used for the TDP override. -->
+    <EmbeddedResource Include="Assets\PawnIO\RyzenSMU.bin" LogicalName="DockSense.RyzenSMU.bin" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />

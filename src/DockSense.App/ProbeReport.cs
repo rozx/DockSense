@@ -87,6 +87,8 @@ internal static class ProbeReport
 
         Section(text, null, () => AppendIgpuMemory(text));
 
+        Section(text, null, () => AppendTdp(text));
+
         Section(text, "Vendor firmware interfaces (ACPI devices):", () =>
         {
             foreach (var (id, name) in HardwareDiagnostics.VendorAcpiDevices())
@@ -226,7 +228,7 @@ internal static class ProbeReport
             var memory = profile.IgpuMemoryMb is { } megabytes
                 ? $"{(megabytes == 0 ? "Auto" : $"{megabytes} MB")} ({profile.IgpuMemoryApply})"
                 : "unchanged";
-            Line(text, 2, mode.ToString(), $"plan {plan}; FSE {profile.Fse}, switch immediately {profile.FseApplyImmediately}; iGPU memory {memory}; {profile.Programs.Count} program(s)");
+            Line(text, 2, mode.ToString(), $"plan {plan}; FSE {profile.Fse}, switch immediately {profile.FseApplyImmediately}; iGPU memory {memory}; TDP {(profile.TdpWatts is { } watts ? $"{watts} W" : "unchanged")}; {profile.Programs.Count} program(s)");
         }
 
         var detection = config.Detection;
@@ -283,5 +285,28 @@ internal static class ProbeReport
         {
             return $"? {ex.GetType().Name}";
         }
+    }
+
+    /// <summary>What the TDP override would work with here. Reads only; nothing is sent to the driver.</summary>
+    private static void AppendTdp(StringBuilder text)
+    {
+        // The board is in the device facts above; this is the processor as the SMU commands are chosen by it.
+        Line(text, 0, "Processor", $"{TdpWriter.DescribeProcessor()}{(TdpWriter.Commands is null ? " (no SMU commands known)" : string.Empty)}");
+        Line(text, 0, "TDP limits", TdpWriter.Device is { } device
+            ? $"{device.Board}: {device.MinWatts} W to {device.PluggedIn.Max} W plugged in / {device.OnBattery.Max} W on battery; never more than {device.PluggedIn.Ceiling} W / {device.OnBattery.Ceiling} W"
+            : $"not known for this board ({TdpWriter.BoardName ?? "-"})");
+        Line(text, 0, "PawnIO driver", PawnIo.IsInstalled ? $"installed{(PawnIo.InstalledVersion is { } version ? $" ({version})" : string.Empty)}" : "not installed");
+        Line(text, 0, "TDP helper task", $"{TdpHelper.DescribeTask()}; install folder protected: {TdpHelper.LocationIsProtected}");
+        Line(text, 0, "Armoury Crate mode", $"{ArmouryCrate.SelectedMode(DeviceProbe.OnAcPower)?.ToString() ?? "-"} (for the current power source)");
+        // The record as it is on disk: the running DockSense may not have looked at it since the PC restarted,
+        // and a value can be on its way while this report is written.
+        Line(text, 0, "TDP set by DockSense", StateStore.LoadTdp() switch
+        {
+            null => "none",
+            { Boot: null } => "a record without its boot session (ignored)",
+            { } state when !state.Boot.IsSameBoot(DockSenseService.CurrentBoot()) => $"{state.Watts} W before the last restart of the PC (no longer in force)",
+            { Pending: true } state => $"{state.Watts} W, not confirmed (on its way, or its outcome stayed open)",
+            { } state => $"{state.Watts} W",
+        });
     }
 }

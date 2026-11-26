@@ -52,6 +52,16 @@
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding ReassertPowerPlan}" />
         </ui:CardControl>
+        <!-- The elevated task that sets the TDP; only shown while it is registered. -->
+        <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Flash24}" Visibility="{Binding TdpHelperInstalled, Converter={StaticResource BoolToVisibility}}">
+            <ui:CardControl.Header>
+                <StackPanel Margin="0,0,24,0">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Set_TdpHelper}" />
+                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Set_TdpHelperDesc}" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:Button AutomationProperties.Name="{loc:T Tdp_RemoveConfirm}" Command="{Binding RemoveTdpHelperCommand}" Content="{loc:T Tdp_RemoveConfirm}" />
+        </ui:CardControl>
 
         <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:T Set_Notifications}" />
         <ui:CardControl Margin="0,0,0,6" Icon="{ui:SymbolIcon Power24}">

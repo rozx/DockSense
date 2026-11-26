@@ -2,8 +2,8 @@
 
 DockSense is an open-source Windows tray app for PC gaming handhelds (first target: ASUS ROG Xbox Ally X, Ryzen
 AI Z2 Extreme). It works out the device's **mode** (**Handheld**, **Docked** = external display, or **eGPU**) and
-applies that mode's profile: power plan, Xbox full screen experience (FSE, "Xbox mode"), iGPU memory and programs
-to run.
+applies that mode's profile: power plan, Xbox full screen experience (FSE, "Xbox mode"), iGPU memory, a TDP
+override and programs to run.
 
 This file holds what every session needs. Measurements, registry paths and the reasoning behind a design live in
 `docs/dev/` (list at the end): **read the file for the area before changing it, and put new findings there, not
@@ -36,7 +36,9 @@ build and start it again afterwards. More in `docs/dev/testing.md`.
 - `src/DockSense.Core` (net10.0): pure logic, no Windows APIs, fully unit tested.
   - Mode: `HardwareClassifier`, `ModeResolver` (eGPU > Docked > Handheld), `ModeStabilizer` (debounce).
   - Planners, one per thing a profile applies: `PowerPlanController`, `FsePlanner`, `IgpuMemoryPlanner`,
-    `IgpuRestartPlanner`, `ProgramPlanner`. Also `PowerSettingCatalog` and `IgpuMemoryOptions`.
+    `IgpuRestartPlanner`, `ProgramPlanner`, `TdpPlanner`. Also `PowerSettingCatalog`, `IgpuMemoryOptions` and
+    the rest of `Tdp.cs` (device limits, SMU commands, the helper task's definition), and `ElevatedLocation`
+    (whether an executable sits where only administrators can replace it; the helper task depends on it).
   - Settings: `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`), `UiSettings`.
     `ModeProfile` has custom equality because of its `Programs` list.
   - Starting and updating: `StartupEntry`, `LogonTaskDefinition`, `Updates.cs`.
@@ -48,7 +50,7 @@ build and start it again afterwards. More in `docs/dev/testing.md`.
     activity log and the config stay in sync.
   - `Platform/`: everything that touches Windows or hardware (SetupAPI, display config, powrprof, the
     notifications window, FSE, `AsusAcpi`, `AmdAdlx`, `AutoStart`, Task Scheduler, `UpdateInstaller`,
-    `HardwareDiagnostics`).
+    `HardwareDiagnostics`, and for the TDP `PawnIo`, `TdpWriter`, `TdpHelper`, `ArmouryCrate`).
   - `Services/`: `Appearance` (the zinc palette: it overrides WPF-UI brush keys in Application.Resources and
     follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications), `TrayIconService` (H.NotifyIcon),
     `IconAssets`, `Dialogs` (WPF-UI `ContentDialogHost` in MainWindow), `UpdateService`.
@@ -73,8 +75,9 @@ build and start it again afterwards. More in `docs/dev/testing.md`.
 
 Each of these exists because something went wrong or would. The linked file has the story.
 
-- **No admin rights, no driver, no service.** The one exception: updating a copy in a protected folder asks for
-  UAC once per update.
+- **No admin rights, no driver, no service.** Two exceptions: updating a copy in a protected folder asks for UAC
+  once per update, and the optional TDP override uses the PawnIO driver (which the user installs) and asks once
+  to register its helper task.
 - **Never decide the mode from AC power alone**, and never from vendor IDs. AC drops about 10 s before Windows
   removes the eGPU. (`detection-and-power.md`)
 - **Other software changes the power plan back.** Re-assert it, with the give-up guard. (`detection-and-power.md`)
@@ -87,6 +90,10 @@ Each of these exists because something went wrong or would. The linked file has 
   route is unverified on real hardware: keep its "experimental" label and its ask-first rule. (`igpu-memory.md`)
 - **Restarting Windows is always the user's click.** A toast button acts only while what it offered still stands.
   Never tell everyone to unplug an eGPU before a restart. (`igpu-memory.md`)
+- **TDP:** the elevated helper task is only offered from a folder that needs admin to change, and the helper
+  trusts nothing it is handed. Never send more than the firmware's own burst limit, keep the warning above the
+  manufacturer's maximum, and don't go after the limiter that pulls the ROG Xbox Ally X (RC74XA, the one device
+  measured) back to 35 W: it is a thermal protection. (`tdp-override.md`)
 - **Live FSE switches and programs never run on "settings changed"** (`ApplyReason`): editing a profile must not
   yank the screen away or start things.
 - **Updates:** never replace the file of a running single-file DockSense, and never change the meaning of the
@@ -110,6 +117,9 @@ Each of these exists because something went wrong or would. The linked file has 
 - The About page credits the author **rozx** (github.com/rozx).
 - **iGPU memory** (2026-11-26): storing the size automatically stays the default on ASUS; the AMD driver route
   ships as experimental.
+- **TDP override** (2026-11-26): custom watts only, no Silent / Performance / Turbo presets. In the UI it is a
+  switch plus a slider with an input box, with no "Don't change" entry among the watt values; iGPU memory stays a
+  dropdown. The range goes up to the firmware's burst limit even where it does not sustain.
 
 ## Releasing
 
@@ -128,6 +138,7 @@ version has no CHANGELOG section.
 | `full-screen-experience.md` | anything FSE: its registry values, the live API, startup apps in Xbox mode |
 | `sign-in-start.md` | the sign-in task, the fast path, start-up timing |
 | `igpu-memory.md` | iGPU memory (ASUS and AMD driver), the ask-first flow, restarts, "Restart for `<mode>`" |
+| `tdp-override.md` | the TDP override: PawnIO and the SMU, the elevated helper task, what was measured |
 | `updates.md` | the updater and its installer contract |
 | `testing.md` | trying a build on the real machine, UI screenshots and clicks, touch, shell and build quirks |
 

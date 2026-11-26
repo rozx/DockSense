@@ -31,6 +31,18 @@ internal static class Program
             return UpdateInstaller.ApplyFromCommandLine(args);
         }
 
+        // The elevated halves of the TDP override (see TdpHelper and TdpWriter). No UI, and they run next to the
+        // DockSense that is already open.
+        if (args.Length > 0 && args[0].Equals(TdpHelperTask.Argument, StringComparison.OrdinalIgnoreCase))
+        {
+            return TdpWriter.RunFromCommandLine(args);
+        }
+
+        if (args.Length > 0 && args[0].Equals(TdpHelper.InstallArgument, StringComparison.OrdinalIgnoreCase))
+        {
+            return TdpHelper.SetupFromCommandLine(args);
+        }
+
         using var singleInstance = new Mutex(initiallyOwned: true, @"Local\DockSense", out var isFirstInstance);
         using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockSense.Show");
         if (!isFirstInstance && args.Contains(UpdateInstaller.AfterUpdateArgument, StringComparer.OrdinalIgnoreCase))

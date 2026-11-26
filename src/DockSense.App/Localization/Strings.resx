@@ -334,4 +334,45 @@
   <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>The AMD graphics driver did not store the iGPU memory ({0}). This feature is experimental: please report it on GitHub.</value></data>
   <data name="Act_IgpuAmdNoAnswer" xml:space="preserve"><value>The AMD graphics driver has not answered yet, so it is not known whether the iGPU memory was stored. DockSense did not restart the PC and will say what came of it. This feature is experimental: please report it on GitHub.</value></data>
   <data name="Prof_IgpuAskDescAmd" xml:space="preserve"><value>Always on for this device: the AMD graphics driver may restart the PC as soon as a size is stored, so nothing is stored until you agree to a restart.</value></data>
+  <!-- TDP override per mode (PawnIO driver, elevated helper task) -->
+  <data name="Dash_Tdp" xml:space="preserve"><value>TDP</value></data>
+  <data name="Prof_Tdp" xml:space="preserve"><value>TDP override</value></data>
+  <data name="Prof_TdpDesc" xml:space="preserve"><value>The processor's power limit, enforced over what the vendor software sets. Manufacturer's range: {0} W to {1}. Needs the PawnIO driver.</value></data>
+  <data name="Prof_TdpWatts" xml:space="preserve"><value>TDP in watts</value></data>
+  <data name="Tdp_Watts" xml:space="preserve"><value>{0} W</value></data>
+  <data name="Tdp_WattsUnconfirmed" xml:space="preserve"><value>{0} W (unconfirmed)</value></data>
+  <data name="Tdp_NotOffered" xml:space="preserve"><value>{0} W (not offered)</value></data>
+  <data name="Tdp_MaxBySource" xml:space="preserve"><value>{0} W plugged in, {1} W on battery</value></data>
+  <data name="Tdp_MaxOnBattery" xml:space="preserve"><value>{0} W on battery</value></data>
+  <data name="Tdp_Warning" xml:space="preserve"><value>{0} W is above the manufacturer's maximum of {1}. This can overheat the device, wear out the battery and damage the hardware. Once the device is hot, its firmware may still pull the power back to its own limit.</value></data>
+  <data name="Tdp_WarningTitle" xml:space="preserve"><value>Go above the manufacturer's maximum?</value></data>
+  <data name="Tdp_WarningMessage" xml:space="preserve"><value>{0} W is more than the manufacturer allows for this device ({1}). Running above that limit can overheat the device, wear out the battery and damage the hardware, and the warranty may not cover it. You do this at your own risk. Once saved, your answer covers this value and lower ones in every mode's profile. It is kept with your settings, also when they are copied to another device of exactly this model.</value></data>
+  <data name="Tdp_WarningConfirm" xml:space="preserve"><value>Set anyway</value></data>
+  <data name="Tdp_SetupTitle" xml:space="preserve"><value>Allow DockSense to set the TDP?</value></data>
+  <data name="Tdp_SetupMessage" xml:space="preserve"><value>Setting the TDP needs administrator rights. Windows asks for your approval once. DockSense then registers a task that sets the TDP when a mode begins, without further prompts, while DockSense itself keeps running without administrator rights. You can remove the task under Settings.</value></data>
+  <data name="Tdp_SetupConfirm" xml:space="preserve"><value>Continue</value></data>
+  <data name="Tdp_NoteDriverMissing" xml:space="preserve"><value>Not applied: the PawnIO driver is not installed.</value></data>
+  <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>Not applied: DockSense needs a protected installation for this. Copy it into a new folder under Program Files (copy, don't move: a moved file keeps its old permissions), quit DockSense from the tray, then start the copy in Program Files.</value></data>
+  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>Not applied: {0} W is above the manufacturer's maximum and has not been confirmed on this device.</value></data>
+  <data name="Tdp_Confirm" xml:space="preserve"><value>Confirm</value></data>
+  <data name="Tdp_NoteHelperMissing" xml:space="preserve"><value>Not applied: administrator approval is missing.</value></data>
+  <data name="Tdp_GetDriver" xml:space="preserve"><value>Get PawnIO</value></data>
+  <data name="Tdp_SetUp" xml:space="preserve"><value>Set up</value></data>
+  <data name="Tdp_RemoveTitle" xml:space="preserve"><value>Remove the TDP helper?</value></data>
+  <data name="Tdp_RemoveMessage" xml:space="preserve"><value>Windows asks for administrator approval. Afterwards DockSense can no longer set the TDP. The values in your mode profiles stay, and choosing one sets the helper up again.</value></data>
+  <data name="Tdp_RemoveConfirm" xml:space="preserve"><value>Remove</value></data>
+  <data name="Set_TdpHelper" xml:space="preserve"><value>TDP helper</value></data>
+  <data name="Set_TdpHelperDesc" xml:space="preserve"><value>A task that runs DockSense with administrator rights to set the TDP of a mode profile.</value></data>
+  <data name="Act_Tdp" xml:space="preserve"><value>TDP set to {0} W</value></data>
+  <data name="Act_TdpHandedBack" xml:space="preserve"><value>TDP handed back to the vendor software</value></data>
+  <data name="Act_TdpHandBackFailed" xml:space="preserve"><value>Could not hand the TDP back to the vendor software. {0} W stays until its mode changes or the PC restarts.</value></data>
+  <data name="Act_TdpHandBackFailedUnknown" xml:space="preserve"><value>The TDP may be partly changed, and it could not be handed back to the vendor software. Select a mode in the vendor software, or restart the PC, to put it right.</value></data>
+  <data name="Act_TdpNeedsConfirmation" xml:space="preserve"><value>The TDP of {0} W was not set: it is above the manufacturer's maximum and has not been confirmed on this device. Confirm it under Mode profiles.</value></data>
+  <data name="Act_TdpDriverMissing" xml:space="preserve"><value>Could not set the TDP: the PawnIO driver is not installed.</value></data>
+  <data name="Act_TdpUnprotected" xml:space="preserve"><value>Could not set the TDP: DockSense must be installed in a folder of its own under Program Files.</value></data>
+  <data name="Act_TdpHelperMissing" xml:space="preserve"><value>Could not set the TDP: administrator approval is missing. Set it up under Mode profiles.</value></data>
+  <data name="Act_TdpFailed" xml:space="preserve"><value>Could not set the TDP ({0}).</value></data>
+  <data name="Act_TdpHelperInstalled" xml:space="preserve"><value>TDP helper set up</value></data>
+  <data name="Act_TdpHelperRemoved" xml:space="preserve"><value>TDP helper removed</value></data>
+  <data name="Act_TdpHelperFailed" xml:space="preserve"><value>Could not change the TDP helper. It needs an administrator account; details are in the log.</value></data>
 </root>
