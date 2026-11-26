@@ -52,6 +52,9 @@ public static class IgpuRestartPlanner
     /// <param name="config">The current configuration.</param>
     /// <param name="firmware">The sizes the firmware offers.</param>
     /// <param name="effectiveRaw">The raw firmware value in effect during this Windows session.</param>
+    /// <summary>How long after a restart was asked for a boot may begin and still count as coming from it.</summary>
+    public static readonly TimeSpan LongestRestart = TimeSpan.FromHours(2);
+
     public static DockMode? AwaitedMode(
         IgpuRestartTarget? target, BootSession boot, DockMode current, DockSenseConfig config, IgpuMemoryOptions firmware, uint effectiveRaw)
     {
@@ -64,8 +67,10 @@ public static class IgpuRestartPlanner
             return null;
         }
 
-        // Only the boot that followed the restart: a later one was not started for that mode.
-        if (target.Boot.BootId is { } before && boot.BootId is { } now && now != before + 1)
+        // Only a boot the PC came back up in from that restart, not one days later. Boots are not counted: a
+        // restart can pass through more than one (the offline phase of a Windows update, Automatic Repair) before
+        // anyone signs in. The boot must have begun soon after the restart was asked for.
+        if (boot.StartedUtc - target.PreparedUtc > LongestRestart)
         {
             return null;
         }
@@ -99,8 +104,9 @@ public static class IgpuRestartPlanner
 /// </summary>
 /// <param name="Mode">The mode the user restarted for.</param>
 /// <param name="Boot">The boot during which they did, i.e. the one before the restart.</param>
+/// <param name="PreparedUtc">When they did.</param>
 /// <param name="WaitUntilUtc">
 /// Set once the PC is back up and DockSense waits for that mode: when the wait ends. It is kept with the record so
 /// that closing DockSense and starting it again does not end the wait, nor start it over.
 /// </param>
-public sealed record IgpuRestartTarget(DockMode Mode, BootSession Boot, DateTime? WaitUntilUtc = null);
+public sealed record IgpuRestartTarget(DockMode Mode, BootSession Boot, DateTime PreparedUtc, DateTime? WaitUntilUtc = null);

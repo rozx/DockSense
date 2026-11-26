@@ -74,7 +74,7 @@ public sealed class IgpuRestartPlannerTests
     {
         // "Restart for eGPU" as a handheld, and the eGPU gets connected only after sign-in.
         var config = Config(handheld: 8192, docked: null, egpu: 512);
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
 
         var awaited = IgpuRestartPlanner.AwaitedMode(target, Boot(42, minutesLater: 2), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1);
 
@@ -85,7 +85,7 @@ public sealed class IgpuRestartPlannerTests
     public void Does_not_wait_without_such_a_restart_or_when_the_pc_came_back_in_that_mode()
     {
         var config = Config(handheld: 8192, docked: null, egpu: 512);
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
 
         Assert.Null(IgpuRestartPlanner.AwaitedMode(null, Boot(42), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
         Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(42, minutesLater: 2), DockMode.Egpu, config, Firmware(currentRaw: 1), effectiveRaw: 1));
@@ -95,18 +95,30 @@ public sealed class IgpuRestartPlannerTests
     public void Does_not_wait_before_the_restart_or_on_a_later_boot()
     {
         var config = Config(handheld: 8192, docked: null, egpu: 512);
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
 
         // DockSense restarted, Windows did not (the user cancelled the restart).
         Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(41), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 16));
-        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(43, minutesLater: 90), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(43, minutesLater: 3 * 24 * 60), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
+    }
+
+    [Fact]
+    public void Waits_after_a_restart_that_passed_through_more_than_one_boot()
+    {
+        // The restart installed a Windows update: boot 42 never reached sign-in, DockSense first runs in boot 43.
+        var config = Config(handheld: 8192, docked: null, egpu: 512);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
+
+        var awaited = IgpuRestartPlanner.AwaitedMode(target, Boot(43, minutesLater: 25), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1);
+
+        Assert.Equal(DockMode.Egpu, awaited);
     }
 
     [Fact]
     public void Does_not_wait_when_the_size_in_effect_is_not_the_one_restarted_for()
     {
         // The profile was changed since, or another tool stored something else before the restart.
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
 
         Assert.Null(IgpuRestartPlanner.AwaitedMode(
             target, Boot(42, minutesLater: 2), DockMode.Handheld, Config(handheld: 8192, docked: null, egpu: 512), Firmware(currentRaw: 8), effectiveRaw: 8));
@@ -118,7 +130,7 @@ public sealed class IgpuRestartPlannerTests
     public void Without_a_boot_counter_the_start_time_tells_the_boots_apart()
     {
         var config = Config(handheld: 8192, docked: null, egpu: 512);
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(null));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(null), Started.AddMinutes(1));
 
         Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(null), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
         Assert.Equal(
@@ -130,7 +142,7 @@ public sealed class IgpuRestartPlannerTests
     public void The_wait_runs_in_full_until_it_has_begun_and_then_only_what_is_left_of_it()
     {
         var wait = TimeSpan.FromMinutes(5);
-        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
         var now = Started.AddMinutes(3);
 
         Assert.Equal(wait, IgpuRestartPlanner.RemainingWait(target, now, wait));
@@ -146,7 +158,7 @@ public sealed class IgpuRestartPlannerTests
     public void A_clock_set_back_does_not_make_the_wait_longer()
     {
         var wait = TimeSpan.FromMinutes(5);
-        var begun = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddHours(1));
+        var begun = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started, WaitUntilUtc: Started.AddHours(1));
 
         Assert.Equal(wait, IgpuRestartPlanner.RemainingWait(begun, Started, wait));
     }

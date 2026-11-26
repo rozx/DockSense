@@ -126,7 +126,7 @@
   <data name="About_Issue" xml:space="preserve"><value>Report an issue</value></data>
   <data name="About_Analysis" xml:space="preserve"><value>Read the Game Mode analysis</value></data>
   <data name="About_Diagnostics" xml:space="preserve"><value>Diagnostics</value></data>
-  <data name="About_DiagnosticsDesc" xml:space="preserve"><value>A read-only report of your adapters, displays, power plans and Game Mode overrides. Attach it when you report an issue.</value></data>
+  <data name="About_DiagnosticsDesc" xml:space="preserve"><value>A read-only report: the device (maker, model, board, BIOS), its graphics adapters and displays, power plans and Game Mode overrides, vendor services and running vendor programs, and your DockSense settings. No user or computer name. Attach it when you report an issue.</value></data>
   <data name="About_CopyReport" xml:space="preserve"><value>Copy diagnostic report</value></data>
   <data name="About_Copied" xml:space="preserve"><value>Copied to clipboard</value></data>
   <data name="About_License" xml:space="preserve"><value>DockSense is free software, licensed under the GNU General Public License v3.0.</value></data>
@@ -333,4 +333,5 @@
   <data name="Restart_AmdHint" xml:space="preserve"><value>Experimental: the iGPU memory is stored through the AMD graphics driver, which may restart the PC by itself. If anything goes wrong, please report it on GitHub (About &gt; Report an issue).</value></data>
   <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>The AMD graphics driver did not store the iGPU memory ({0}). This feature is experimental: please report it on GitHub.</value></data>
   <data name="Act_IgpuAmdNoAnswer" xml:space="preserve"><value>The AMD graphics driver has not answered yet, so it is not known whether the iGPU memory was stored. DockSense did not restart the PC and will say what came of it. This feature is experimental: please report it on GitHub.</value></data>
+  <data name="Prof_IgpuAskDescAmd" xml:space="preserve"><value>Always on for this device: the AMD graphics driver may restart the PC as soon as a size is stored, so nothing is stored until you agree to a restart.</value></data>
 </root>

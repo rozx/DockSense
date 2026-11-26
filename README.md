@@ -43,7 +43,7 @@ DockSense runs quietly in your system tray, watching for external GPUs, external
 - 🔔 **Native notifications & 🩺 Diagnostics.** Toast alerts on mode changes and program launches, a live Game Mode throttle check on the Status page, and a one-click diagnostic report.
 - ⬆️ **Self-updating.** Daily GitHub release checks verified with SHA-256 checksums, with one-click or automatic next-start updates (can be turned off).
 - 🌐 **English & 简体中文**, light and dark theme, and pixel-art tray icons for every state.
-- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus, for the optional iGPU memory, the ASUS ACPI interface or the AMD driver's own API. *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
+- 🪶 **Lightweight & zero-install.** No admin rights, no driver, no service—just documented Windows APIs plus, for the optional iGPU memory, the ASUS ACPI interface. *(The experimental AMD-driver route for other handhelds uses AMD's own API; whether that needs admin rights is not known yet.)* *(Updating a copy inside a protected folder such as Program Files asks for UAC once per update.)*
 
 ## How it works
 

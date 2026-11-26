@@ -72,6 +72,7 @@ public sealed class DockSenseService : IDisposable
     private IgpuMemoryOffer? _igpuAsked;
     private bool _amdDriverReadPending;
     private bool _amdStoreUnanswered;
+    private bool? _fseBeforeUnansweredStore;
     private bool _resumedInSameMode;
     private bool _disposed;
 
@@ -894,7 +895,7 @@ public sealed class DockSenseService : IDisposable
         {
             // Before the size is stored: the AMD driver may restart the PC by itself, and then nothing that
             // comes after the store runs. The next start needs to know which mode the restart was for.
-            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(offer.Mode, _igpuBoot?.Boot ?? CurrentBoot()));
+            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(offer.Mode, _igpuBoot?.Boot ?? CurrentBoot(), DateTime.UtcNow));
         }
 
         var stored = decision.Step == IgpuMemoryStep.None
@@ -955,7 +956,7 @@ public sealed class DockSenseService : IDisposable
         // and then nothing that comes after the store runs. It is taken back when the size cannot be stored.
         // First, the mode restarted for: if the PC comes back up before the dock or eGPU is connected, the size
         // stays for a while.
-        StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(mode, _igpuBoot?.Boot ?? CurrentBoot()));
+        StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(mode, _igpuBoot?.Boot ?? CurrentBoot(), DateTime.UtcNow));
 
         // Then the sign-in setting: Windows reads it when the shell starts after the restart, and DockSense itself
         // may be up too late.
@@ -976,7 +977,10 @@ public sealed class DockSenseService : IDisposable
         var stored = (fresh is not null && fresh.IsStored(raw)) || StoreIgpuMemory($"Restart for {mode}", target, raw);
         if (!stored && _amdStoreUnanswered)
         {
-            // Nothing is taken back: the request is still with the driver and may yet go through.
+            // Nothing is taken back: the request is still with the driver and may yet go through. Should it fail
+            // after all, the sign-in setting goes back to what it was, as on an immediate failure.
+            var changed = fseSet is not null && fseBefore is not null && fseBefore != fseSet;
+            _fseBeforeUnansweredStore = changed ? fseBefore : null;
             NotifyWarning(Loc.T("Act_IgpuAmdNoAnswer"));
         }
         else if (!stored)
@@ -1007,7 +1011,7 @@ public sealed class DockSenseService : IDisposable
     {
         if (IgpuMemoryPendingMb is { } pending && Config.ProfileFor(Mode).IgpuMemoryMb == pending)
         {
-            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(Mode, _igpuBoot?.Boot ?? CurrentBoot()));
+            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(Mode, _igpuBoot?.Boot ?? CurrentBoot(), DateTime.UtcNow));
         }
     }
 
@@ -1127,6 +1131,8 @@ public sealed class DockSenseService : IDisposable
     {
         var (stored, note) = await late;
         _amdStoreUnanswered = false;
+        var fseBefore = _fseBeforeUnansweredStore;
+        _fseBeforeUnansweredStore = null;
         if (_disposed)
         {
             return;
@@ -1142,10 +1148,14 @@ public sealed class DockSenseService : IDisposable
         }
         else
         {
-            // The sign-in setting a "Restart for <mode>" may have prepared is left: the next sign-in writes the
-            // setting of the mode the PC is in then.
+            // What was prepared for the restart is taken back, as on an immediate failure.
             Log.Warn($"{context}: the AMD driver answered late and did not store iGPU memory {megabytes} MB: {note}.");
             StateStore.ClearIgpuRestartTarget();
+            if (fseBefore is { } before && FseSettings.SetStartupToFse(before))
+            {
+                Log.Info($"{context}: no restart, so Full Screen Experience at sign-in is {(before ? "on" : "off")} again.");
+            }
+
             NotifyWarning(Loc.F("Act_IgpuAmdFailed", note));
         }
 

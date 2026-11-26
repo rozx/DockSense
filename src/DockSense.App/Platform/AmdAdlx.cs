@@ -254,6 +254,19 @@ internal static class AmdAdlx
     private static Task<(T? Value, string Problem)> OnOwnThread<T>(Func<(T? Value, string Problem)> work)
     {
         var completion = new TaskCompletionSource<(T? Value, string Problem)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // One ADLX session at a time. A call whose caller stopped waiting is still inside the library, with its
+        // interfaces held: a second session then, ending in ADLXTerminate, would pull the library from under it.
+        lock (Gate)
+        {
+            if (_inFlight is { IsCompleted: false })
+            {
+                return Task.FromResult<(T? Value, string Problem)>((default, Busy));
+            }
+
+            _inFlight = completion.Task;
+        }
+
         var thread = new Thread(() =>
         {
             try
@@ -276,6 +289,10 @@ internal static class AmdAdlx
 
     /// <summary>The note of a read on a PC without the AMD driver: nothing to try again later.</summary>
     public const string NoDriver = "no AMD driver with ADLX";
+
+    private const string Busy = "the AMD driver is still busy with an earlier request";
+    private static readonly object Gate = new();
+    private static Task? _inFlight;
 
     private static AdlxMemoryOption? ReadOption(IntPtr vgm, int slot)
     {

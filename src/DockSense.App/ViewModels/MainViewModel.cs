@@ -289,7 +289,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         try
         {
-            Clipboard.SetText(ProbeReport.Build(_service.Config));
+            // Not on the UI thread: the report asks the AMD driver among others, which can take seconds.
+            var config = _service.Config;
+            Clipboard.SetText(await Task.Run(() => ProbeReport.Build(config)));
             CopyReportText = Loc.T("About_Copied");
             await Task.Delay(2000);
         }
@@ -445,6 +447,7 @@ public sealed partial class MainViewModel : ObservableObject
             profile.IgpuExperimental = _service.IgpuMemoryViaAmdDriver;
             profile.IgpuAsk = profile.IgpuExperimental || config.IgpuMemoryApply == IgpuMemoryApply.Ask;
             profile.IgpuDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuDescAmd" : "Prof_IgpuDesc");
+            profile.IgpuAskDescription = Loc.T(profile.IgpuExperimental ? "Prof_IgpuAskDescAmd" : "Prof_IgpuAskDesc");
 
             if (!profile.WhenOptions.SequenceEqual(whenOptions))
             {
@@ -926,6 +929,7 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     public partial bool IgpuExperimental { get; set; }
 
     [ObservableProperty] public partial string IgpuDescription { get; set; } = string.Empty;
+    [ObservableProperty] public partial string IgpuAskDescription { get; set; } = string.Empty;
     [ObservableProperty] public partial IReadOnlyList<Option<ProgramTrigger>> WhenOptions { get; set; } = [];
 
     /// <summary>"Don't change" in the iGPU memory list.</summary>

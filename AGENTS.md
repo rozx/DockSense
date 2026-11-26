@@ -106,6 +106,15 @@ Details and raw data: `docs/game-mode-throttle.md`.
     offered); the size DockSense stored is remembered per boot (`IgpuMemoryBootState.StoredRaw`) because the
     driver is not known to report a pending size; the log says whether `SetOption` came back. Only the driver's
     custom sizes are offered (no Auto). The user does not want to ask the reporter to run probe builds.
+    A store has three outcomes: stored, refused, or **no answer within 10 s** (the wait is on the UI thread).
+    Without an answer nothing prepared for the restart is taken back, DockSense does not restart the PC, and
+    nothing else is stored or prepared until the driver answers (`_amdStoreUnanswered`); the outcome is picked up
+    then (`FollowLateAmdStoreAsync`: stored means the restart toast, refused means the restart target and the
+    sign-in setting go back). A read gives up after 15 s and is tried once more 30 s later. Only one ADLX session
+    runs at a time: while a call that timed out is still inside the library, further calls fail at once. A driver
+    preset that comes to the size a profile asks for does not count as that size stored
+    (`IgpuMemoryOptions.CurrentIsFixed`). State: `igpu-memory.json` (the size in effect in this boot session and
+    what DockSense stored through the driver), `igpu-restart.json` (see `AwaitedMode`).
     Debug builds: `DOCKSENSE_SIMULATE_AMD_VGM=1` simulates such a driver (reads a made-up list, storing always
     fails, the real state file is left alone) to look at the flow on other hardware.
 - **Plan enumeration**: `PowerEnumerate` skips hidden High Performance-type plans (High performance, Power saver,
@@ -125,8 +134,13 @@ Details and raw data: `docs/game-mode-throttle.md`.
     stores that size and the mode's FSE sign-in setting first so one restart is enough; `AwaitedMode`: after a
     restart the user started from DockSense for a mode's size, the PC may come back up in another mode because the
     eGPU gets connected only after sign-in, and then that mode's size stays for up to 5 minutes instead of being
-    written back at once), `IgpuMemoryPlanner` (per profile `igpuMemoryApply`: `Automatic` stores the size when the
-    mode starts, `Ask` only offers it; putting back the size in effect never asks)
+    written back at once; the record of that restart, `igpu-restart.json` in `%LOCALAPPDATA%\DockSense`, is written
+    before the size is stored, carries the time it was asked for and, once the wait runs, the time the wait ends,
+    so a restart of DockSense does not end the wait; a boot counts as coming from the restart when it began
+    within 2 hours of it, without counting boots, because a restart can pass through several),
+    `IgpuMemoryPlanner` (per profile `igpuMemoryApply`: `Automatic` stores the size when the mode starts, `Ask`
+    only offers it; with `Ask`, putting back the size in effect is stored without asking, except on the AMD
+    driver path, where `alwaysAsk` makes every store ask)
   - `DockSenseConfig` / `ConfigStore` (JSON at `%APPDATA%\DockSense\config.json`) and `UiSettings`. `ModeProfile` has
     custom equality because of its `Programs` list.
   - `StartupEntry`: whether the Run entry really starts this copy (on / off / disabled by Windows / another copy,
@@ -148,15 +162,19 @@ Details and raw data: `docs/game-mode-throttle.md`.
   - `DockSenseService`: orchestration on the UI thread (DispatcherTimers), activity log, `ModeApplied`, `Warning` and
     `IgpuMemoryChanged` events. `ApplyReason` decides what runs: live FSE and programs never run on "settings changed".
     Plan create/save/delete go through it so the activity log and config stay in sync.
-    Restarting Windows is always the user's click (`Platform/SystemPower`): the Status card, the tray's "Restart for
-    `<mode>`" (both confirm in a dialog) and the "Restart now" button on the iGPU memory toast. Windows starts
-    DockSense for a click on an old toast, so that button restarts only while a size is still pending.
+    Restarting Windows is always the user's click (`Platform/SystemPower`). With a confirmation dialog: the Status
+    card's **Restart now** and **Change and restart**, and the tray's "Restart for `<mode>`". Without one, because
+    the button is the go-ahead: **Restart now** on the restart toast and **Change and restart** on the question
+    toast. Windows starts DockSense for a click on an old toast, so a toast button acts only while what it
+    offered still stands (a size still pending, the same offer still open).
     iGPU memory "ask first" (issue #10): the question is a toast with **Change** / **Change and restart** (same tag
     as the restart toast, so one replaces the other) plus a Status card; its buttons act only while
     `IgpuMemoryOffer` is still the offer the toast was shown for. It is shown even when mode change notifications
     are off. Automatic stays the default on ASUS (the user's decision, 2026-11-26). While an eGPU is connected the
-    restart dialogs and toasts add a neutral sentence for PCs that do not start with one attached (an MSI Claw A8
-    with an AOOSTAR AG02 hangs at boot); never tell everyone to unplug, the Ally X boots fine at the XG Mobile.
+    restart dialogs (the tray's "Restart for `<mode>`" included) and toasts add a neutral sentence for PCs that do
+    not start with one attached (an MSI Claw A8 with an AOOSTAR AG02 hangs at boot); "Restart for eGPU" without an
+    eGPU connected says to connect it after sign-in instead (`RestartFor_EgpuHint`). Never tell everyone to
+    unplug, the Ally X boots fine at the XG Mobile.
   - `Services/`: `Appearance` (minimal zinc palette with a monochrome accent; it overrides WPF-UI brush keys in
     Application.Resources and follows the Windows theme), `Toasts` (Microsoft.Toolkit.Uwp.Notifications),
     `TrayIconService` (H.NotifyIcon), `IconAssets`.

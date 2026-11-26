@@ -140,7 +140,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,24,0">
                                     <ui:TextBlock FontTypography="BodyStrong" Text="{loc:T Prof_IgpuAsk}" />
-                                    <TextBlock Style="{StaticResource Secondary}" Text="{loc:T Prof_IgpuAskDesc}" FontSize="12" />
+                                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding IgpuAskDescription}" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:ToggleSwitch
                                     Grid.Column="1"
