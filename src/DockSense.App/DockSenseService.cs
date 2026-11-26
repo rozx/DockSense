@@ -856,8 +856,11 @@ public sealed class DockSenseService : IDisposable
     /// longer stands (an old notification: the mode or the profile changed since) or the size could not be stored.
     /// </summary>
     /// <param name="offer">The offer the user answered.</param>
-    /// <param name="notify">Say that a restart is needed (<see cref="IgpuMemoryChanged"/>). False when the caller restarts right away.</param>
-    public bool AcceptIgpuMemory(IgpuMemoryOffer offer, bool notify)
+    /// <param name="restartFollows">
+    /// The caller restarts Windows right away. Otherwise a notification says that a restart is needed
+    /// (<see cref="IgpuMemoryChanged"/>).
+    /// </param>
+    public bool AcceptIgpuMemory(IgpuMemoryOffer offer, bool restartFollows)
     {
         if (IgpuMemoryOffer != offer || IgpuMemory is null)
         {
@@ -866,14 +869,26 @@ public sealed class DockSenseService : IDisposable
 
         IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
         var decision = IgpuMemoryPlanner.Decide(Config.ProfileFor(offer.Mode), IgpuMemory, _igpuBoot?.EffectiveRaw, IgpuMemoryViaAmdDriver);
+        if (restartFollows)
+        {
+            // Before the size is stored: the AMD driver may restart the PC by itself, and then nothing that
+            // comes after the store runs. The next start needs to know which mode the restart was for.
+            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(offer.Mode, _igpuBoot?.Boot ?? CurrentBoot()));
+        }
+
         var stored = decision.Step == IgpuMemoryStep.None
             ? IgpuMemory.RawFor(offer.MemoryMb) == IgpuMemory.CurrentRaw // another tool stored it in the meantime
             : StoreIgpuMemory($"{offer.Mode} (agreed)", offer.MemoryMb, decision.Raw);
         if (!stored)
         {
+            if (restartFollows)
+            {
+                StateStore.ClearIgpuRestartTarget(); // no restart follows
+            }
+
             NotifyWarning(Loc.F("Act_IgpuStoreFailed", FormatMemory(offer.MemoryMb)));
         }
-        else if (notify && IgpuMemoryPendingMb is not null)
+        else if (!restartFollows && IgpuMemoryPendingMb is not null)
         {
             IgpuMemoryChanged?.Invoke(offer.MemoryMb);
         }
@@ -898,37 +913,50 @@ public sealed class DockSenseService : IDisposable
 
         var fresh = SafeReadIgpuMemory();
         IgpuMemory = fresh ?? IgpuMemory;
-        var stored = false;
         if (IgpuMemory.RawFor(target) is not { } raw)
         {
             Log.Warn($"Restart for {mode}: the firmware does not offer {target} MB of iGPU memory.");
-        }
-        else
-        {
-            // "Already stored" only counts when the firmware was just read: after a failed read the value known
-            // here may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
-            stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
-        }
-
-        if (!stored)
-        {
             NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
-        }
-        else
-        {
-            // If the PC comes back up before the dock or eGPU is connected, the size stays for a while.
-            StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(mode, _igpuBoot?.Boot ?? CurrentBoot()));
+            RaiseStatusChanged();
+            return false;
         }
 
-        if (stored && Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
+        // What the next start needs goes in before the size is stored: the AMD driver may restart the PC by itself,
+        // and then nothing that comes after the store runs. It is taken back when the size cannot be stored.
+        // First, the mode restarted for: if the PC comes back up before the dock or eGPU is connected, the size
+        // stays for a while.
+        StateStore.SaveIgpuRestartTarget(new IgpuRestartTarget(mode, _igpuBoot?.Boot ?? CurrentBoot()));
+
+        // Then the sign-in setting: Windows reads it when the shell starts after the restart, and DockSense itself
+        // may be up too late.
+        bool? fseBefore = null, fseSet = null;
+        if (Config.ProfileFor(mode).Fse is var fse and not FseStartup.Unchanged && FseSettings.IsAvailable)
         {
-            // Windows reads this when the shell starts after the restart; DockSense itself may be up too late.
             var wantFse = fse == FseStartup.FullScreenExperience;
+            fseBefore = FseSettings.StartupToFse;
             if (FseSettings.SetStartupToFse(wantFse))
             {
+                fseSet = wantFse;
                 Log.Info($"Restart for {mode}: Full Screen Experience at sign-in -> {(wantFse ? "on" : "off")}");
-                AddActivity(Loc.F("Act_Fse", Loc.T(wantFse ? "Common_On" : "Common_Off")));
             }
+        }
+
+        // "Already stored" only counts when the firmware was just read: after a failed read the value known here
+        // may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
+        var stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
+        if (!stored)
+        {
+            StateStore.ClearIgpuRestartTarget();
+            if (fseSet is { } set && fseBefore is { } before && before != set && FseSettings.SetStartupToFse(before))
+            {
+                Log.Info($"Restart for {mode}: no restart, so Full Screen Experience at sign-in is {(before ? "on" : "off")} again.");
+            }
+
+            NotifyWarning(Loc.F("Act_IgpuRestartFailed", ModeName(mode)));
+        }
+        else if (fseSet is { } wanted)
+        {
+            AddActivity(Loc.F("Act_Fse", Loc.T(wanted ? "Common_On" : "Common_Off")));
         }
 
         RaiseStatusChanged();

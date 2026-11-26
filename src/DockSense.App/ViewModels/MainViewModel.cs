@@ -198,7 +198,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     internal async Task AcceptIgpuOfferAsync(IgpuMemoryOffer offer, bool restart)
     {
-        if (!_service.AcceptIgpuMemory(offer, notify: !restart) || !restart)
+        if (!_service.AcceptIgpuMemory(offer, restartFollows: restart) || !restart)
         {
             return;
         }

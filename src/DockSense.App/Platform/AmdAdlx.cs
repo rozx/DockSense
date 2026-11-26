@@ -27,20 +27,14 @@ internal sealed record AdlxMemoryReport(
     string AdlxVersion, bool Supported, AdlxMemoryOption? Current, AdlxMemoryOption? Default, IReadOnlyList<AdlxMemoryOption> Options)
 {
     /// <summary>
-    /// The sizes DockSense offers from this: the driver's custom sizes, or every size it lists when it marks none
-    /// as custom. Null when there is nothing to choose from or the stored size is unknown.
+    /// The sizes DockSense offers from this: the driver's custom sizes only. A preset ("auto" mode) is the
+    /// driver's own policy, not a fixed size, even though it reports the size it comes to. Null when the driver
+    /// lists no custom size or the stored size is unknown.
     /// </summary>
-    public IgpuMemoryOptions? ToIgpuMemoryOptions()
-    {
-        if (!Supported)
-        {
-            return null;
-        }
-
-        var custom = Options.Where(o => o.IsCustom).ToList();
-        var sizes = (custom.Count > 0 ? custom : Options).Select(o => o.CarvedMb ?? 0);
-        return IgpuMemoryOptions.FromDriverSizes(sizes, Current?.CarvedMb);
-    }
+    public IgpuMemoryOptions? ToIgpuMemoryOptions() =>
+        Supported
+            ? IgpuMemoryOptions.FromDriverSizes(Options.Where(o => o.IsCustom).Select(o => o.CarvedMb ?? 0), Current?.CarvedMb)
+            : null;
 }
 
 /// <summary>
@@ -125,9 +119,9 @@ internal static class AmdAdlx
     }
 
     /// <summary>
-    /// Stores a Variable Graphics Memory size, choosing the driver's own option of that size (a custom one when
-    /// there is a choice). Returns false with the reason in <paramref name="note"/> when the driver does not offer
-    /// the size or refuses.
+    /// Stores a Variable Graphics Memory size, choosing the driver's own custom option of that size. Returns
+    /// false with the reason in <paramref name="note"/> when the driver does not offer the size as a custom one
+    /// or refuses.
     /// </summary>
     /// <remarks>
     /// AMD documents <c>SetOption</c> as restarting the PC by itself, so this may not return at all. Only ever call
@@ -156,7 +150,6 @@ internal static class AmdAdlx
             var chosen = IntPtr.Zero;
             try
             {
-                var chosenIsCustom = false;
                 var count = Method<GetCount>(list, ListSize)(list);
                 for (uint i = 0; i < count; i++)
                 {
@@ -165,12 +158,11 @@ internal static class AmdAdlx
                         continue;
                     }
 
+                    // Custom sizes only: a preset of the same size is the driver's own policy, not this size.
                     var described = Describe(option);
-                    if (described.CarvedMb == megabytes && (chosen == IntPtr.Zero || (described.IsCustom && !chosenIsCustom)))
+                    if (chosen == IntPtr.Zero && described.IsCustom && described.CarvedMb == megabytes)
                     {
-                        Free(chosen);
                         chosen = option;
-                        chosenIsCustom = described.IsCustom;
                     }
                     else
                     {
@@ -180,7 +172,7 @@ internal static class AmdAdlx
 
                 if (chosen == IntPtr.Zero)
                 {
-                    return (false, $"ADLX {version}: the driver does not offer {megabytes} MB");
+                    return (false, $"ADLX {version}: the driver does not offer {megabytes} MB as a custom size");
                 }
 
                 var result = Method<SetObject>(vgm, VgmSetOption)(vgm, chosen);
