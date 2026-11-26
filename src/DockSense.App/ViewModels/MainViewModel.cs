@@ -503,12 +503,16 @@ public sealed partial class MainViewModel : ObservableObject
 
                 // What keeps the value from being applied, with the way out where there is one.
                 var blocked = config.TdpWatts is not null && tdpReadiness != TdpReadiness.Ready;
-                profile.TdpNote = !blocked ? string.Empty : Loc.T(tdpReadiness switch
+                var unconfirmed = config.TdpWatts is { } saved && tdpDevice.Offers(saved)
+                    && !tdpDevice.IsConfirmed(saved, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts);
+                profile.TdpNote = blocked ? Loc.T(tdpReadiness switch
                 {
                     TdpReadiness.DriverMissing => "Tdp_NoteDriverMissing",
                     TdpReadiness.UnprotectedFolder => "Tdp_NoteUnprotected",
                     _ => "Tdp_NoteHelperMissing",
-                });
+                })
+                    : unconfirmed ? Loc.F("Tdp_NoteUnconfirmed", config.TdpWatts)
+                    : string.Empty;
                 profile.TdpNoteAction = !blocked ? string.Empty : tdpReadiness switch
                 {
                     TdpReadiness.DriverMissing => Loc.T("Tdp_GetDriver"),
@@ -583,14 +587,18 @@ public sealed partial class MainViewModel : ObservableObject
         {
             // The question names the watts, so the answer covers that value and anything lower. Going higher
             // asks again, and so does a value kept from another device, which nobody confirmed for this one.
-            var confirmedUpTo = previous != ModeProfileViewModel.TdpUnchanged && device.Offers(previous) && device.ExceedsManufacturerMax(previous)
-                ? previous
-                : device.WarnAboveWatts;
-            if (value > confirmedUpTo
-                && !await Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", value, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm")))
+            // That includes choosing the same value again after the note under the setting asked for it.
+            // What was agreed to is kept with the settings, per board: a number in a profile says nothing about
+            // that, it may have come from another device.
+            if (!device.IsConfirmed(value, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts))
             {
-                SetTdpSelection(profile, previous);
-                return;
+                if (!await Dialogs.ConfirmAsync(Loc.T("Tdp_WarningTitle"), Loc.F("Tdp_WarningMessage", value, ManufacturerMaxText(device)), Loc.T("Tdp_WarningConfirm")))
+                {
+                    SetTdpSelection(profile, previous);
+                    return;
+                }
+
+                _service.UpdateConfig(c => c with { TdpConfirmedBoard = device.Board, TdpConfirmedWatts = value }, reapply: false);
             }
 
             // The driver may have been installed since this was last looked at. Nothing is sent from here: the

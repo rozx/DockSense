@@ -38,8 +38,7 @@ internal static class Program
             return TdpWriter.RunFromCommandLine(args);
         }
 
-        if (args.Length > 0 && (args[0].Equals(TdpHelper.InstallArgument, StringComparison.OrdinalIgnoreCase)
-            || args[0].Equals(TdpHelper.RemoveArgument, StringComparison.OrdinalIgnoreCase)))
+        if (args.Length > 0 && args[0].Equals(TdpHelper.InstallArgument, StringComparison.OrdinalIgnoreCase))
         {
             return TdpHelper.SetupFromCommandLine(args);
         }

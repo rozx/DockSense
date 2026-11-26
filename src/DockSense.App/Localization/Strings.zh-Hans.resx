@@ -351,7 +351,8 @@
   <data name="Tdp_SetupMessage" xml:space="preserve"><value>设置 TDP 需要管理员权限。Windows 会请你批准一次，之后 DockSense 会注册一个任务，在进入模式时设置 TDP，不再弹出提示；DockSense 本身仍以普通权限运行。你可以在“设置”中移除这个任务。</value></data>
   <data name="Tdp_SetupConfirm" xml:space="preserve"><value>继续</value></data>
   <data name="Tdp_NoteDriverMissing" xml:space="preserve"><value>未生效：没有安装 PawnIO 驱动。</value></data>
-  <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>未生效：这份 DockSense 所在的位置，没有管理员权限的程序也能修改。请把它复制到 Program Files 下的新文件夹中（要复制而不是移动：移动的文件会保留原来的权限），以免以管理员权限运行的文件被别的程序替换。</value></data>
+  <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>未生效：此功能需要 DockSense 安装在受保护的位置。请把它复制到 Program Files 下的新文件夹中（要复制而不是移动：移动的文件会保留原来的权限），从托盘退出 DockSense，然后启动 Program Files 中的那一份。</value></data>
+  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>未生效：{0} W 超出了厂商规定的上限，并且尚未在此设备上确认。请重新设置这个数值以确认。</value></data>
   <data name="Tdp_NoteHelperMissing" xml:space="preserve"><value>未生效：还没有获得管理员批准。</value></data>
   <data name="Tdp_GetDriver" xml:space="preserve"><value>获取 PawnIO</value></data>
   <data name="Tdp_SetUp" xml:space="preserve"><value>设置</value></data>
@@ -363,8 +364,10 @@
   <data name="Act_Tdp" xml:space="preserve"><value>TDP 已设为 {0} W</value></data>
   <data name="Act_TdpHandedBack" xml:space="preserve"><value>TDP 已交还给厂商软件</value></data>
   <data name="Act_TdpHandBackFailed" xml:space="preserve"><value>无法把 TDP 交还给厂商软件。{0} W 会一直保持，直到厂商软件切换模式或电脑重启。</value></data>
+  <data name="Act_TdpHandBackFailedUnknown" xml:space="preserve"><value>TDP 可能只被部分修改，并且无法交还给厂商软件。请在厂商软件中选择一个模式，或重启电脑来恢复。</value></data>
+  <data name="Act_TdpNeedsConfirmation" xml:space="preserve"><value>未设置 {0} W 的 TDP：它超出了厂商规定的上限，并且尚未在此设备上确认。请在“模式配置”中确认。</value></data>
   <data name="Act_TdpDriverMissing" xml:space="preserve"><value>无法设置 TDP：没有安装 PawnIO 驱动。</value></data>
-  <data name="Act_TdpUnprotected" xml:space="preserve"><value>无法设置 TDP：DockSense 必须放在需要管理员权限才能修改的文件夹中。</value></data>
+  <data name="Act_TdpUnprotected" xml:space="preserve"><value>无法设置 TDP：DockSense 必须安装在 Program Files 下它自己的文件夹中。</value></data>
   <data name="Act_TdpHelperMissing" xml:space="preserve"><value>无法设置 TDP：还没有获得管理员批准。请在“模式配置”中设置。</value></data>
   <data name="Act_TdpFailed" xml:space="preserve"><value>无法设置 TDP（{0}）。</value></data>
   <data name="Act_TdpHelperInstalled" xml:space="preserve"><value>已设置 TDP 辅助任务</value></data>

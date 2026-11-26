@@ -69,12 +69,16 @@ internal static class TdpWriter
         return $"{CpuVendor()} family {family:X}h model {model:X}h";
     }
 
-    /// <summary>The helper's entry point. The exit code is a <see cref="TdpWriteResult"/>.</summary>
+    /// <summary>
+    /// The helper's entry point. The exit code is a <see cref="TdpWriteResult"/>, or after a write that went
+    /// through, 100 plus the watts that were sent (<see cref="TdpHelperTask.ExitCodeForSent"/>).
+    /// </summary>
     public static int RunFromCommandLine(string[] args)
     {
         try
         {
-            return (int)Run(args);
+            var outcome = Run(args);
+            return outcome is { Result: TdpWriteResult.Ok, SentWatts: { } sent } ? TdpHelperTask.ExitCodeForSent(sent) : (int)outcome.Result;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -82,7 +86,7 @@ internal static class TdpWriter
         }
     }
 
-    private static TdpWriteResult Run(string[] args)
+    private static TdpWriteOutcome Run(string[] args)
     {
         if (TdpHelperTask.ParseWatts(args) is not { } watts)
         {
@@ -157,7 +161,8 @@ internal static class TdpWriter
                 return reply.Submitted ? TdpWriteResult.Rejected : TdpWriteResult.Failed;
             }
 
-            return TdpWriteResult.Ok;
+            // Done, and how much: only this process knows which power source the value was clamped for.
+            return new TdpWriteOutcome(TdpWriteResult.Ok, (int)(milliwatts / 1000));
         }
         finally
         {
@@ -199,8 +204,17 @@ internal static class TdpWriter
             return default;
         }
 
-        // From the command write on, the SMU may have taken the request even when nothing is heard back.
-        if (!Write(driver, mailbox.Message, command) || !WaitForResponse(driver, mailbox.Response, out var status))
+        if (!Write(driver, mailbox.Message, command))
+        {
+            // The driver refused the write, so no command went out and the SMU has nothing to answer. The
+            // response was cleared a moment ago; left like that, the mailbox would look busy to every later
+            // request, from any tool. Put back the value it shows when idle.
+            Write(driver, mailbox.Response, AmdSmuPowerCommands.Ok);
+            return default;
+        }
+
+        // The command is with the SMU: from here on it may have been carried out even when nothing is heard back.
+        if (!WaitForResponse(driver, mailbox.Response, out var status))
         {
             return new SmuReply(Submitted: true, Status: 0, Value: 0);
         }

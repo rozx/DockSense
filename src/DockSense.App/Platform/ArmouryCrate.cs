@@ -53,7 +53,10 @@ internal static class ArmouryCrate
 
     private sealed class Watcher : IDisposable
     {
+        private static readonly TimeSpan RetryEvery = TimeSpan.FromMinutes(1);
+
         private RegistryKey _key;
+        private Timer? _retry;
         private bool _warned;
         private readonly Action _changed;
         private readonly AutoResetEvent _signal = new(false);
@@ -79,6 +82,7 @@ internal static class ArmouryCrate
                 }
 
                 _disposed = true;
+                _retry?.Dispose();
             }
 
             _wait.Unregister(null);
@@ -107,33 +111,57 @@ internal static class ArmouryCrate
         /// </summary>
         private void Arm()
         {
-            if (Register())
+            if (Register() || Reopen())
             {
+                _retry?.Dispose();
+                _retry = null;
                 return;
             }
 
-            try
-            {
-                if (Registry.LocalMachine.OpenSubKey(ThrottleKey) is { } fresh)
-                {
-                    _key.Dispose();
-                    _key = fresh;
-                    if (Register())
-                    {
-                        return;
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-            {
-                // Falls through to the warning.
-            }
-
+            // The replacement key may only be created later. Looked for again from time to time until it is there.
+            _retry ??= new Timer(_ => RetryArm(), null, RetryEvery, RetryEvery);
             if (!_warned)
             {
                 _warned = true;
-                Log.Warn("Armoury Crate's settings can no longer be watched; the TDP is still sent again after power source and plan changes.");
+                Log.Warn("Armoury Crate's settings cannot be watched right now; the TDP is still sent again after power source and plan changes.");
             }
+        }
+
+        private bool Reopen()
+        {
+            try
+            {
+                if (Registry.LocalMachine.OpenSubKey(ThrottleKey) is not { } fresh)
+                {
+                    return false;
+                }
+
+                _key.Dispose();
+                _key = fresh;
+                return Register();
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                return false;
+            }
+        }
+
+        private void RetryArm()
+        {
+            lock (_gate)
+            {
+                if (_disposed || !Reopen())
+                {
+                    return;
+                }
+
+                _retry?.Dispose();
+                _retry = null;
+                _warned = false;
+            }
+
+            // Whatever was changed while nobody was watching counts as a change now.
+            _changed();
         }
 
         private bool Register() =>

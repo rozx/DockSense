@@ -193,7 +193,50 @@ public sealed class TdpTests
     [InlineData(3, false, TdpAction.None)]
     public void On_the_older_models_the_plan_does_not_depend_on_the_power_source(int watts, bool limitInForce, TdpAction expected)
     {
-        Assert.Equal(expected, TdpPlanner.Plan(new ModeProfile { TdpWatts = watts }, Ally, limitInForce));
+        // Confirmed on this board up to its ceiling, so that only the range decides here.
+        Assert.Equal(expected, TdpPlanner.Plan(new ModeProfile { TdpWatts = watts }, Ally, limitInForce, confirmedBoard: "RC71", confirmedWatts: 53));
+    }
+
+    [Theory]
+    [InlineData(35, null, 0, TdpAction.Set)]          // within the manufacturer's maximum: nothing to confirm
+    [InlineData(45, null, 0, TdpAction.HandBack)]     // above it and never confirmed: treated as no value
+    [InlineData(45, "RC74XA", 45, TdpAction.Set)]
+    [InlineData(45, "rc74xa", 50, TdpAction.Set)]     // a higher confirmation covers lower values
+    [InlineData(50, "RC74XA", 45, TdpAction.HandBack)] // going higher needs a new confirmation
+    [InlineData(45, "RC72", 53, TdpAction.HandBack)]  // confirmed on another device
+    public void Above_the_maximum_a_value_counts_only_once_it_was_confirmed_on_this_board(int watts, string? board, int confirmed, TdpAction expected)
+    {
+        Assert.Equal(expected, TdpPlanner.Plan(new ModeProfile { TdpWatts = watts }, AllyX, limitInForce: true, board, confirmed));
+    }
+
+    [Fact]
+    public void A_value_fine_on_one_board_can_need_confirming_on_another()
+    {
+        // 35 W is the Xbox Ally X's maximum, but above the ROG Ally X's 30 W plugged in and 25 W on battery.
+        Assert.True(AllyX.IsConfirmed(35, confirmedBoard: null, confirmedWatts: 0));
+        Assert.False(Ally.IsConfirmed(35, confirmedBoard: null, confirmedWatts: 0));
+        Assert.False(Ally.IsConfirmed(35, confirmedBoard: "RC74XA", confirmedWatts: 55));
+        Assert.True(Ally.IsConfirmed(35, confirmedBoard: "RC71", confirmedWatts: 35));
+    }
+
+    [Theory]
+    [InlineData(120, TdpWriteResult.Ok, 20)]            // 100 plus the watts that were sent
+    [InlineData(155, TdpWriteResult.Ok, 55)]
+    [InlineData(0, TdpWriteResult.Unconfirmed, null)]   // "done" without saying what was sent is not an answer
+    [InlineData(3, TdpWriteResult.NotElevated, null)]
+    [InlineData(9, TdpWriteResult.Busy, null)]
+    [InlineData(10, TdpWriteResult.PartlyApplied, null)]
+    [InlineData(-1073741510, TdpWriteResult.Unconfirmed, null)] // ended from outside
+    [InlineData(42, TdpWriteResult.Unconfirmed, null)]
+    public void The_helpers_exit_code_says_how_it_ended_and_what_it_sent(int exitCode, TdpWriteResult result, int? sent)
+    {
+        Assert.Equal(new TdpWriteOutcome(result, sent), TdpHelperTask.OutcomeOf(exitCode));
+    }
+
+    [Fact]
+    public void A_write_that_went_through_reports_its_watts()
+    {
+        Assert.Equal(new TdpWriteOutcome(TdpWriteResult.Ok, 35), TdpHelperTask.OutcomeOf(TdpHelperTask.ExitCodeForSent(35)));
     }
 
     [Theory]

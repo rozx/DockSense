@@ -39,6 +39,17 @@ public sealed record TdpDevice(string Board, int MinWatts, TdpBounds PluggedIn, 
 
     public bool ExceedsManufacturerMax(int watts) => watts > WarnAboveWatts;
 
+    /// <summary>
+    /// True when <paramref name="watts"/> may be sent without asking: it is within the manufacturer's maximum, or
+    /// the user confirmed that much on this very board. A confirmation given on another board does not count,
+    /// and neither does a value that merely arrived with a copied settings file.
+    /// </summary>
+    /// <param name="confirmedBoard">The board the user last confirmed a value above the maximum on, if any.</param>
+    /// <param name="confirmedWatts">The highest value confirmed there.</param>
+    public bool IsConfirmed(int watts, string? confirmedBoard, int confirmedWatts) =>
+        !ExceedsManufacturerMax(watts)
+        || (string.Equals(confirmedBoard, Board, StringComparison.OrdinalIgnoreCase) && watts <= confirmedWatts);
+
     /// <summary>The value to send for <paramref name="watts"/> on the given power source.</summary>
     public int Clamp(int watts, bool onAcPower) => Math.Clamp(watts, MinWatts, For(onAcPower).Ceiling);
 
@@ -147,6 +158,12 @@ public enum TdpWriteResult
     /// be treated as possibly in force. Never an exit code: DockSense concludes this by itself.
     /// </summary>
     Unconfirmed = 11,
+}
+
+/// <summary>How a TDP write ended and, when it went through, the watts the helper sent.</summary>
+public readonly record struct TdpWriteOutcome(TdpWriteResult Result, int? SentWatts = null)
+{
+    public static implicit operator TdpWriteOutcome(TdpWriteResult result) => new(result);
 }
 
 /// <summary>Why a TDP override cannot be written right now, if anything is in the way.</summary>
@@ -272,6 +289,24 @@ public static class TdpHelperTask
         }
     }
 
+    /// <summary>
+    /// The helper's exit code after a write that went through: 100 plus the watts it sent. The value is clamped
+    /// for the power source at the moment of sending, which only the helper knows for certain, and the exit code
+    /// is the one thing it hands back.
+    /// </summary>
+    public static int ExitCodeForSent(int watts) => SentBase + watts;
+
+    /// <summary>The outcome an exit code of the helper stands for; anything it does not use is unconfirmed.</summary>
+    public static TdpWriteOutcome OutcomeOf(int exitCode) => exitCode switch
+    {
+        >= SentBase and <= SentBase + 999 => new TdpWriteOutcome(TdpWriteResult.Ok, exitCode - SentBase),
+        (int)TdpWriteResult.Ok => new TdpWriteOutcome(TdpWriteResult.Unconfirmed), // "done" without saying what was sent
+        _ when Enum.IsDefined(typeof(TdpWriteResult), exitCode) => new TdpWriteOutcome((TdpWriteResult)exitCode),
+        _ => new TdpWriteOutcome(TdpWriteResult.Unconfirmed),
+    };
+
+    private const int SentBase = 100;
+
     /// <summary>The watts from the helper's command line (<c>--set-tdp 20</c>), or null when it is anything else.</summary>
     public static int? ParseWatts(IReadOnlyList<string> args) =>
         args.Count == 2
@@ -300,7 +335,9 @@ public static class TdpPlanner
     /// <summary>What applying <paramref name="profile"/> means for the TDP.</summary>
     /// <param name="device">The device, or null when it is not supported.</param>
     /// <param name="limitInForce">True while a limit DockSense set is still in effect (same boot).</param>
-    public static TdpAction Plan(ModeProfile profile, TdpDevice? device, bool limitInForce)
+    /// <param name="confirmedBoard">See <see cref="TdpDevice.IsConfirmed"/>.</param>
+    /// <param name="confirmedWatts">See <see cref="TdpDevice.IsConfirmed"/>.</param>
+    public static TdpAction Plan(ModeProfile profile, TdpDevice? device, bool limitInForce, string? confirmedBoard = null, int confirmedWatts = 0)
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (device is null)
@@ -308,7 +345,8 @@ public static class TdpPlanner
             return TdpAction.None;
         }
 
-        if (profile.TdpWatts is { } watts && device.Offers(watts))
+        // A value above the maximum that nobody confirmed on this device is treated like no value at all.
+        if (profile.TdpWatts is { } watts && device.Offers(watts) && device.IsConfirmed(watts, confirmedBoard, confirmedWatts))
         {
             return TdpAction.Set;
         }

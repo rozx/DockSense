@@ -351,7 +351,8 @@
   <data name="Tdp_SetupMessage" xml:space="preserve"><value>Setting the TDP needs administrator rights. Windows asks for your approval once. DockSense then registers a task that sets the TDP when a mode begins, without further prompts, while DockSense itself keeps running without administrator rights. You can remove the task under Settings.</value></data>
   <data name="Tdp_SetupConfirm" xml:space="preserve"><value>Continue</value></data>
   <data name="Tdp_NoteDriverMissing" xml:space="preserve"><value>Not applied: the PawnIO driver is not installed.</value></data>
-  <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>Not applied: this copy of DockSense is in a place that programs without administrator rights can change. Copy it into a new folder under Program Files (copy, don't move: a moved file keeps its old permissions), so that nothing can take the place of the file that runs with administrator rights.</value></data>
+  <data name="Tdp_NoteUnprotected" xml:space="preserve"><value>Not applied: DockSense needs a protected installation for this. Copy it into a new folder under Program Files (copy, don't move: a moved file keeps its old permissions), quit DockSense from the tray, then start the copy in Program Files.</value></data>
+  <data name="Tdp_NoteUnconfirmed" xml:space="preserve"><value>Not applied: {0} W is above the manufacturer's maximum and has not been confirmed on this device. Set the value again to confirm it.</value></data>
   <data name="Tdp_NoteHelperMissing" xml:space="preserve"><value>Not applied: administrator approval is missing.</value></data>
   <data name="Tdp_GetDriver" xml:space="preserve"><value>Get PawnIO</value></data>
   <data name="Tdp_SetUp" xml:space="preserve"><value>Set up</value></data>
@@ -363,8 +364,10 @@
   <data name="Act_Tdp" xml:space="preserve"><value>TDP set to {0} W</value></data>
   <data name="Act_TdpHandedBack" xml:space="preserve"><value>TDP handed back to the vendor software</value></data>
   <data name="Act_TdpHandBackFailed" xml:space="preserve"><value>Could not hand the TDP back to the vendor software. {0} W stays until its mode changes or the PC restarts.</value></data>
+  <data name="Act_TdpHandBackFailedUnknown" xml:space="preserve"><value>The TDP may be partly changed, and it could not be handed back to the vendor software. Select a mode in the vendor software, or restart the PC, to put it right.</value></data>
+  <data name="Act_TdpNeedsConfirmation" xml:space="preserve"><value>The TDP of {0} W was not set: it is above the manufacturer's maximum and has not been confirmed on this device. Confirm it under Mode profiles.</value></data>
   <data name="Act_TdpDriverMissing" xml:space="preserve"><value>Could not set the TDP: the PawnIO driver is not installed.</value></data>
-  <data name="Act_TdpUnprotected" xml:space="preserve"><value>Could not set the TDP: DockSense must be in a folder that needs administrator rights to change.</value></data>
+  <data name="Act_TdpUnprotected" xml:space="preserve"><value>Could not set the TDP: DockSense must be installed in a folder of its own under Program Files.</value></data>
   <data name="Act_TdpHelperMissing" xml:space="preserve"><value>Could not set the TDP: administrator approval is missing. Set it up under Mode profiles.</value></data>
   <data name="Act_TdpFailed" xml:space="preserve"><value>Could not set the TDP ({0}).</value></data>
   <data name="Act_TdpHelperInstalled" xml:space="preserve"><value>TDP helper set up</value></data>

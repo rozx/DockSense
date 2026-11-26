@@ -100,6 +100,12 @@ public sealed class DockSenseService : IDisposable
     /// <summary>The last attempt to send the wanted TDP did not go through, so it is due again.</summary>
     private bool _tdpStale;
 
+    /// <summary>The TDP was handed back, but its record could not be deleted yet (see <see cref="RetireTdpRecord"/>).</summary>
+    private bool _tdpRecordToRetire;
+
+    /// <summary>The mode and value last warned about as "above the maximum and not confirmed on this device".</summary>
+    private (DockMode Mode, int Watts)? _tdpUnconfirmedWarned;
+
     public DockSenseService(ConfigStore configStore)
     {
         _configStore = configStore;
@@ -254,7 +260,7 @@ public sealed class DockSenseService : IDisposable
             // So does its TDP; this instance only needs to know the value to send it again after a reset. What
             // must not carry on is a limit this profile does not want (giving it back failed before, or the
             // previous instance was closed mid-write): that is given back now.
-            var tdp = TdpPlanner.Plan(Config.ProfileFor(mode), TdpDevice, _tdpState is not null);
+            var tdp = PlanTdp(Config.ProfileFor(mode));
             _tdpWanted = tdp == TdpAction.Set ? Config.ProfileFor(mode).TdpWatts : null;
             if (tdp == TdpAction.HandBack && !Paused)
             {
@@ -1320,9 +1326,29 @@ public sealed class DockSenseService : IDisposable
                 : $"; {_tdpState.Watts} W set by DockSense is {(_tdpState.Pending ? "possibly " : string.Empty)}in force"));
     }
 
+    /// <summary>What <paramref name="profile"/> means for the TDP right now (<see cref="TdpPlanner.Plan"/>).</summary>
+    private TdpAction PlanTdp(ModeProfile profile) =>
+        TdpPlanner.Plan(profile, TdpDevice, _tdpState is not null, Config.TdpConfirmedBoard, Config.TdpConfirmedWatts);
+
     private void ApplyTdp(DockMode mode, ModeProfile profile, ApplyReason reason)
     {
-        switch (TdpPlanner.Plan(profile, TdpDevice, _tdpState is not null))
+        RetireTdpRecord();
+
+        // A value above the manufacturer's maximum counts only once it was agreed to on this device. One that
+        // came in with a settings file from another device is not sent; Mode profiles says how to confirm it.
+        if (profile.TdpWatts is { } asked && TdpDevice is { } known && known.Offers(asked)
+            && !known.IsConfirmed(asked, Config.TdpConfirmedBoard, Config.TdpConfirmedWatts))
+        {
+            Log.Warn($"{mode}: {asked} W is above the manufacturer's maximum and was not confirmed on this device; not sending it.");
+            // Said once per mode and value, not at every edit of the profile.
+            if (_tdpUnconfirmedWarned != (mode, asked))
+            {
+                _tdpUnconfirmedWarned = (mode, asked);
+                NotifyWarning(Loc.F("Act_TdpNeedsConfirmation", asked));
+            }
+        }
+
+        switch (PlanTdp(profile))
         {
             case TdpAction.Set:
                 // Every edit of a profile applies it again: no need to send a value that was sent already.
@@ -1407,7 +1433,7 @@ public sealed class DockSenseService : IDisposable
                 }
 
                 var reason = _tdpReason;
-                var result = TdpWriteResult.Failed;
+                var outcome = new TdpWriteOutcome(TdpWriteResult.Failed);
                 if (TdpReadiness == TdpReadiness.Ready)
                 {
                     // On record before it is sent: should DockSense be closed while the helper runs, the next
@@ -1416,7 +1442,7 @@ public sealed class DockSenseService : IDisposable
                     var announced = new TdpState(CurrentBoot(), device.Clamp(watts, SafeOnAcPower()), Pending: true);
                     if (StateStore.SaveTdp(announced))
                     {
-                        result = await Task.Run(() => TdpHelper.Write(watts));
+                        outcome = await Task.Run(() => TdpHelper.Write(watts));
                     }
                     else
                     {
@@ -1424,9 +1450,9 @@ public sealed class DockSenseService : IDisposable
                     }
                 }
 
-                // The helper clamps for the power source at the moment it sends. This is the same sum made right
-                // after it returned: DockSense's best knowledge of what went out, not a reading from the hardware.
-                OnTdpWritten(device.Clamp(watts, SafeOnAcPower()), result, reason);
+                // After a write that went through, the helper says how many watts it sent: it clamps for the
+                // power source at that moment. Without that, the same sum made here is the best there is.
+                OnTdpWritten(outcome.SentWatts ?? device.Clamp(watts, SafeOnAcPower()), outcome.Result, reason);
             }
             while (_tdpWriteAgain);
 
@@ -1473,6 +1499,12 @@ public sealed class DockSenseService : IDisposable
         {
             _tdpState = new TdpState(CurrentBoot(), sent, Pending: true);
         }
+        else if (_tdpState is { Pending: false })
+        {
+            // The value on record was being sent again because something may have replaced it, and that did not
+            // work. It is still DockSense's to give back, but no longer known to be what is in force.
+            _tdpState = _tdpState with { Pending = true };
+        }
 
         StateStore.SaveTdp(_tdpState);
 
@@ -1486,12 +1518,12 @@ public sealed class DockSenseService : IDisposable
         }
 
         _tdpBusyRetries = 0;
-        if (result == TdpWriteResult.PartlyApplied)
+        if (result == TdpWriteResult.PartlyApplied && !HandBackTdp())
         {
             // Some of the limits went in. That mix is neither what was asked for nor what the vendor software
-            // set, so the TDP goes back to the vendor software right away. If that fails too, the record makes a
-            // later apply try again.
-            HandBackTdp();
+            // set, so the TDP goes back to the vendor software right away. That failed too, and the hand-back
+            // has said so; the record makes a later apply try again.
+            return;
         }
 
         // Whatever was in the way may have changed since it was last looked at (the driver or the task removed).
@@ -1517,7 +1549,8 @@ public sealed class DockSenseService : IDisposable
     /// Gives the TDP back to the vendor software by re-sending the performance mode Armoury Crate has selected:
     /// the firmware then loads that mode's own limits (measured on the RC74XA).
     /// </summary>
-    private void HandBackTdp()
+    /// <returns>True when the firmware accepted the mode, so the limit DockSense set is gone.</returns>
+    private bool HandBackTdp()
     {
         var onAc = SafeOnAcPower();
         var asusMode = TdpPlanner.AsusModeToRestore(ArmouryCrate.SelectedMode(onAc), onAc);
@@ -1540,20 +1573,38 @@ public sealed class DockSenseService : IDisposable
         {
             // The limit is still in force, so it stays on record: Status keeps showing it, and the next time a
             // profile without an override is applied, the hand-back is tried again.
-            Log.Warn($"Could not hand the TDP back (performance mode {asusMode}); {_tdpState?.Watts} W stays until the vendor software or a restart changes it.");
-            var message = Loc.F("Act_TdpHandBackFailed", _tdpState?.Watts);
+            Log.Warn($"Could not hand the TDP back (performance mode {asusMode}); {_tdpState?.Watts} W{(_tdpState?.Pending == true ? " (not confirmed)" : string.Empty)} stays until the vendor software or a restart changes it.");
+
+            // When the value itself is not confirmed (it may have gone in only in part), naming it as what
+            // "stays" would claim more than is known.
+            var message = _tdpState?.Pending == true
+                ? Loc.T("Act_TdpHandBackFailedUnknown")
+                : Loc.F("Act_TdpHandBackFailed", _tdpState?.Watts);
             if (_tdpWarned != message)
             {
                 _tdpWarned = message;
                 NotifyWarning(message);
             }
 
-            return;
+            return false;
         }
 
         _tdpWarned = null;
         _tdpState = null;
-        StateStore.SaveTdp(null);
+        _tdpRecordToRetire = !StateStore.SaveTdp(null);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a record that could not be deleted when the TDP was handed back (the file was in use). Left
+    /// behind, it would make the next start hand back once more, over whatever the user has chosen since.
+    /// </summary>
+    private void RetireTdpRecord()
+    {
+        if (_tdpRecordToRetire && _tdpState is null && !_tdpWriting)
+        {
+            _tdpRecordToRetire = !StateStore.SaveTdp(null);
+        }
     }
 
     /// <summary>

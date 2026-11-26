@@ -24,13 +24,17 @@ PawnIO refuses callers without administrator rights (opening it fails with error
 
 - `Platform/TdpHelper` registers a task without triggers, `DockSense-TDP-<SID>`: run level highest, and a security
   descriptor that lets the user read and run it but not change it. Registering takes one UAC prompt
-  (`DockSense.exe --install-tdp-helper <SID>`); removing it another (`--remove-tdp-helper <SID>`, from Settings).
+  (`DockSense.exe --install-tdp-helper <SID>`). Removing it, from Settings, takes another, for Windows' own
+  `schtasks.exe`: removal must also work from a copy that is not in a protected place (the task may be a
+  leftover), and such a copy must not be what gets administrator rights.
   The task counts as ready only while it is enabled, starts this copy and is still set to run with the highest
   privileges. Settings offers **Remove** for any task under that name, also a disabled or outdated one.
 - DockSense starts the task with the watts as its parameter (`$(Arg0)`). The task runs
   `DockSense.exe --set-tdp <watts>` (`Platform/TdpWriter`): it trusts nothing it is handed (a known board, a known
-  processor, the value clamped to the device's range), shows no UI and writes no files. Its exit code
-  (`TdpWriteResult`) is the result, read back from the task.
+  processor, the value clamped to the device's range), shows no UI and writes no files. Its exit code is the
+  result, read back from the task: a `TdpWriteResult`, or after a write that went through, 100 plus the watts
+  it sent (`TdpHelperTask.OutcomeOf`). So what DockSense records is what the helper sent, clamped for the power
+  source at that moment.
 - Neither elevated command writes to the log: it is in the user's folders.
 
 ### Where the helper may run from
@@ -40,6 +44,9 @@ replace that file** (Debug builds skip the check; they are not distributed). Nev
 
 The check reads the permissions (`TdpHelper.LocationIsProtected`, decided by `Core/ElevatedLocation`, unit tested):
 
+- The installation must be in a folder of its own under Program Files (either one). The task keeps the path
+  for as long as it exists, and those are the folders that stay administrator-managed whatever is installed or
+  removed inside them.
 - The file and its folder must be owned by, and changeable only for, administrators, SYSTEM or TrustedInstaller.
 - The folder directly above must not let anyone else create folders: the task keeps the path, so a path that
   could be brought back after the installation is moved or removed is not acceptable. Directly under Program
@@ -99,8 +106,11 @@ helper. Typed text has to be one plain number, with a unit after it at most.
 
 - A profile that never had a value starts at the highest one the manufacturer allows on either power source, so
   switching the override on never asks about exceeding the maximum.
-- The question about going above the maximum names the watts and covers that value and lower ones. Going higher
-  asks again, and so does a value kept from another device.
+- The question about going above the maximum names the watts and covers that value and lower ones. The answer
+  is kept with the settings, per board (`tdpConfirmedBoard` / `tdpConfirmedWatts`). A higher value asks
+  again. A value above the maximum that was not confirmed on this board, for example one that arrived with a
+  settings file from another device, is not sent: `TdpPlanner.Plan` treats it as no value, a warning says so,
+  and the note under the setting asks to set it again.
 - A value saved for another device stays in the settings, whatever this device supports.
 
 The user wants a slider plus an input box for the TDP, a dropdown for iGPU memory, and no "Don't change" entry
@@ -116,11 +126,14 @@ Raised in review of PR #12 and not solved; decide before treating the feature as
   unpacked library, but nothing enforces that. A small separate helper with nothing but administrator-controlled
   files behind it would be the robust form.
 - **The task stays when the installation goes.** Remove the helper under Settings before moving or deleting
-  DockSense; the uninstall steps in the READMEs say so.
+  DockSense; the uninstall steps in the READMEs say so. Requiring Program Files keeps the old path from being
+  made again without administrator rights.
 - **One record per user.** The limit applies to the whole PC, the record of it is in one user's profile. A second
   user signing in during the same boot does not know of the first user's limit.
-- **What DockSense records is what it asked for**, clamped the way the helper clamps. It is not read back from
-  the hardware.
+- **What DockSense records is what the helper says it sent.** It is not read back from the hardware.
+- **The result is read from the task, not from the run.** Task Scheduler reports the last run of a task. Runs
+  from one DockSense are kept apart in time; a second program starting the same task at the same moment could
+  still be mistaken for it.
 
 ## Measurements
 

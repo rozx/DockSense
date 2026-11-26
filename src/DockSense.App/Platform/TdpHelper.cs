@@ -27,9 +27,6 @@ internal static class TdpHelper
     /// <summary><c>--install-tdp-helper &lt;user SID&gt;</c>: registers the task. Run elevated.</summary>
     public const string InstallArgument = "--install-tdp-helper";
 
-    /// <summary><c>--remove-tdp-helper &lt;user SID&gt;</c>: removes the task. Run elevated.</summary>
-    public const string RemoveArgument = "--remove-tdp-helper";
-
     /// <summary>Where the driver comes from. DockSense does not install it.</summary>
     public const string PawnIoUrl = "https://pawnio.eu/";
 
@@ -48,7 +45,7 @@ internal static class TdpHelper
     private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(75);
 
     private static readonly TimeSpan MinimumGap = TimeSpan.FromSeconds(2.5);
-    private static DateTime lastStartUtc = DateTime.MinValue;
+    private static long lastStartTicks = -(long)MinimumGap.TotalMilliseconds;
 
     /// <summary>True on a device and processor DockSense can set the TDP of.</summary>
     public static bool IsSupported => TdpWriter.Device is not null && TdpWriter.Commands is not null;
@@ -98,6 +95,14 @@ internal static class TdpHelper
                     return false;
                 }
 
+                // And only under Program Files: the task keeps the path for as long as it exists, and those are
+                // the folders that stay administrator-managed whatever is installed or removed inside them. Any
+                // other tree, however well protected today, can be taken away and its path made again by anyone.
+                if (!IsUnderProgramFiles(folder.FullName))
+                {
+                    return false;
+                }
+
                 var ancestors = new List<LocationAccess>();
                 for (var above = folder; above is not null; above = above.Parent)
                 {
@@ -127,6 +132,21 @@ internal static class TdpHelper
 
     /// <summary>True for a junction, a symbolic link or any other reparse point.</summary>
     private static bool IsLink(FileSystemInfo entry) => entry.Attributes.HasFlag(FileAttributes.ReparsePoint);
+
+    /// <summary>True for a folder inside one of the Program Files folders (not for those folders themselves).</summary>
+    private static bool IsUnderProgramFiles(string folder)
+    {
+        foreach (var special in new[] { Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86 })
+        {
+            var root = Environment.GetFolderPath(special);
+            if (root.Length > 0 && folder.StartsWith(root.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static LocationAccess ReadAccess(FileSystemSecurity security)
     {
@@ -183,38 +203,47 @@ internal static class TdpHelper
     }
 
     /// <summary>Registers the helper task. Windows asks for administrator approval.</summary>
-    public static TdpSetupResult Install() => RunElevated(InstallArgument, expectInstalled: true);
+    public static TdpSetupResult Install() =>
+        CurrentUserSid() is { } sid ? RunElevated(ExecutablePath, [InstallArgument, sid], expectInstalled: true) : TdpSetupResult.Failed;
 
-    /// <summary>Removes the helper task. Windows asks for administrator approval.</summary>
-    public static TdpSetupResult Remove() => RunElevated(RemoveArgument, expectInstalled: false);
+    /// <summary>
+    /// Removes the helper task. Windows asks for administrator approval, for its own Task Scheduler tool: removing
+    /// must also work from a copy of DockSense that is not in a protected place (the task may be a leftover from
+    /// one that was), and such a copy must not be the thing that gets administrator rights.
+    /// </summary>
+    public static TdpSetupResult Remove() =>
+        CurrentUserSid() is { } sid
+            ? RunElevated(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), ["/Delete", "/TN", TdpHelperTask.NameFor(sid), "/F"], expectInstalled: false)
+            : TdpSetupResult.Failed;
 
     /// <summary>
     /// Starts the helper task with <paramref name="watts"/> and waits for it. Blocks until the task has ended
     /// (normally well under a second, at most <see cref="WriteTimeout"/>); call it off the UI thread, one call
     /// at a time.
     /// </summary>
-    public static TdpWriteResult Write(int watts)
+    public static TdpWriteOutcome Write(int watts)
     {
         var running = false;
         try
         {
             if (LogonTaskRegistration.OpenRootFolder() is not { } folder || CurrentUserSid() is not { } sid)
             {
-                return TdpWriteResult.Failed;
+                return new TdpWriteOutcome(TdpWriteResult.Failed);
             }
 
             var name = TdpHelperTask.NameFor(sid);
 
-            // The task reports its last run to the second. Runs are kept that far apart, so that the result read
-            // below can only belong to this one and not to the run before it.
-            var sinceLast = DateTime.UtcNow - lastStartUtc;
+            // The task reports its last run to the second. Runs from this process are kept that far apart, so
+            // that the result read below belongs to this one and not to the run before it. Measured on a clock
+            // that only runs forward: the wall clock can be set back.
+            var sinceLast = TimeSpan.FromMilliseconds(Environment.TickCount64 - lastStartTicks);
             if (sinceLast < MinimumGap)
             {
                 Thread.Sleep(MinimumGap - sinceLast);
             }
 
             var started = DateTime.Now;
-            lastStartUtc = DateTime.UtcNow;
+            lastStartTicks = Environment.TickCount64;
             var instance = folder.GetTask(name).Run(watts.ToString(System.Globalization.CultureInfo.InvariantCulture));
             running = true;
 
@@ -233,31 +262,33 @@ internal static class TdpHelper
                 var exitCode = (int)task.LastTaskResult;
                 if ((DateTime)task.LastRunTime >= started.AddSeconds(-1) && exitCode != TaskStillRunning)
                 {
-                    // Any code the helper does not use means it did not end by itself (ended by Task Scheduler,
-                    // or crashed), possibly after a limit had gone in.
-                    return Enum.IsDefined(typeof(TdpWriteResult), exitCode) ? (TdpWriteResult)exitCode : TdpWriteResult.Unconfirmed;
+                    // A write that went through says how many watts it sent. Any code the helper does not use
+                    // means it did not end by itself (ended by Task Scheduler, or crashed), possibly after a
+                    // limit had gone in.
+                    return TdpHelperTask.OutcomeOf(exitCode);
                 }
 
                 Thread.Sleep(50);
             }
 
             Log.Warn("The TDP helper task did not report back.");
-            return TdpWriteResult.Unconfirmed;
+            return new TdpWriteOutcome(TdpWriteResult.Unconfirmed);
         }
         catch (FileNotFoundException)
         {
-            return running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed; // The task was removed meanwhile.
+            // The task was removed meanwhile.
+            return new TdpWriteOutcome(running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed);
         }
         catch (Exception ex)
         {
             // Late-bound COM: a failure can arrive as almost any exception type (see LogonTaskRegistration).
             // Once the task was started, losing track of it does not mean it did nothing.
             Log.Warn($"Could not run the TDP helper task: {ex.Message}");
-            return running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed;
+            return new TdpWriteOutcome(running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed);
         }
     }
 
-    /// <summary>The elevated half of <see cref="Install"/> and <see cref="Remove"/>. Returns the exit code.</summary>
+    /// <summary>The elevated half of <see cref="Install"/>. Returns the exit code.</summary>
     public static int SetupFromCommandLine(string[] args)
     {
         // The task belongs to the user who asked. Approval given with another account's password means that user
@@ -269,27 +300,6 @@ internal static class TdpHelper
 
         try
         {
-            // Quiet: this runs elevated, and the log is in the user's folders.
-            if (LogonTaskRegistration.OpenRootFolder(quiet: true) is not { } folder)
-            {
-                return 1;
-            }
-
-            var name = TdpHelperTask.NameFor(sid);
-            if (args[0].Equals(RemoveArgument, StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    folder.DeleteTask(name, 0);
-                }
-                catch (FileNotFoundException)
-                {
-                    // Already gone.
-                }
-
-                return 0;
-            }
-
             // Checked here as well, not only before asking: this command can be started by anyone, and approving
             // its prompt must never leave a task behind that runs a file the user's programs can replace.
             if (!InstallFolderIsProtected)
@@ -297,6 +307,13 @@ internal static class TdpHelper
                 return 3;
             }
 
+            // Quiet: this runs elevated, and the log is in the user's folders.
+            if (LogonTaskRegistration.OpenRootFolder(quiet: true) is not { } folder)
+            {
+                return 1;
+            }
+
+            var name = TdpHelperTask.NameFor(sid);
             var xml = TdpHelperTask.BuildXml(ExecutablePath, sid);
             folder.RegisterTask(name, xml, TaskCreateOrUpdate, null, null, TaskLogonInteractiveToken, TdpHelperTask.SecurityDescriptorFor(sid));
             return 0;
@@ -321,35 +338,33 @@ internal static class TdpHelper
         }
     }
 
-    private static TdpSetupResult RunElevated(string argument, bool expectInstalled)
+    private static TdpSetupResult RunElevated(string program, string[] arguments, bool expectInstalled)
     {
-        if (CurrentUserSid() is not { } sid)
-        {
-            return TdpSetupResult.Failed;
-        }
-
-        var start = new ProcessStartInfo(ExecutablePath)
+        var start = new ProcessStartInfo(program)
         {
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden,
         };
-        start.ArgumentList.Add(argument);
-        start.ArgumentList.Add(sid);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
 
+        var what = expectInstalled ? "setup" : "removal";
         try
         {
             using var process = Process.Start(start);
             if (process is null || !process.WaitForExit(SetupTimeout))
             {
-                Log.Warn($"The TDP helper setup ({argument}) did not finish.");
+                Log.Warn($"The TDP helper {what} did not finish.");
                 return TdpSetupResult.Failed;
             }
 
             // Installed means this copy's task, ready to use; removed means no task under that name at all.
-            if (process.ExitCode != 0 || (expectInstalled ? !IsInstalled : TaskExists))
+            if (expectInstalled ? (process.ExitCode != 0 || !IsInstalled) : TaskExists)
             {
-                Log.Warn($"The TDP helper setup ({argument}) failed with exit code {process.ExitCode}; task: {DescribeTask()}.");
+                Log.Warn($"The TDP helper {what} failed with exit code {process.ExitCode}; task: {DescribeTask()}.");
                 return TdpSetupResult.Failed;
             }
 
