@@ -91,6 +91,14 @@ Details and raw data: `docs/game-mode-throttle.md`.
   Auto plus 0.5–16 GB (raw values 1, 2, 4, 6 … 32), set to 8 GB (raw 0x10). Option `i` sits at reply offset `6 + 2i`.
   Changes apply only after a **restart**. The legacy `0x000600C1` (APU_MEM) is unsupported here and has unsafe raw values;
   never write it. Only write raw values the firmware lists. Source: G-Helper `AsusACPI.cs`.
+  - **AMD Variable Graphics Memory through ADLX** (issue #10, for devices without ATKACPI such as the MSI Claw A8):
+    `Platform/AmdAdlx` reads it for the diagnostic report only (`amdadlx64.dll` from System32,
+    `ADLXInitializeWithIncompatibleDriver`, `IADLXSystem3` slot 6, vtable slots from the SDK's C headers). On the
+    Ally X (driver 32.0.32015.7029, ADLX 1.5.0.124, read while at the eGPU on 2026-11-26) the chain works up to
+    `IsSupported`, which answers **false**: this driver does not offer VGM, so the option list and any write are
+    untested on real hardware and ADLX is no fallback for ASUS devices. `SetOption` (slot 7) is not declared:
+    AMD's docs and sample say it restarts the PC by itself, Claw Control's code assumes it does not. Whether it
+    needs admin is unknown. The user does not want to ask the reporter to run probe builds.
 - **Plan enumeration**: `PowerEnumerate` skips hidden High Performance-type plans (High performance, Power saver,
   Ultimate) on Modern Standby. `HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes` lists them all and is
   readable without admin, but it also holds the power mode overlays (`961cc777`, `3af9b8d9`, `ded574b5`), which are not plans.

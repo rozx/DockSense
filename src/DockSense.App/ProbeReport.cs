@@ -70,6 +70,28 @@ internal static class ProbeReport
             text.AppendLine("iGPU memory:         not adjustable on this device");
         }
 
+        // Read only, for devices without the ASUS interface: DockSense does not set it this way (yet).
+        var adlx = AmdAdlx.ReadVariableGraphicsMemory(out var adlxNote);
+        if (adlx is null)
+        {
+            text.AppendLine($"AMD graphics memory: not read ({adlxNote})");
+        }
+        else if (!adlx.Supported)
+        {
+            text.AppendLine($"AMD graphics memory: not offered by the driver (ADLX {adlx.AdlxVersion})");
+        }
+        else
+        {
+            text.AppendLine($"AMD graphics memory: Variable Graphics Memory, ADLX {adlx.AdlxVersion}");
+            text.AppendLine($"  current:           {adlx.Current?.ToString() ?? "-"}");
+            text.AppendLine($"  default:           {adlx.Default?.ToString() ?? "-"}");
+            text.AppendLine($"  options:           {adlx.Options.Count}");
+            foreach (var option in adlx.Options)
+            {
+                text.AppendLine($"    {option}");
+            }
+        }
+
         var startup = AutoStart.Status;
         text.AppendLine();
         text.AppendLine($"Start with Windows:  {startup.State switch
