@@ -583,8 +583,17 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        // The profile stays editable while a dialog of this choice is open or the helper is being set up. When a
-        // newer choice was made meanwhile, that one counts: nothing of this one is saved, and nothing put back.
+        // While the helper is being set up, no TDP choice is taken: the rows are locked, and one that still gets
+        // here (typed just before) is put back. Otherwise two choices could be on their way at once, each with
+        // its own questions, and the older one could be sent or saved after the newer.
+        if (_tdpSetupRunning)
+        {
+            SetTdpSelection(profile, previous);
+            return;
+        }
+
+        // Should a newer choice in this profile overtake this one all the same, that one counts: nothing of
+        // this one is saved, and nothing put back.
         var edit = ++profile.TdpEdit;
         if (value != ModeProfileViewModel.TdpUnchanged && device.Offers(value))
         {
@@ -617,16 +626,9 @@ public sealed partial class MainViewModel : ObservableObject
             if (_service.TdpReadiness == TdpReadiness.HelperMissing)
             {
                 var ready = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
-                    && await _service.SetUpTdpHelperAsync(apply: false);
+                    && await SetUpTdpHelperLockedAsync(apply: false);
                 if (profile.TdpEdit != edit)
                 {
-                    // Nothing of this choice is kept, but the helper it set up is there now: the value the
-                    // active profile has saved may have been waiting for exactly that.
-                    if (ready)
-                    {
-                        _service.RefreshTdpReadiness();
-                    }
-
                     return;
                 }
 
@@ -648,6 +650,35 @@ public sealed partial class MainViewModel : ObservableObject
         // The window may have been refreshed from the saved settings while a dialog was open.
         SetTdpSelection(profile, value);
         SaveProfile(profile);
+    }
+
+    /// <summary>True while the helper is being set up from this window (<see cref="SetUpTdpHelperLockedAsync"/>).</summary>
+    private bool _tdpSetupRunning;
+
+    /// <summary>
+    /// Sets up the helper (Windows asks for approval) with the TDP rows of all profiles locked meanwhile, so that
+    /// no second choice, question or setup can start before this one is through.
+    /// </summary>
+    private async Task<bool> SetUpTdpHelperLockedAsync(bool apply)
+    {
+        _tdpSetupRunning = true;
+        foreach (var profile in Profiles)
+        {
+            profile.TdpEditable = false;
+        }
+
+        try
+        {
+            return await _service.SetUpTdpHelperAsync(apply);
+        }
+        finally
+        {
+            _tdpSetupRunning = false;
+            foreach (var profile in Profiles)
+            {
+                profile.TdpEditable = true;
+            }
+        }
     }
 
     /// <summary>Asks whether <paramref name="watts"/>, above the manufacturer's maximum, is really wanted.</summary>
@@ -692,9 +723,9 @@ public sealed partial class MainViewModel : ObservableObject
                 break;
 
             case TdpReadiness.HelperMissing:
-                if (await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
+                if (!_tdpSetupRunning && await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm")))
                 {
-                    await _service.SetUpTdpHelperAsync();
+                    await SetUpTdpHelperLockedAsync(apply: true);
                 }
 
                 break;
@@ -1293,6 +1324,10 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     partial void OnIgpuAskChanged(bool value) => owner.SaveProfile(this);
     /// <summary>Counts the TDP choices made in this profile, so that one still waiting for an answer can tell it was overtaken.</summary>
     internal int TdpEdit { get; set; }
+
+    /// <summary>False while the helper is being set up: the TDP row takes no input then.</summary>
+    [ObservableProperty]
+    public partial bool TdpEditable { get; set; } = true;
 
     partial void OnSelectedTdpChanged(int oldValue, int newValue) => owner.ChangeTdp(this, oldValue, newValue);
 

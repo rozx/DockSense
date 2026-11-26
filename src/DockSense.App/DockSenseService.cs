@@ -1645,8 +1645,15 @@ public sealed class DockSenseService : IDisposable
         }
         else
         {
+            // Looked at afresh, and Windows is asked only when the task is what is missing: without the driver
+            // the task would change nothing, and a copy in an unprotected folder is not to be elevated at all.
             InvalidateTdpReadiness();
-            done = TdpReadiness == TdpReadiness.Ready || await (_tdpSetup = RunTdpSetupAsync());
+            done = TdpReadiness switch
+            {
+                TdpReadiness.Ready => true,
+                TdpReadiness.HelperMissing => await (_tdpSetup = RunTdpSetupAsync()),
+                _ => false,
+            };
         }
 
         if (done && apply)

@@ -152,7 +152,7 @@
                             </Grid>
 
                             <!-- TDP override (needs the PawnIO driver and DockSense's elevated helper task) -->
-                            <Grid Style="{StaticResource SettingRow}" Visibility="{Binding TdpAvailable, Converter={StaticResource BoolToVisibility}}">
+                            <Grid Style="{StaticResource SettingRow}" IsEnabled="{Binding TdpEditable}" Visibility="{Binding TdpAvailable, Converter={StaticResource BoolToVisibility}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
