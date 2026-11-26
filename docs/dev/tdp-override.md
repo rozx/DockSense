@@ -57,6 +57,8 @@ PawnIO refuses callers without administrator rights (opening it fails with error
   has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. If that
   fails, the value stays on record, so Status keeps showing it and the next apply tries again. Removing the
   helper task hands back as well; when a write is still on its way, once that write has returned.
+- If the helper was started but does not report back within 20 s (`TdpWriteResult.Unconfirmed`), it may still set
+  the value, so the value stays on record as possibly in force.
 - If the SMU takes one limit and then refuses another (`TdpWriteResult.PartlyApplied`), the mix is not left
   behind: DockSense puts it on record and hands the TDP back at once.
 - What an override needs (the driver, the task) is looked at again whenever the user acts on it, so installing

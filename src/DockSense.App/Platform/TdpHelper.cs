@@ -153,6 +153,7 @@ internal static class TdpHelper
     /// </summary>
     public static TdpWriteResult Write(int watts)
     {
+        var running = false;
         try
         {
             if (LogonTaskRegistration.OpenRootFolder() is not { } folder || CurrentUserSid() is not { } sid)
@@ -163,6 +164,7 @@ internal static class TdpHelper
             var name = TdpHelperTask.NameFor(sid);
             var started = DateTime.Now;
             var instance = folder.GetTask(name).Run(watts.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            running = true;
 
             var clock = Stopwatch.StartNew();
             while (clock.Elapsed < WriteTimeout && IsRunning(instance))
@@ -183,18 +185,20 @@ internal static class TdpHelper
                 Thread.Sleep(50);
             }
 
+            // Giving up on waiting does not stop the task: it may still set the value.
             Log.Warn("The TDP helper task did not finish in time.");
-            return TdpWriteResult.Failed;
+            return TdpWriteResult.Unconfirmed;
         }
         catch (FileNotFoundException)
         {
-            return TdpWriteResult.Failed; // The task was removed meanwhile.
+            return running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed; // The task was removed meanwhile.
         }
         catch (Exception ex)
         {
             // Late-bound COM: a failure can arrive as almost any exception type (see LogonTaskRegistration).
+            // Once the task was started, losing track of it does not mean it did nothing.
             Log.Warn($"Could not run the TDP helper task: {ex.Message}");
-            return TdpWriteResult.Failed;
+            return running ? TdpWriteResult.Unconfirmed : TdpWriteResult.Failed;
         }
     }
 

@@ -140,6 +140,12 @@ public enum TdpWriteResult
     /// the old ones, which is neither what was asked for nor what the vendor software set.
     /// </summary>
     PartlyApplied = 10,
+
+    /// <summary>
+    /// The helper was started but did not report back in time. It may still set the value, so the value has to
+    /// be treated as possibly in force. Never an exit code: DockSense concludes this by itself.
+    /// </summary>
+    Unconfirmed = 11,
 }
 
 /// <summary>Why a TDP override cannot be written right now, if anything is in the way.</summary>

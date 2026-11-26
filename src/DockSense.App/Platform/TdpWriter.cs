@@ -114,9 +114,6 @@ internal static class TdpWriter
             return TdpWriteResult.ModuleRejected;
         }
 
-        // On battery the firmware's own burst limit can be lower; never send more than that.
-        var milliwatts = checked((uint)device.Clamp(watts, DeviceProbe.OnAcPower) * 1000);
-
         // Without the mutex another tool's request and this one could overwrite each other's arguments and take
         // each other's answers. So no mutex, no write: neither when it stays taken nor when it cannot be opened.
         using var mutex = OpenPciMutex();
@@ -132,6 +129,10 @@ internal static class TdpWriter
             {
                 return TdpWriteResult.NoAnswer;
             }
+
+            // On battery the firmware's own burst limit can be lower; never send more than that. Worked out
+            // only now, right before sending: the charger may have been unplugged while the mutex was waited for.
+            var milliwatts = checked((uint)device.Clamp(watts, DeviceProbe.OnAcPower) * 1000);
 
             // Whether anything was changed before a refusal decides what DockSense has to put right afterwards.
             var applied = 0;

@@ -1434,7 +1434,14 @@ public sealed class DockSenseService : IDisposable
             _tdpWarned = null;
             _tdpBusyRetries = 0;
 
-        // Nothing was changed, so the record goes back to what it was before this attempt.
+        if (result == TdpWriteResult.Unconfirmed)
+        {
+            // The helper was started and may still set the value: it stays on record as possibly in force, so
+            // that a profile without an override gives it back.
+            _tdpState ??= new TdpState(CurrentBoot(), sent);
+        }
+
+        // Otherwise nothing was changed, and the record goes back to what it was before this attempt.
         StateStore.SaveTdp(_tdpState);
         if (result == TdpWriteResult.PartlyApplied)
         {
@@ -1459,7 +1466,14 @@ public sealed class DockSenseService : IDisposable
 
         _tdpBusyRetries = 0;
 
-        // Nothing was changed, so the record goes back to what it was before this attempt.
+        if (result == TdpWriteResult.Unconfirmed)
+        {
+            // The helper was started and may still set the value: it stays on record as possibly in force, so
+            // that a profile without an override gives it back.
+            _tdpState ??= new TdpState(CurrentBoot(), sent);
+        }
+
+        // Otherwise nothing was changed, and the record goes back to what it was before this attempt.
         StateStore.SaveTdp(_tdpState);
         if (result == TdpWriteResult.PartlyApplied)
         {
