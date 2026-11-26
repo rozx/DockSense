@@ -224,7 +224,9 @@ Details and raw data: `docs/game-mode-throttle.md`.
       Test with two single-file publishes of different `-p:Version` (see the release workflow's publish command).
       The real UAC path can only be exercised from 0.3 on, because the download must know `--install-update`.
 - No admin rights are needed, with one exception: updating a copy in a protected folder (the user's own install is
-  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update.
+  in `C:\Program Files (x86)\DockSense`) asks for UAC once per update. Unknown for one path: whether the AMD
+  driver accepts an iGPU memory change from a standard user (the experimental ADLX route). DockSense has no
+  elevation for it; a refusal is reported and nothing changes.
 - `tests/DockSense.Core.Tests` (xUnit).
 - `tools/DockSense.IconGen`: the pixel-art icons are text grids in `Sprites.cs`. Running the tool regenerates
   `assets/icons` (multi-size .ico with DIB frames; 1x/3x/8x PNGs) and `assets/logo.png`.

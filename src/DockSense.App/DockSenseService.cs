@@ -73,6 +73,7 @@ public sealed class DockSenseService : IDisposable
     private bool _amdDriverReadPending;
     private bool _amdStoreUnanswered;
     private bool? _fseBeforeUnansweredStore;
+    private DockMode? _modeAtUnansweredStore;
     private bool _resumedInSameMode;
     private bool _disposed;
 
@@ -1069,12 +1070,21 @@ public sealed class DockSenseService : IDisposable
 
         Log.Info($"{context}: asking the AMD driver to store iGPU memory {megabytes} MB. The driver may restart the PC by itself.");
         var stored = AmdAdlx.SetVariableGraphicsMemory(megabytes, out var note, out var late);
+        if (stored is null && late is { IsCompleted: true })
+        {
+            // Answered in the moment after the wait gave up: an answer like any other.
+            (var answered, note) = late.Result;
+            stored = answered;
+            late = null;
+        }
+
         if (stored is null && late is not null)
         {
             // Not a failure: the request is still with the driver and may yet go through (or restart the PC).
             // Callers keep what they prepared for a restart, and the outcome is picked up when it comes.
             Log.Warn($"{context}: {note}. It is not known yet whether iGPU memory {megabytes} MB was stored.");
             _amdStoreUnanswered = true;
+            _modeAtUnansweredStore = Mode;
             _ = FollowLateAmdStoreAsync(context, late, megabytes, raw);
             return false;
         }
@@ -1129,10 +1139,15 @@ public sealed class DockSenseService : IDisposable
     /// </summary>
     private async Task FollowLateAmdStoreAsync(string context, Task<(bool Stored, string Note)> late, int megabytes, uint raw)
     {
+        // Never inside the call that started this: its caller must first see the request as unanswered, also
+        // when the driver answers at that very moment.
+        await Task.Yield();
         var (stored, note) = await late;
         _amdStoreUnanswered = false;
         var fseBefore = _fseBeforeUnansweredStore;
+        var modeThen = _modeAtUnansweredStore;
         _fseBeforeUnansweredStore = null;
+        _modeAtUnansweredStore = null;
         if (_disposed)
         {
             return;
@@ -1141,7 +1156,19 @@ public sealed class DockSenseService : IDisposable
         if (stored)
         {
             NoteStoredThroughAmdDriver($"{context} (late answer)", megabytes, raw);
-            if (IgpuMemoryPendingMb is not null)
+            if (modeThen is { } then && then != Mode)
+            {
+                // The mode changed while the driver took its time. The restart that was prepared no longer fits,
+                // and what the mode the PC is in now asks for is worked out afresh against the size just stored.
+                Log.Info($"{context}: the mode changed from {then} to {Mode} before the driver answered; the prepared restart is off.");
+                StateStore.ClearIgpuRestartTarget();
+                if (!Paused)
+                {
+                    ApplyIgpuMemory(Mode, Config.ProfileFor(Mode), ApplyReason.ModeChange);
+                }
+            }
+
+            if (IgpuMemoryOffer is null && IgpuMemoryPendingMb is not null)
             {
                 IgpuMemoryChanged?.Invoke(megabytes);
             }

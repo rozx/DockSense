@@ -97,8 +97,9 @@ public sealed class IgpuRestartPlannerTests
         var config = Config(handheld: 8192, docked: null, egpu: 512);
         var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddMinutes(1));
 
-        // DockSense restarted, Windows did not (the user cancelled the restart).
-        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(41), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 16));
+        // DockSense restarted, Windows did not (the user cancelled the restart). The size restarted for counts as
+        // in effect here, so that only the boot decides.
+        Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(41), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
         Assert.Null(IgpuRestartPlanner.AwaitedMode(target, Boot(43, minutesLater: 3 * 24 * 60), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
     }
 

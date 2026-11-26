@@ -60,7 +60,13 @@ internal static partial class HardwareDiagnostics
         List<(string, string)> facts = [];
         using (var bios = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\BIOS"))
         {
-            string Value(string name) => (bios?.GetValue(name) as string)?.Trim() ?? string.Empty;
+            // Plain strings on the devices seen so far; a multi-string is taken by its first line.
+            string Value(string name) => bios?.GetValue(name) switch
+            {
+                string text => text.Trim(),
+                string[] lines => lines.FirstOrDefault(line => !string.IsNullOrWhiteSpace(line))?.Trim() ?? string.Empty,
+                _ => string.Empty,
+            };
             facts.Add(("maker / model", Join(Value("SystemManufacturer"), Value("SystemProductName"))));
             facts.Add(("family / SKU", Join(Value("SystemFamily"), Value("SystemSKU"))));
             facts.Add(("board", Join(Value("BaseBoardManufacturer"), Value("BaseBoardProduct"))));
