@@ -868,6 +868,11 @@ public sealed class DockSenseService : IDisposable
             return false;
         }
 
+        if (RefuseWhileAmdStoreUnanswered())
+        {
+            return false;
+        }
+
         IgpuMemory = SafeReadIgpuMemory() ?? IgpuMemory;
         var decision = IgpuMemoryPlanner.Decide(Config.ProfileFor(offer.Mode), IgpuMemory, _igpuBoot?.EffectiveRaw, IgpuMemoryViaAmdDriver);
         if (restartFollows)
@@ -912,6 +917,11 @@ public sealed class DockSenseService : IDisposable
     public bool PrepareRestart(DockMode mode)
     {
         if (Config.ProfileFor(mode).IgpuMemoryMb is not { } target || IgpuMemory is null)
+        {
+            return false;
+        }
+
+        if (RefuseWhileAmdStoreUnanswered())
         {
             return false;
         }
@@ -1058,6 +1068,24 @@ public sealed class DockSenseService : IDisposable
         }
 
         NoteStoredThroughAmdDriver(context, megabytes, raw);
+        return true;
+    }
+
+    /// <summary>
+    /// While the AMD driver has not answered a store request, that request may still go through or restart the PC,
+    /// and what was prepared for its restart belongs to it. Nothing else is prepared or stored until it answers;
+    /// the user is told so. Returns true when a request is outstanding.
+    /// </summary>
+    private bool RefuseWhileAmdStoreUnanswered()
+    {
+        if (!_amdStoreUnanswered)
+        {
+            return false;
+        }
+
+        Log.Warn("The AMD driver has not answered the previous iGPU memory request yet; nothing else is stored or prepared until it does.");
+        NotifyWarning(Loc.T("Act_IgpuAmdNoAnswer"));
+        RaiseStatusChanged();
         return true;
     }
 
