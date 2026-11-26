@@ -128,6 +128,9 @@ public enum TdpWriteResult
 
     /// <summary>Anything else, including a helper that could not be started or did not finish.</summary>
     Failed = 8,
+
+    /// <summary>Another hardware tool was using the SMU and did not let go in time; nothing was set.</summary>
+    Busy = 9,
 }
 
 /// <summary>Why a TDP override cannot be written right now, if anything is in the way.</summary>

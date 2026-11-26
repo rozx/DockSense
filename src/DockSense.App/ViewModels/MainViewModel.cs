@@ -584,6 +584,8 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
             }
 
+            // The driver may have been installed since this was last looked at.
+            _service.RefreshTdpReadiness();
             if (_service.TdpReadiness == TdpReadiness.HelperMissing
                 && !(await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
                     && await _service.SetUpTdpHelperAsync()))
@@ -601,6 +603,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The button next to a profile's "not applied" note: get the driver, or set up the helper.</summary>
     internal async Task ResolveTdpNote()
     {
+        // Look again first: the note may be about something the user has put right meanwhile (the driver
+        // installed after following the link). Then the note goes away, or its button offers the next step.
+        _service.RefreshTdpReadiness();
         switch (_service.TdpReadiness)
         {
             case TdpReadiness.DriverMissing:

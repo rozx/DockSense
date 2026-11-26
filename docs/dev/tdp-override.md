@@ -31,9 +31,17 @@ PawnIO refuses callers without administrator rights (opening it fails with error
   (`TdpWriteResult`) is the result, read back from the task.
 - Before any limit is sent, the SMU's test message must answer correctly (argument plus one). A wrong answer
   means these are not the registers of this processor, and nothing is set.
-- **The task runs this executable elevated, so it is only offered when the install folder cannot be written
-  without admin** (Debug builds skip that check). Never weaken this: in a user-writable folder any program could
-  replace the file and get administrator rights without a prompt.
+- **The task runs this executable elevated, so it is only registered when nobody without administrator rights
+  can replace that file** (Debug builds skip the check). Never weaken this: from anywhere else a program could
+  put its own code in its place and get administrator rights without a prompt.
+  - The check reads the permissions (`TdpHelper.LocationIsProtected`, decided by `Core/ElevatedLocation`): the
+    file and its folder must be owned by, and writable only for, administrators, SYSTEM or TrustedInstaller, and
+    no folder above may let anyone else delete or rename what is inside, change permissions or take ownership.
+    Creating new folders further up does not count: Windows lets everyone do that at the root of a drive.
+  - It runs twice: before DockSense asks for approval, and again in the elevated `--install-tdp-helper` itself,
+    because that command can be started by anyone. A write test would not do there: elevated, it always succeeds.
+- The helper takes the mutex hardware tools share for SMU access (`Global\Access_PCI`). If another tool holds it
+  for more than 2 s, nothing is sent (`TdpWriteResult.Busy`) and DockSense tries again, up to three times.
 - Registering the task from an agent shell is blocked; the user does that step in the UI.
 
 ## Keeping it in force, and giving it back
@@ -43,7 +51,10 @@ PawnIO refuses callers without administrator rights (opening it fails with error
   settings (`Platform/ArmouryCrate` watches that registry key). One write runs at a time.
 - `tdp.json` remembers the value in force for this boot. A restart of the PC clears every limit.
 - A mode without an override then gets the TDP handed back: DockSense re-sends the performance mode Armoury Crate
-  has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again.
+  has selected through ATKACPI (`0x00120075`), and the firmware loads that mode's own limits again. If that
+  fails, the value stays on record, so Status keeps showing it and the next apply tries again.
+- What an override needs (the driver, the task) is looked at again whenever the user acts on it, so installing
+  PawnIO while DockSense is open is noticed without a restart.
 
 ## The Mode profiles row
 

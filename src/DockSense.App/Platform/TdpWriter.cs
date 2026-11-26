@@ -28,6 +28,8 @@ internal static class TdpWriter
     /// <summary>The mutex hardware tools share for SMU and PCI config access (HWiNFO, RyzenAdj, UXTU and others).</summary>
     private const string PciMutexName = @"Global\Access_PCI";
 
+    private static readonly TimeSpan MutexWait = TimeSpan.FromSeconds(2);
+
     private const int PollLimit = 8192;
     private const int MailboxArguments = 6;
     private const uint TestArgument = 0x47;
@@ -115,8 +117,15 @@ internal static class TdpWriter
         // On battery the firmware's own burst limit can be lower; never send more than that.
         var milliwatts = checked((uint)device.Clamp(watts, DeviceProbe.OnAcPower) * 1000);
 
+        // Without the mutex another tool's request and this one could overwrite each other's arguments and take
+        // each other's answers, so a mutex that exists but stays taken means: not now.
         using var mutex = OpenPciMutex();
         var held = Acquire(mutex);
+        if (mutex is not null && !held)
+        {
+            return TdpWriteResult.Busy;
+        }
+
         try
         {
             // The test message sets nothing. A wrong answer means these are not the registers of this processor.
@@ -204,7 +213,7 @@ internal static class TdpWriter
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
         {
-            return null; // Without it the write still works; it only lacks the courtesy towards other tools.
+            return null; // It cannot even be opened, so no other tool can be coordinated with through it.
         }
     }
 
@@ -212,7 +221,7 @@ internal static class TdpWriter
     {
         try
         {
-            return mutex?.WaitOne(TimeSpan.FromMilliseconds(500)) == true;
+            return mutex?.WaitOne(MutexWait) == true;
         }
         catch (AbandonedMutexException)
         {

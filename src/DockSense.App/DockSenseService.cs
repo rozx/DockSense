@@ -59,6 +59,8 @@ public sealed class DockSenseService : IDisposable
     /// </summary>
     private static readonly TimeSpan TdpReassertDelay = TimeSpan.FromSeconds(3);
 
+    private const int MaxTdpBusyRetries = 3;
+
     private readonly ConfigStore _configStore;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _rescanTimer = new() { Interval = CoalesceDelay };
@@ -92,6 +94,7 @@ public sealed class DockSenseService : IDisposable
     private string? _tdpWarned;
     private TdpReadiness? _tdpReadiness;
     private bool? _tdpHelperInstalled;
+    private int _tdpBusyRetries;
 
     public DockSenseService(ConfigStore configStore)
     {
@@ -1416,8 +1419,20 @@ public sealed class DockSenseService : IDisposable
             _tdpState = new TdpState(CurrentBoot(), sent);
             StateStore.SaveTdp(_tdpState);
             _tdpWarned = null;
+            _tdpBusyRetries = 0;
             return;
         }
+
+        // Another hardware tool had the SMU: nothing was set, and a moment later it is usually free again.
+        if (result == TdpWriteResult.Busy && _tdpBusyRetries < MaxTdpBusyRetries)
+        {
+            _tdpBusyRetries++;
+            Log.Info($"The SMU was busy; sending {sent} W again shortly (attempt {_tdpBusyRetries} of {MaxTdpBusyRetries}).");
+            QueueTdpReassert(reason);
+            return;
+        }
+
+        _tdpBusyRetries = 0;
 
         // Whatever was in the way may have changed since it was last looked at (the driver or the task removed).
         InvalidateTdpReadiness();
@@ -1463,12 +1478,39 @@ public sealed class DockSenseService : IDisposable
         }
         else
         {
+            // The limit is still in force, so it stays on record: Status keeps showing it, and the next time a
+            // profile without an override is applied, the hand-back is tried again.
             Log.Warn($"Could not hand the TDP back (performance mode {asusMode}); {_tdpState?.Watts} W stays until the vendor software or a restart changes it.");
-            NotifyWarning(Loc.F("Act_TdpHandBackFailed", _tdpState?.Watts));
+            var message = Loc.F("Act_TdpHandBackFailed", _tdpState?.Watts);
+            if (_tdpWarned != message)
+            {
+                _tdpWarned = message;
+                NotifyWarning(message);
+            }
+
+            return;
         }
 
+        _tdpWarned = null;
         _tdpState = null;
         StateStore.SaveTdp(null);
+    }
+
+    /// <summary>
+    /// Looks again at what a TDP override needs (the driver, the helper task), for when the user may just have
+    /// installed it, and sends the wanted value if nothing is in the way any more.
+    /// </summary>
+    public void RefreshTdpReadiness()
+    {
+        InvalidateTdpReadiness();
+        if (TdpReadiness == TdpReadiness.Ready && _tdpWanted is not null && _tdpState?.Watts != _tdpWanted)
+        {
+            _tdpWarned = null;
+            _tdpReason = "what was missing is there now";
+            _ = WriteTdpAsync();
+        }
+
+        RaiseStatusChanged();
     }
 
     /// <summary>Registers the elevated helper task (Windows asks for approval), then sends the wanted TDP.</summary>

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using DockSense.Core;
 
@@ -50,9 +51,8 @@ internal static class TdpHelper
     private static string ExecutablePath => Environment.ProcessPath ?? string.Empty;
 
     /// <summary>
-    /// True when this copy sits where only administrators can change files. The helper task runs this file
-    /// elevated, so from a folder the user can write to, any program could put its own code there and get
-    /// administrator rights without a prompt. Debug builds skip the check so the feature can be developed.
+    /// True when the helper task may run this copy: it sits where only administrators can change files
+    /// (<see cref="LocationIsProtected"/>). Debug builds skip the check so the feature can be developed.
     /// </summary>
     public static bool InstallFolderIsProtected
     {
@@ -61,9 +61,77 @@ internal static class TdpHelper
 #if DEBUG
             return true;
 #else
-            return !UpdateInstaller.CanWriteInstallFolder();
+            return LocationIsProtected;
 #endif
         }
+    }
+
+    /// <summary>
+    /// True when nobody without administrator rights can replace this executable: not the file, not its folder,
+    /// not a folder above it (<see cref="ElevatedLocation"/>). The helper task runs this file elevated, so from
+    /// anywhere else a program could put its own code in its place and get administrator rights without a prompt.
+    /// Read from the permissions, so the answer is the same whether or not the caller is elevated. A location
+    /// whose permissions cannot be read counts as unprotected.
+    /// </summary>
+    public static bool LocationIsProtected
+    {
+        get
+        {
+            try
+            {
+                var file = new FileInfo(ExecutablePath);
+                if (!file.Exists || file.Directory is not { } folder)
+                {
+                    return false;
+                }
+
+                var ancestors = new List<LocationAccess>();
+                for (var above = folder.Parent; above is not null; above = above.Parent)
+                {
+                    ancestors.Add(ReadAccess(above.GetAccessControl(AccessSections)));
+                }
+
+                return ElevatedLocation.IsProtected(
+                    ReadAccess(file.GetAccessControl(AccessSections)), ReadAccess(folder.GetAccessControl(AccessSections)), ancestors);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
+                or InvalidOperationException or IdentityNotMappedException)
+            {
+                return false;
+            }
+        }
+    }
+
+    private const AccessControlSections AccessSections = AccessControlSections.Access | AccessControlSections.Owner;
+
+    // The generic bits can stand in for the specific ones in an entry that was never mapped.
+    private const FileSystemRights GenericWrite = (FileSystemRights)0x40000000;
+    private const FileSystemRights GenericAll = (FileSystemRights)0x10000000;
+
+    private const FileSystemRights ChangeContents =
+        FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete | GenericWrite | GenericAll;
+
+    private const FileSystemRights TakeControl =
+        FileSystemRights.DeleteSubdirectoriesAndFiles | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | GenericAll;
+
+    private static LocationAccess ReadAccess(FileSystemSecurity security)
+    {
+        var owner = security.GetOwner(typeof(SecurityIdentifier))?.Value ?? string.Empty;
+        var grants = new List<LocationGrant>();
+        foreach (FileSystemAccessRule rule in security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier)))
+        {
+            // Entries that are only handed down to children do not apply to the object itself.
+            if (rule.AccessControlType != AccessControlType.Allow || rule.PropagationFlags.HasFlag(PropagationFlags.InheritOnly))
+            {
+                continue;
+            }
+
+            var rights = ((rule.FileSystemRights & ChangeContents) != 0 ? LocationRights.ChangeContents : LocationRights.None)
+                | ((rule.FileSystemRights & TakeControl) != 0 ? LocationRights.TakeControl : LocationRights.None);
+            grants.Add(new LocationGrant(rule.IdentityReference.Value, rights));
+        }
+
+        return new LocationAccess(owner, grants);
     }
 
     /// <summary>True when the helper task is registered for this copy of DockSense.</summary>
@@ -172,6 +240,13 @@ internal static class TdpHelper
                 }
 
                 return 0;
+            }
+
+            // Checked here as well, not only before asking: this command can be started by anyone, and approving
+            // its prompt must never leave a task behind that runs a file the user's programs can replace.
+            if (!InstallFolderIsProtected)
+            {
+                return 3;
             }
 
             var xml = TdpHelperTask.BuildXml(ExecutablePath, sid);

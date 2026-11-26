@@ -296,7 +296,7 @@ internal static class ProbeReport
             ? $"{device.Board}: {device.MinWatts} W to {device.PluggedIn.Max} W plugged in / {device.OnBattery.Max} W on battery; never more than {device.PluggedIn.Ceiling} W / {device.OnBattery.Ceiling} W"
             : $"not known for this board ({TdpWriter.BoardName ?? "-"})");
         Line(text, 0, "PawnIO driver", PawnIo.IsInstalled ? $"installed{(PawnIo.InstalledVersion is { } version ? $" ({version})" : string.Empty)}" : "not installed");
-        Line(text, 0, "TDP helper task", $"{TdpHelper.DescribeTask()}; install folder protected: {TdpHelper.InstallFolderIsProtected}");
+        Line(text, 0, "TDP helper task", $"{TdpHelper.DescribeTask()}; install folder protected: {TdpHelper.LocationIsProtected}");
         Line(text, 0, "Armoury Crate mode", $"{ArmouryCrate.SelectedMode(DeviceProbe.OnAcPower)?.ToString() ?? "-"} (for the current power source)");
         Line(text, 0, "TDP set by DockSense", StateStore.LoadTdp() is { } state ? $"{state.Watts} W" : "none");
     }
