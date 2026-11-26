@@ -583,6 +583,9 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // The profile stays editable while a dialog of this choice is open or the helper is being set up. When a
+        // newer choice was made meanwhile, that one counts: nothing of this one is saved, and nothing put back.
+        var edit = ++profile.TdpEdit;
         if (value != ModeProfileViewModel.TdpUnchanged && device.Offers(value))
         {
             // The question names the watts, so the answer covers that value and anything lower. Going higher
@@ -593,7 +596,13 @@ public sealed partial class MainViewModel : ObservableObject
             var agreed = false;
             if (!device.IsConfirmed(value, _service.Config.TdpConfirmedBoard, _service.Config.TdpConfirmedWatts))
             {
-                if (!await ConfirmAboveMaximumAsync(device, value))
+                var yes = await ConfirmAboveMaximumAsync(device, value);
+                if (profile.TdpEdit != edit)
+                {
+                    return;
+                }
+
+                if (!yes)
                 {
                     SetTdpSelection(profile, previous);
                     return;
@@ -605,12 +614,20 @@ public sealed partial class MainViewModel : ObservableObject
             // The driver may have been installed since this was last looked at. Nothing is sent from here: the
             // value being replaced must not go out, and the new one is applied when the profile is saved below.
             _service.RefreshTdpReadiness(apply: false);
-            if (_service.TdpReadiness == TdpReadiness.HelperMissing
-                && !(await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
-                    && await _service.SetUpTdpHelperAsync(apply: false)))
+            if (_service.TdpReadiness == TdpReadiness.HelperMissing)
             {
-                SetTdpSelection(profile, previous);
-                return;
+                var ready = await Dialogs.ConfirmAsync(Loc.T("Tdp_SetupTitle"), Loc.T("Tdp_SetupMessage"), Loc.T("Tdp_SetupConfirm"))
+                    && await _service.SetUpTdpHelperAsync(apply: false);
+                if (profile.TdpEdit != edit)
+                {
+                    return;
+                }
+
+                if (!ready)
+                {
+                    SetTdpSelection(profile, previous);
+                    return;
+                }
             }
 
             // Kept only now, with the value it was given for: backing out of the helper setup takes the
@@ -1258,6 +1275,9 @@ public sealed partial class ModeProfileViewModel(DockMode mode, MainViewModel ow
     partial void OnSelectedIgpuChanged(int value) => owner.SaveProfile(this);
 
     partial void OnIgpuAskChanged(bool value) => owner.SaveProfile(this);
+    /// <summary>Counts the TDP choices made in this profile, so that one still waiting for an answer can tell it was overtaken.</summary>
+    internal int TdpEdit { get; set; }
+
     partial void OnSelectedTdpChanged(int oldValue, int newValue) => owner.ChangeTdp(this, oldValue, newValue);
 
     partial void OnTdpEnabledChanged(bool value)

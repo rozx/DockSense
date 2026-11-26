@@ -146,7 +146,7 @@ public sealed partial class OptionSlider : UserControl
 
     /// <summary>
     /// The option a typed text means, or -1: a label is that option, and a number is the option whose number is
-    /// closest. The whole text has to be one plain number, with a unit after it at most ("20", "20 W", "0.5 GB"):
+    /// closest. The whole text has to be one plain number, with the options' unit after it at most ("20", "20 W"):
     /// "-20" or "20-30" mean nothing here, and must not turn into 20. A Chinese input method types "。" for the
     /// decimal point.
     /// </summary>
@@ -168,6 +168,14 @@ public sealed partial class OptionSlider : UserControl
 
         var match = NumberPattern().Match(typed.Replace('。', '.').Replace(',', '.'));
         if (!match.Success || !double.TryParse(match.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
+        {
+            return -1;
+        }
+
+        // A unit has to be the one the options are shown in: "20 mW" is not 20 W.
+        var unit = match.Groups[2].Value;
+        if (unit.Length > 0 && !options.Any(o => NumberPattern().Match(o.Label) is { Success: true } label
+            && string.Equals(label.Groups[2].Value, unit, StringComparison.CurrentCultureIgnoreCase)))
         {
             return -1;
         }
@@ -258,6 +266,6 @@ public sealed partial class OptionSlider : UserControl
         Commit();
     }
 
-    [GeneratedRegex(@"^(\d+(?:\.\d+)?)\s*\p{L}*$")]
+    [GeneratedRegex(@"^(\d+(?:\.\d+)?)\s*(\p{L}*)$")]
     private static partial Regex NumberPattern();
 }
