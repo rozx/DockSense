@@ -332,4 +332,5 @@
   <data name="Toast_IgpuAskMessageAmd" xml:space="preserve"><value>{0} mode asks for it. Experimental: the AMD graphics driver may restart the PC right away. Save your work first.</value></data>
   <data name="Restart_AmdHint" xml:space="preserve"><value>Experimental: the iGPU memory is stored through the AMD graphics driver, which may restart the PC by itself. If anything goes wrong, please report it on GitHub (About &gt; Report an issue).</value></data>
   <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>The AMD graphics driver did not store the iGPU memory ({0}). This feature is experimental: please report it on GitHub.</value></data>
+  <data name="Act_IgpuAmdNoAnswer" xml:space="preserve"><value>The AMD graphics driver has not answered yet, so it is not known whether the iGPU memory was stored. DockSense did not restart the PC and will say what came of it. This feature is experimental: please report it on GitHub.</value></data>
 </root>

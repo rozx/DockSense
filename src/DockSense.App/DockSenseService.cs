@@ -71,6 +71,7 @@ public sealed class DockSenseService : IDisposable
     private DockMode? _igpuAwaitedMode;
     private IgpuMemoryOffer? _igpuAsked;
     private bool _amdDriverReadPending;
+    private bool _amdStoreUnanswered;
     private bool _resumedInSameMode;
     private bool _disposed;
 
@@ -879,7 +880,11 @@ public sealed class DockSenseService : IDisposable
         var stored = decision.Step == IgpuMemoryStep.None
             ? IgpuMemory.RawFor(offer.MemoryMb) == IgpuMemory.CurrentRaw // another tool stored it in the meantime
             : StoreIgpuMemory($"{offer.Mode} (agreed)", offer.MemoryMb, decision.Raw);
-        if (!stored)
+        if (!stored && _amdStoreUnanswered)
+        {
+            NotifyWarning(Loc.T("Act_IgpuAmdNoAnswer")); // the restart target stays: the request may yet go through
+        }
+        else if (!stored)
         {
             if (restartFollows)
             {
@@ -944,7 +949,12 @@ public sealed class DockSenseService : IDisposable
         // "Already stored" only counts when the firmware was just read: after a failed read the value known here
         // may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
         var stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
-        if (!stored)
+        if (!stored && _amdStoreUnanswered)
+        {
+            // Nothing is taken back: the request is still with the driver and may yet go through.
+            NotifyWarning(Loc.T("Act_IgpuAmdNoAnswer"));
+        }
+        else if (!stored)
         {
             StateStore.ClearIgpuRestartTarget();
             if (fseSet is { } set && fseBefore is { } before && before != set && FseSettings.SetStartupToFse(before))
@@ -1022,14 +1032,37 @@ public sealed class DockSenseService : IDisposable
     /// </summary>
     private bool StoreIgpuMemoryThroughAmdDriver(string context, int megabytes, uint raw)
     {
+        if (_amdStoreUnanswered)
+        {
+            Log.Warn($"{context}: the AMD driver has not answered the previous request yet; not sending another one.");
+            return false;
+        }
+
         Log.Info($"{context}: asking the AMD driver to store iGPU memory {megabytes} MB. The driver may restart the PC by itself.");
-        if (!AmdAdlx.SetVariableGraphicsMemory(megabytes, out var note))
+        var stored = AmdAdlx.SetVariableGraphicsMemory(megabytes, out var note, out var late);
+        if (stored is null && late is not null)
+        {
+            // Not a failure: the request is still with the driver and may yet go through (or restart the PC).
+            // Callers keep what they prepared for a restart, and the outcome is picked up when it comes.
+            Log.Warn($"{context}: {note}. It is not known yet whether iGPU memory {megabytes} MB was stored.");
+            _amdStoreUnanswered = true;
+            _ = FollowLateAmdStoreAsync(context, late, megabytes, raw);
+            return false;
+        }
+
+        if (stored != true)
         {
             Log.Warn($"{context}: the AMD driver did not store iGPU memory {megabytes} MB: {note}.");
             AddActivity(Loc.F("Act_IgpuAmdFailed", note));
             return false;
         }
 
+        NoteStoredThroughAmdDriver(context, megabytes, raw);
+        return true;
+    }
+
+    private void NoteStoredThroughAmdDriver(string context, int megabytes, uint raw)
+    {
         // The driver is not known to report a size that waits for a restart, so remember it here.
         IgpuMemory = IgpuMemory! with { CurrentRaw = raw };
         if (_igpuBoot is { } boot)
@@ -1040,7 +1073,40 @@ public sealed class DockSenseService : IDisposable
 
         Log.Info($"{context}: the AMD driver stored iGPU memory {megabytes} MB and has not restarted the PC by itself.");
         AddActivity(Loc.F("Act_IgpuMemory", FormatMemory(megabytes)));
-        return true;
+    }
+
+    /// <summary>
+    /// The AMD driver answered a store request after DockSense had stopped waiting for it. If the size went in,
+    /// it now waits for a restart like any other, and the notification offers one. If not, the restart that was
+    /// prepared for it is off.
+    /// </summary>
+    private async Task FollowLateAmdStoreAsync(string context, Task<(bool Stored, string Note)> late, int megabytes, uint raw)
+    {
+        var (stored, note) = await late;
+        _amdStoreUnanswered = false;
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (stored)
+        {
+            NoteStoredThroughAmdDriver($"{context} (late answer)", megabytes, raw);
+            if (IgpuMemoryPendingMb is not null)
+            {
+                IgpuMemoryChanged?.Invoke(megabytes);
+            }
+        }
+        else
+        {
+            // The sign-in setting a "Restart for <mode>" may have prepared is left: the next sign-in writes the
+            // setting of the mode the PC is in then.
+            Log.Warn($"{context}: the AMD driver answered late and did not store iGPU memory {megabytes} MB: {note}.");
+            StateStore.ClearIgpuRestartTarget();
+            NotifyWarning(Loc.F("Act_IgpuAmdFailed", note));
+        }
+
+        RaiseStatusChanged();
     }
 
     /// <summary>This boot: Windows' boot counter (readable without admin) plus the start time as a fallback.</summary>

@@ -101,7 +101,7 @@ internal static class AmdAdlx
             return new AdlxMemoryReport("simulated", Supported: true, options[1], options[1], options);
         }
 
-        var (report, problem) = OnOwnThread<AdlxMemoryReport>(ReadPatience, () => WithMemoryInterface<AdlxMemoryReport>((vgm, version) =>
+        var read = OnOwnThread<AdlxMemoryReport>(() => WithMemoryInterface<AdlxMemoryReport>((vgm, version) =>
         {
             var result = Method<GetFlag>(vgm, VgmIsSupported)(vgm, out var supported);
             if (result != 0)
@@ -114,28 +114,36 @@ internal static class AmdAdlx
                 : (new AdlxMemoryReport(
                     version, Supported: true, ReadOption(vgm, VgmGetOption), ReadOption(vgm, VgmGetDefaultOption), ReadOptions(vgm)), string.Empty);
         }));
-        note = problem;
+        if (!read.Wait(ReadPatience))
+        {
+            note = $"the AMD driver did not answer within {ReadPatience.TotalSeconds:0} s";
+            return null;
+        }
+
+        (var report, note) = read.Result;
         return report;
     }
 
     /// <summary>
     /// Stores a Variable Graphics Memory size, choosing the driver's own custom option of that size. Returns
     /// false with the reason in <paramref name="note"/> when the driver does not offer the size as a custom one
-    /// or refuses.
+    /// or refuses. Returns null when the driver has not answered in time: the call is still running then, and
+    /// <paramref name="late"/> completes with its outcome, which may well be that the size was stored.
     /// </summary>
     /// <remarks>
     /// AMD documents <c>SetOption</c> as restarting the PC by itself, so this may not return at all. Only ever call
     /// it after the user agreed to a restart.
     /// </remarks>
-    public static bool SetVariableGraphicsMemory(int megabytes, out string note)
+    public static bool? SetVariableGraphicsMemory(int megabytes, out string note, out Task<(bool Stored, string Note)>? late)
     {
+        late = null;
         if (Simulated)
         {
             note = "simulated driver: nothing is stored";
             return false;
         }
 
-        var (stored, problem) = OnOwnThread<bool>(WritePatience, () => WithMemoryInterface<bool>((vgm, version) =>
+        var write = OnOwnThread<bool>(() => WithMemoryInterface<bool>((vgm, version) =>
         {
             if (Method<GetFlag>(vgm, VgmIsSupported)(vgm, out var supported) != 0 || supported == 0)
             {
@@ -184,7 +192,14 @@ internal static class AmdAdlx
                 Free(list);
             }
         }));
-        note = problem;
+        if (!write.Wait(WritePatience))
+        {
+            note = $"the AMD driver has not answered within {WritePatience.TotalSeconds:0} s";
+            late = write;
+            return null;
+        }
+
+        (var stored, note) = write.Result;
         return stored;
     }
 
@@ -229,23 +244,31 @@ internal static class AmdAdlx
         }
     }
 
-    private static (T? Value, string Problem) OnOwnThread<T>(TimeSpan patience, Func<(T? Value, string Problem)> work)
+    /// <summary>
+    /// Runs <paramref name="work"/> on a thread of its own. The task completes when the work does, however long
+    /// the driver takes: a caller that stops waiting can still learn the outcome.
+    /// </summary>
+    private static Task<(T? Value, string Problem)> OnOwnThread<T>(Func<(T? Value, string Problem)> work)
     {
-        (T? Value, string Problem) outcome = (default, string.Empty);
+        var completion = new TaskCompletionSource<(T? Value, string Problem)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
             try
             {
-                outcome = work();
+                completion.SetResult(work());
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
             {
-                outcome = (default, NoDriver);
+                completion.SetResult((default, NoDriver));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                completion.SetResult((default, $"{ex.GetType().Name}: {ex.Message}"));
             }
         })
         { IsBackground = true, Name = "ADLX" };
         thread.Start();
-        return thread.Join(patience) ? outcome : (default, $"the AMD driver did not answer within {patience.TotalSeconds:0} s");
+        return completion.Task;
     }
 
     /// <summary>The note of a read on a PC without the AMD driver: nothing to try again later.</summary>

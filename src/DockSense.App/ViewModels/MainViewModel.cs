@@ -233,6 +233,12 @@ public sealed partial class MainViewModel : ObservableObject
             message += $"\n\n{Loc.T("RestartFor_EgpuHint")}";
         }
 
+        if (_service.EgpuConnected)
+        {
+            // Restarting for another mode with an eGPU still attached: the PC may not start that way.
+            message += $"\n\n{Loc.T("Toast_EgpuHint")}";
+        }
+
         if (_service.IgpuMemoryViaAmdDriver)
         {
             message += $"\n\n{Loc.T("Restart_AmdHint")}";

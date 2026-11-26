@@ -332,4 +332,5 @@
   <data name="Toast_IgpuAskMessageAmd" xml:space="preserve"><value>{0}模式需要这个大小。实验性功能：AMD 显卡驱动可能立即重启电脑，请先保存工作。</value></data>
   <data name="Restart_AmdHint" xml:space="preserve"><value>实验性功能：核显显存通过 AMD 显卡驱动保存，驱动可能自行重启电脑。如果出现问题，欢迎在 GitHub 上反馈（关于 &gt; 反馈问题）。</value></data>
   <data name="Act_IgpuAmdFailed" xml:space="preserve"><value>AMD 显卡驱动没有保存核显显存（{0}）。这是实验性功能，欢迎在 GitHub 上反馈。</value></data>
+  <data name="Act_IgpuAmdNoAnswer" xml:space="preserve"><value>AMD 显卡驱动尚未响应，因此还不知道核显显存是否已保存。DockSense 没有重启电脑，结果出来后会再通知你。这是实验性功能，欢迎在 GitHub 上反馈。</value></data>
 </root>
