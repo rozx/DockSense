@@ -265,7 +265,9 @@ internal static class TdpHelper
                     // A write that went through says how many watts it sent. Any code the helper does not use
                     // means it did not end by itself (ended by Task Scheduler, or crashed), possibly after a
                     // limit had gone in.
-                    return TdpHelperTask.OutcomeOf(exitCode, watts);
+                    return TdpWriter.Device is { } device
+                        ? TdpHelperTask.OutcomeOf(exitCode, device, watts)
+                        : new TdpWriteOutcome(TdpWriteResult.Unconfirmed);
                 }
 
                 Thread.Sleep(50);

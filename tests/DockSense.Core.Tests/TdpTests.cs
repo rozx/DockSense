@@ -221,9 +221,10 @@ public sealed class TdpTests
 
     [Theory]
     [InlineData(155, TdpWriteResult.Ok, 55)]            // 100 plus the watts that were sent
-    [InlineData(135, TdpWriteResult.Ok, 35)]            // less than asked for: clamped for battery
-    [InlineData(156, TdpWriteResult.Unconfirmed, null)] // more than was asked for cannot have been sent
+    [InlineData(135, TdpWriteResult.Unconfirmed, null)] // this board sends 55 W on either power source
+    [InlineData(156, TdpWriteResult.Unconfirmed, null)]
     [InlineData(255, TdpWriteResult.Unconfirmed, null)]
+    [InlineData(101, TdpWriteResult.Unconfirmed, null)]
     [InlineData(100, TdpWriteResult.Unconfirmed, null)] // no watts at all
     [InlineData(0, TdpWriteResult.Unconfirmed, null)]   // "done" without saying what was sent is not an answer
     [InlineData(3, TdpWriteResult.NotElevated, null)]
@@ -233,13 +234,26 @@ public sealed class TdpTests
     [InlineData(42, TdpWriteResult.Unconfirmed, null)]
     public void The_helpers_exit_code_says_how_it_ended_and_what_it_sent(int exitCode, TdpWriteResult result, int? sent)
     {
-        Assert.Equal(new TdpWriteOutcome(result, sent), TdpHelperTask.OutcomeOf(exitCode, requestedWatts: 55));
+        Assert.Equal(new TdpWriteOutcome(result, sent), TdpHelperTask.OutcomeOf(exitCode, AllyX, requestedWatts: 55));
+    }
+
+    [Theory]
+    [InlineData(53, 153, 53)]   // plugged in
+    [InlineData(53, 135, 35)]   // on battery the firmware's burst limit is 35 W
+    [InlineData(53, 143, null)] // neither of the two
+    [InlineData(20, 120, 20)]
+    [InlineData(20, 101, null)]
+    [InlineData(55, 135, null)] // outside this board's range: the helper would have sent nothing
+    public void Only_what_the_board_can_have_sent_counts_as_sent(int requested, int exitCode, int? sent)
+    {
+        var expected = new TdpWriteOutcome(sent is null ? TdpWriteResult.Unconfirmed : TdpWriteResult.Ok, sent);
+        Assert.Equal(expected, TdpHelperTask.OutcomeOf(exitCode, Ally, requested));
     }
 
     [Fact]
     public void A_write_that_went_through_reports_its_watts()
     {
-        Assert.Equal(new TdpWriteOutcome(TdpWriteResult.Ok, 35), TdpHelperTask.OutcomeOf(TdpHelperTask.ExitCodeForSent(35), requestedWatts: 35));
+        Assert.Equal(new TdpWriteOutcome(TdpWriteResult.Ok, 35), TdpHelperTask.OutcomeOf(TdpHelperTask.ExitCodeForSent(35), AllyX, requestedWatts: 35));
     }
 
     [Theory]

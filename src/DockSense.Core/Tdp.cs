@@ -297,13 +297,16 @@ public static class TdpHelperTask
     public static int ExitCodeForSent(int watts) => SentBase + watts;
 
     /// <summary>
-    /// The outcome an exit code of the helper stands for, after it was asked for <paramref name="requestedWatts"/>.
-    /// The helper only ever clamps downwards, so it cannot have sent more than it was asked for; such a code, like
-    /// any other it does not use, is unconfirmed.
+    /// The outcome an exit code of the helper stands for, after it was asked for <paramref name="requestedWatts"/>
+    /// on <paramref name="device"/>. The helper sends what it was asked for, clamped for the power source at that
+    /// moment: only those two values can be a write that went through. Any other code in that range, like any
+    /// code the helper does not use, is unconfirmed.
     /// </summary>
-    public static TdpWriteOutcome OutcomeOf(int exitCode, int requestedWatts) => exitCode switch
+    public static TdpWriteOutcome OutcomeOf(int exitCode, TdpDevice device, int requestedWatts) => exitCode switch
     {
-        > SentBase when exitCode - SentBase <= requestedWatts => new TdpWriteOutcome(TdpWriteResult.Ok, exitCode - SentBase),
+        >= SentBase when device.Offers(requestedWatts)
+            && (exitCode - SentBase == device.Clamp(requestedWatts, onAcPower: true) || exitCode - SentBase == device.Clamp(requestedWatts, onAcPower: false))
+            => new TdpWriteOutcome(TdpWriteResult.Ok, exitCode - SentBase),
         >= SentBase => new TdpWriteOutcome(TdpWriteResult.Unconfirmed),
         (int)TdpWriteResult.Ok => new TdpWriteOutcome(TdpWriteResult.Unconfirmed), // "done" without saying what was sent
         _ when Enum.IsDefined(typeof(TdpWriteResult), exitCode) => new TdpWriteOutcome((TdpWriteResult)exitCode),

@@ -632,7 +632,16 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Records the agreement to <paramref name="watts"/> and lower values, in every profile, on this model.</summary>
     private void SaveTdpConfirmation(TdpDevice device, int watts, bool apply) =>
-        _service.UpdateConfig(c => c with { TdpConfirmedBoard = device.Board, TdpConfirmedWatts = watts }, reapply: apply);
+        _service.UpdateConfig(c => c with
+        {
+            TdpConfirmedBoard = device.Board,
+
+            // Never lowered for the same model: dialogs overlap (the helper setup takes a while, and the other
+            // profiles stay editable meanwhile), and an older answer must not take back a newer, higher one.
+            TdpConfirmedWatts = string.Equals(c.TdpConfirmedBoard, device.Board, StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(c.TdpConfirmedWatts, watts)
+                : watts,
+        }, reapply: apply);
 
     /// <summary>
     /// The button next to a profile's "not applied" note: get the driver, set up the helper, or confirm a saved

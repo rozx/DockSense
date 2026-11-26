@@ -108,8 +108,8 @@ helper. Typed text has to be one plain number, with a unit after it at most.
   switching the override on never asks about exceeding the maximum.
 - The question about going above the maximum names the watts and covers that value and lower ones, in every
   profile (the dialog says so). The answer is kept with the settings, per board model (`tdpConfirmedBoard` /
-  `tdpConfirmedWatts`), and only once the helper setup that may follow has gone through. A higher value asks
-  again. A value above the maximum that was not confirmed for this model, for example one that arrived with a
+  `tdpConfirmedWatts`) and never lowered for the same model. If the edit also prompts for the helper setup,
+  the answer is saved only after that setup succeeds. A higher value asks again. A value above the maximum that was not confirmed for this model, for example one that arrived with a
   settings file from another model, is not sent: `TdpPlanner.Plan` treats it as no value, a warning says so,
   and the note under the setting has a Confirm button (choosing the same value again changes nothing, so the
   slider cannot ask). The manufacturer's maximum belongs to the model, so the agreement does too: a settings
