@@ -20,6 +20,16 @@ public sealed record IgpuMemoryOptions(int UnitMb, IReadOnlyList<uint> RawValues
     private const uint Unsupported = 0x80000;
     private const uint Units512Mb = 0x20000;
 
+    /// <summary>
+    /// False when the stored value is the size a policy of the driver comes to at the moment (a preset of AMD's
+    /// Variable Graphics Memory), not a size that was set: it then counts as stored for no size, so that a profile
+    /// asking for that very size still gets it set as a fixed one.
+    /// </summary>
+    public bool CurrentIsFixed { get; init; } = true;
+
+    /// <summary>True when <paramref name="raw"/> is what is stored now, as a size that was set.</summary>
+    public bool IsStored(uint raw) => CurrentIsFixed && raw == CurrentRaw;
+
     /// <summary>Megabytes for a raw value; 0 means Auto.</summary>
     public int ToMb(uint raw) => checked((int)raw * UnitMb);
 
@@ -45,7 +55,7 @@ public sealed record IgpuMemoryOptions(int UnitMb, IReadOnlyList<uint> RawValues
     /// nothing should be written (no target, already set, or a size the firmware does not offer).
     /// </summary>
     public uint? RawToWrite(int? targetMb) =>
-        targetMb is { } mb && RawFor(mb) is { } raw && raw != CurrentRaw ? raw : null;
+        targetMb is { } mb && RawFor(mb) is { } raw && !IsStored(raw) ? raw : null;
 
     /// <summary>
     /// The sizes a graphics driver offers, for devices whose firmware has no interface of its own (AMD's Variable
@@ -54,11 +64,14 @@ public sealed record IgpuMemoryOptions(int UnitMb, IReadOnlyList<uint> RawValues
     /// </summary>
     /// <param name="sizesMb">The sizes on offer, in MB. Sizes of 0 or less and repeats are dropped.</param>
     /// <param name="storedMb">The size the driver has stored, in MB. It need not be one of the sizes on offer.</param>
-    public static IgpuMemoryOptions? FromDriverSizes(IEnumerable<int> sizesMb, int? storedMb)
+    /// <param name="storedIsFixed">False when that size is what a preset of the driver comes to (<see cref="CurrentIsFixed"/>).</param>
+    public static IgpuMemoryOptions? FromDriverSizes(IEnumerable<int> sizesMb, int? storedMb, bool storedIsFixed = true)
     {
         ArgumentNullException.ThrowIfNull(sizesMb);
         var sizes = sizesMb.Where(mb => mb > 0).Distinct().Order().Select(mb => (uint)mb).ToList();
-        return sizes.Count > 0 && storedMb is >= 0 and var stored ? new IgpuMemoryOptions(1, sizes, (uint)stored) : null;
+        return sizes.Count > 0 && storedMb is >= 0 and var stored
+            ? new IgpuMemoryOptions(1, sizes, (uint)stored) { CurrentIsFixed = storedIsFixed }
+            : null;
     }
 
     /// <summary>Decodes a DSTS reply. Returns null when the device is not supported or the reply is malformed.</summary>

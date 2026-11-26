@@ -38,7 +38,7 @@ public static class IgpuMemoryPlanner
 
         if (profile.IgpuMemoryMb is not { } megabytes
             || firmware.RawFor(megabytes) is not { } raw
-            || raw == firmware.CurrentRaw)
+            || firmware.IsStored(raw))
         {
             return default;
         }

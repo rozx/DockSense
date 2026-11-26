@@ -651,7 +651,7 @@ public sealed class DockSenseService : IDisposable
             _igpuBoot = saved;
             if (IgpuMemoryViaAmdDriver && saved.StoredRaw is { } stored)
             {
-                options = options with { CurrentRaw = stored }; // stored by DockSense earlier in this boot session
+                options = options with { CurrentRaw = stored, CurrentIsFixed = true }; // stored by DockSense earlier in this boot session
             }
         }
         else
@@ -883,7 +883,7 @@ public sealed class DockSenseService : IDisposable
         }
 
         var stored = decision.Step == IgpuMemoryStep.None
-            ? IgpuMemory.RawFor(offer.MemoryMb) == IgpuMemory.CurrentRaw // another tool stored it in the meantime
+            ? IgpuMemory.RawFor(offer.MemoryMb) is { } offered && IgpuMemory.IsStored(offered) // another tool stored it in the meantime
             : StoreIgpuMemory($"{offer.Mode} (agreed)", offer.MemoryMb, decision.Raw);
         if (!stored && _amdStoreUnanswered)
         {
@@ -958,7 +958,7 @@ public sealed class DockSenseService : IDisposable
 
         // "Already stored" only counts when the firmware was just read: after a failed read the value known here
         // may be out of date (Armoury Crate can change it), and the PC is about to restart on it.
-        var stored = (fresh is not null && raw == fresh.CurrentRaw) || StoreIgpuMemory($"Restart for {mode}", target, raw);
+        var stored = (fresh is not null && fresh.IsStored(raw)) || StoreIgpuMemory($"Restart for {mode}", target, raw);
         if (!stored && _amdStoreUnanswered)
         {
             // Nothing is taken back: the request is still with the driver and may yet go through.
@@ -1092,7 +1092,7 @@ public sealed class DockSenseService : IDisposable
     private void NoteStoredThroughAmdDriver(string context, int megabytes, uint raw)
     {
         // The driver is not known to report a size that waits for a restart, so remember it here.
-        IgpuMemory = IgpuMemory! with { CurrentRaw = raw };
+        IgpuMemory = IgpuMemory! with { CurrentRaw = raw, CurrentIsFixed = true };
         if (_igpuBoot is { } boot)
         {
             _igpuBoot = boot with { StoredRaw = raw };

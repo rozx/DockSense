@@ -88,6 +88,25 @@ public sealed class IgpuMemoryOptionsTests
     }
 
     [Fact]
+    public void A_size_that_a_driver_preset_comes_to_is_not_stored_as_that_size()
+    {
+        // The driver is on its "Medium" preset, which comes to 4 GB today. A profile asking for 4 GB wants it fixed.
+        var preset = IgpuMemoryOptions.FromDriverSizes([512, 4096, 8192], storedMb: 4096, storedIsFixed: false);
+        var custom = IgpuMemoryOptions.FromDriverSizes([512, 4096, 8192], storedMb: 4096);
+
+        Assert.NotNull(preset);
+        Assert.NotNull(custom);
+        Assert.False(preset.IsStored(4096));
+        Assert.Equal(4096u, preset.RawToWrite(4096));
+        Assert.Equal(4096, preset.ToMb(preset.CurrentRaw));
+        Assert.True(custom.IsStored(4096));
+        Assert.Null(custom.RawToWrite(4096));
+
+        // Once it has been set, it is stored like any other size.
+        Assert.Null((preset with { CurrentRaw = 4096, CurrentIsFixed = true }).RawToWrite(4096));
+    }
+
+    [Fact]
     public void Driver_sizes_need_a_size_on_offer_and_a_stored_size()
     {
         Assert.Null(IgpuMemoryOptions.FromDriverSizes([], storedMb: 512));

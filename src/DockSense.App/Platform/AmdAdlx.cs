@@ -33,7 +33,8 @@ internal sealed record AdlxMemoryReport(
     /// </summary>
     public IgpuMemoryOptions? ToIgpuMemoryOptions() =>
         Supported
-            ? IgpuMemoryOptions.FromDriverSizes(Options.Where(o => o.IsCustom).Select(o => o.CarvedMb ?? 0), Current?.CarvedMb)
+            ? IgpuMemoryOptions.FromDriverSizes(
+                Options.Where(o => o.IsCustom).Select(o => o.CarvedMb ?? 0), Current?.CarvedMb, storedIsFixed: Current?.IsCustom == true)
             : null;
 }
 

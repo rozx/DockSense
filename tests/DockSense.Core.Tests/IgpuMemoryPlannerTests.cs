@@ -82,6 +82,16 @@ public sealed class IgpuMemoryPlannerTests
     }
 
     [Fact]
+    public void A_size_held_by_a_driver_preset_still_gets_set()
+    {
+        var firmware = IgpuMemoryOptions.FromDriverSizes([512, 4096, 8192], storedMb: 4096, storedIsFixed: false)!;
+
+        var decision = IgpuMemoryPlanner.Decide(Profile(4096), firmware, effectiveRaw: 4096, alwaysAsk: true);
+
+        Assert.Equal(new IgpuMemoryDecision(IgpuMemoryStep.Ask, 4096, 4096), decision);
+    }
+
+    [Fact]
     public void Auto_is_a_size_like_any_other()
     {
         Assert.Equal(
