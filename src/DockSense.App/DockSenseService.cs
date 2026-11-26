@@ -765,22 +765,37 @@ public sealed class DockSenseService : IDisposable
             return; // DockSense restarted, Windows has not (yet): the note stays for the boot that follows.
         }
 
-        StateStore.ClearIgpuRestartTarget();
-        if (IgpuMemory is not { } options || _igpuBoot is not { } state
+        var remaining = IgpuRestartPlanner.RemainingWait(target, DateTime.UtcNow, AwaitedModeWait);
+        if (remaining <= TimeSpan.Zero || IgpuMemory is not { } options || _igpuBoot is not { } state
             || IgpuRestartPlanner.AwaitedMode(target, boot, mode, Config, options, state.EffectiveRaw) is not { } awaited)
         {
+            StateStore.ClearIgpuRestartTarget();
             return;
         }
 
+        // The record stays until the wait is over, now with its end: DockSense may be closed and started again
+        // meanwhile, and that must neither end the wait nor start it over.
+        if (target.WaitUntilUtc is null)
+        {
+            StateStore.SaveIgpuRestartTarget(target with { WaitUntilUtc = DateTime.UtcNow + remaining });
+        }
+
         _igpuAwaitedMode = awaited;
+        _igpuWaitTimer.Interval = remaining;
         _igpuWaitTimer.Start();
-        Log.Info($"Restarted for {awaited}, now {mode}: the iGPU memory stays as it is until {awaited} starts, for up to {AwaitedModeWait.TotalMinutes:0} minutes.");
+        Log.Info($"Restarted for {awaited}, now {mode}: the iGPU memory stays as it is until {awaited} starts, for up to {Math.Ceiling(remaining.TotalMinutes):0} more minute(s).");
         AddActivity(Loc.F("Act_IgpuAwaiting", ModeName(awaited)));
     }
 
     private void EndAwaitedModeWait()
     {
         _igpuWaitTimer.Stop();
+        if (_igpuAwaitedMode is not null)
+        {
+            // Only the record of a wait that was running: one saved for a restart that is still to come stays.
+            StateStore.ClearIgpuRestartTarget();
+        }
+
         _igpuAwaitedMode = null;
     }
 

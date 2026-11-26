@@ -74,6 +74,23 @@ public static class IgpuRestartPlanner
             ? target.Mode
             : null;
     }
+
+    /// <summary>
+    /// How long the wait for the mode restarted for still has to run: all of <paramref name="wait"/> when it has
+    /// not begun, what is left of it otherwise (never more than <paramref name="wait"/>, should the clock have been
+    /// set back), and zero when it is over.
+    /// </summary>
+    public static TimeSpan RemainingWait(IgpuRestartTarget target, DateTime nowUtc, TimeSpan wait)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (target.WaitUntilUtc is not { } until)
+        {
+            return wait;
+        }
+
+        var left = until - nowUtc;
+        return left <= TimeSpan.Zero ? TimeSpan.Zero : left < wait ? left : wait;
+    }
 }
 
 /// <summary>
@@ -82,4 +99,8 @@ public static class IgpuRestartPlanner
 /// </summary>
 /// <param name="Mode">The mode the user restarted for.</param>
 /// <param name="Boot">The boot during which they did, i.e. the one before the restart.</param>
-public sealed record IgpuRestartTarget(DockMode Mode, BootSession Boot);
+/// <param name="WaitUntilUtc">
+/// Set once the PC is back up and DockSense waits for that mode: when the wait ends. It is kept with the record so
+/// that closing DockSense and starting it again does not end the wait, nor start it over.
+/// </param>
+public sealed record IgpuRestartTarget(DockMode Mode, BootSession Boot, DateTime? WaitUntilUtc = null);

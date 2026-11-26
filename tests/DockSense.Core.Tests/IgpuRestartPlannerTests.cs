@@ -125,4 +125,29 @@ public sealed class IgpuRestartPlannerTests
             DockMode.Egpu,
             IgpuRestartPlanner.AwaitedMode(target, Boot(null, minutesLater: 2), DockMode.Handheld, config, Firmware(currentRaw: 1), effectiveRaw: 1));
     }
+
+    [Fact]
+    public void The_wait_runs_in_full_until_it_has_begun_and_then_only_what_is_left_of_it()
+    {
+        var wait = TimeSpan.FromMinutes(5);
+        var target = new IgpuRestartTarget(DockMode.Egpu, Boot(41));
+        var now = Started.AddMinutes(3);
+
+        Assert.Equal(wait, IgpuRestartPlanner.RemainingWait(target, now, wait));
+
+        // DockSense was closed and started again two minutes into the wait.
+        var begun = target with { WaitUntilUtc = now.AddMinutes(3) };
+        Assert.Equal(TimeSpan.FromMinutes(3), IgpuRestartPlanner.RemainingWait(begun, now, wait));
+        Assert.Equal(TimeSpan.Zero, IgpuRestartPlanner.RemainingWait(begun, now.AddMinutes(3), wait));
+        Assert.Equal(TimeSpan.Zero, IgpuRestartPlanner.RemainingWait(begun, now.AddHours(2), wait));
+    }
+
+    [Fact]
+    public void A_clock_set_back_does_not_make_the_wait_longer()
+    {
+        var wait = TimeSpan.FromMinutes(5);
+        var begun = new IgpuRestartTarget(DockMode.Egpu, Boot(41), Started.AddHours(1));
+
+        Assert.Equal(wait, IgpuRestartPlanner.RemainingWait(begun, Started, wait));
+    }
 }
