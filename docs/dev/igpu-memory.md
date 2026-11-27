@@ -20,10 +20,23 @@ every use starts and ends ADLX on a thread of its own.
 
 **What is known and what is not.** On the Ally X (driver 32.0.32015.7029, ADLX 1.5.0.124, read while at the eGPU
 on 2026-11-26) the chain works up to `IsSupported`, which answers **false**: this driver does not offer VGM. So
-ADLX is no fallback for ASUS devices, and **reading the option list and the write (`SetOption`, slot 7) have
-never run on real hardware**. AMD's docs and sample say `SetOption` restarts the PC by itself, Claw Control's
-code assumes it does not, and whether it needs admin is unknown (DockSense has no elevation for it; a refusal is
-reported and nothing changes).
+ADLX is no fallback for ASUS devices. On an MSI Claw A8 (issue #10, 0.4.0, also ADLX 1.5.0.124) **reading works**:
+current and default are Custom 8 GB, and the list has the presets Minimum / Medium / High (0.5, 8, 16 GB) plus
+custom sizes 0.5 GB and 1 to 16 GB in 1 GB steps. **The write (`SetOption`, slot 7) has still never run on real
+hardware**: 0.4.0 crashed before reaching it (next paragraph). AMD's docs and sample say `SetOption` restarts the
+PC by itself, Claw Control's code assumes it does not, and whether it needs admin is unknown (DockSense has no
+elevation for it; a refusal is reported and nothing changes).
+
+**One ADLX start per load of the library.** Starting ADLX again after `ADLXTerminate` while `amdadlx64.dll` is
+still in the process crashes inside `ADLXInitializeWithIncompatibleDriver` with an access violation (0xC0000005),
+which .NET cannot catch: the process is gone without a log line. It does not matter whether the second start is
+on the same thread, or goes through `ADLXInitializeWithIncompatibleDriver2`. It reproduces on the Ally X, where
+VGM is not even offered. In 0.4.0 the library was bound with `DllImport` and so never unloaded: the read after the
+start was the first session, and the first store or **Copy diagnostic report** was the second and took DockSense
+down (issue #10: "hang and then crash" on **Change and restart**). AMD's `ADLXHelper` frees the library after
+every terminate, and so does `AmdAdlx.WithMemoryInterface` now (`NativeLibrary.TryLoad` / `Free` around each
+session, no `DllImport`). If the library is still loaded after the free, further sessions are refused instead of
+risking the crash.
 
 The user chose on 2026-11-26 to ship the write blind as an **experimental** feature, said so in the UI and the
 READMEs with an invitation to report issues on GitHub. Keep that label until a report confirms it. The user does

@@ -2,6 +2,17 @@
 
 All notable changes to DockSense are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-11-26
+
+Fixes a crash in 0.4.0 on PCs with an AMD graphics driver. On devices that set the iGPU memory through the AMD driver, such as the MSI Claw A8, it made **Change and restart** close DockSense before anything was stored.
+
+### Fixed
+
+- **DockSense closed without a message the second time it used the AMD graphics driver's library in one run.** The library has to be unloaded between uses, as AMD's own helper code does, and 0.4.0 kept it loaded. What that looked like:
+  - On devices without the ASUS firmware interface (the experimental AMD driver route), the first use is the read shortly after DockSense starts. **Change and restart** for the iGPU memory or **About → Copy diagnostic report** was the second: the window froze and DockSense was gone. Nothing was stored, so the iGPU memory was not changed. ([#10](https://github.com/rozx/DockSense/issues/10), thanks @darksn0ww for the report and the log)
+  - On ASUS handhelds such as the ROG Xbox Ally X, copying the diagnostic report twice in one run did the same.
+- Storing the iGPU memory through the AMD driver is **still experimental**. Reading the sizes is now confirmed on the MSI Claw A8, but because of this crash the store itself has not run on a real device yet. The driver may restart the PC as soon as a size is stored, so save your work first, and please [report how it went](https://github.com/rozx/DockSense/issues).
+
 ## [0.4.0] - 2026-11-26
 
 Each mode can now enforce its own processor power limit (TDP) on the ROG Ally family, and DockSense can ask before it changes the iGPU memory. The TDP override is the first DockSense feature that needs a driver and an administrator approval. It is optional, and everything else still runs without either.
@@ -136,6 +147,7 @@ First public release.
 - `DockSense.exe --probe <file>` read-only diagnostic report, and a **Copy diagnostic report** button.
 - Write-up of the Game Mode CPU throttle in [docs/game-mode-throttle.md](docs/game-mode-throttle.md).
 
+[0.4.1]: https://github.com/rozx/DockSense/releases/tag/v0.4.1
 [0.4.0]: https://github.com/rozx/DockSense/releases/tag/v0.4.0
 [0.3.4]: https://github.com/rozx/DockSense/releases/tag/v0.3.4
 [0.3.3]: https://github.com/rozx/DockSense/releases/tag/v0.3.3
